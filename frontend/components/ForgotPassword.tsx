@@ -19,30 +19,34 @@ export function ForgotPassword({ onBackToLogin }: ForgotPasswordProps) {
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+        setIsLoading(true);
+        setIsSuccess(false);
         setError("");
 
-        if (!email) {
-            setError("Email address is required");
-            return;
-        }
-
-        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-        if (!emailRegex.test(email)) {
-            setError("Please enter a valid email address");
-            return;
-        }
-
-        setIsLoading(true);
-
         try {
-            await requestPasswordReset(email);
+            const response = await fetch(
+                "http://localhost:8000/api/v1/auth/request-password-reset",
+                {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ email }), // ✅ Correct JSON format
+                }
+            );
+
+            if (!response.ok) {
+                const errText = await response.text();
+                throw new Error(errText || "Something went wrong.");
+            }
+
             setIsSuccess(true);
-        } catch (err) {
-            setError(err instanceof Error ? err.message : "Failed to send reset email");
+        } catch (err: any) {
+            console.error("Failed to send reset link:", err);
+            setError("❌ Could not send reset link. Please try again later.");
         } finally {
             setIsLoading(false);
         }
     };
+
 
     if (isSuccess) {
         return (

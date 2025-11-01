@@ -11,6 +11,8 @@ import { Alert, AlertDescription, AlertTitle } from "./ui/alert";
 import { Progress } from "./ui/progress";
 import { Badge } from "./ui/badge";
 import { Separator } from "./ui/separator";
+import ImportExportDialog from "../components/ImportExportDialog";
+
 
 export function ClusteringPage() {
     const [selectedCategory, setSelectedCategory] = useState<string>("");
@@ -272,6 +274,11 @@ export function ClusteringPage() {
                         </div>
                     )}
 
+                    <div className="flex justify-between items-center">
+                        <h3 className="font-semibold text-md">K-Means Clustering Configuration</h3>
+                        <ImportExportDialog />
+                    </div>
+
                     {/* Run Button */}
                     <Button
                         onClick={handleRunClustering}
@@ -290,6 +297,7 @@ export function ClusteringPage() {
                             </>
                         )}
                     </Button>
+
 
                     {/* Processing Progress */}
                     {isProcessing && (

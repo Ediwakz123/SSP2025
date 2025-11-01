@@ -2,175 +2,204 @@ import { useEffect, useRef, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "./ui/card";
 import { businesses, LOCATION_INFO, getUniqueCategories } from "../data/businesses";
 import { Badge } from "./ui/badge";
+import { Button } from "./ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 import { Label } from "./ui/label";
-import { MapPin, Filter } from "lucide-react";
+import { MapPin, Filter, RefreshCcw } from "lucide-react";
 
 export function MapPage() {
     const mapRef = useRef<HTMLDivElement>(null);
-    const [map, setMap] = useState<any>(null);
-    const [markers, setMarkers] = useState<any[]>([]);
-    const [selectedCategory, setSelectedCategory] = useState<string>("all");
-    const [selectedZone, setSelectedZone] = useState<string>("all");
+    const leafletMap = useRef<any>(null);
+    const clusterLayer = useRef<any>(null);
+
+    const [selectedCategory, setSelectedCategory] = useState("all");
+    const [selectedZone, setSelectedZone] = useState("all");
+    const [totalMarkers, setTotalMarkers] = useState(0);
 
     const categories = getUniqueCategories();
 
+    // ✅ Load and initialize Leaflet smoothly once
     useEffect(() => {
-        // Initialize Leaflet map
-        if (!mapRef.current) return;
-
-        // Load Leaflet CSS and JS
-        const link = document.createElement('link');
-        link.rel = 'stylesheet';
-        link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
-        document.head.appendChild(link);
-
-        const script = document.createElement('script');
-        script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
-        script.onload = () => initMap();
-        document.head.appendChild(script);
-
-        return () => {
-            if (map) {
-                map.remove();
+        const loadLeaflet = async () => {
+            if (typeof window.L !== "undefined") {
+                initMap();
+                return;
             }
+
+            const addCSS = (href: string) => {
+                const link = document.createElement("link");
+                link.rel = "stylesheet";
+                link.href = href;
+                document.head.appendChild(link);
+            };
+
+            addCSS("https://unpkg.com/leaflet@1.9.4/dist/leaflet.css");
+            addCSS("https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css");
+            addCSS("https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css");
+
+            const leafletScript = document.createElement("script");
+            leafletScript.src = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";
+            leafletScript.onload = () => {
+                const clusterScript = document.createElement("script");
+                clusterScript.src = "https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js";
+                clusterScript.onload = initMap;
+                document.head.appendChild(clusterScript);
+            };
+            document.head.appendChild(leafletScript);
         };
+        loadLeaflet();
     }, []);
 
     const initMap = () => {
-        // @ts-ignore - Leaflet loaded from CDN
+        // @ts-ignore
         const L = window.L;
+        if (!mapRef.current || leafletMap.current) return;
 
-        const newMap = L.map(mapRef.current).setView(
+        const map = L.map(mapRef.current as HTMLElement, {
+            zoomControl: true,
+            attributionControl: false,
+        }).setView(
             [LOCATION_INFO.center_latitude, LOCATION_INFO.center_longitude],
             15
         );
 
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-        }).addTo(newMap);
+        L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+            attribution: "&copy; OpenStreetMap contributors",
+        }).addTo(map);
 
-        // Add barangay center marker
+        // Barangay marker
         L.marker([LOCATION_INFO.center_latitude, LOCATION_INFO.center_longitude], {
             icon: L.divIcon({
-                className: 'custom-div-icon',
-                html: `<div style="background-color: #ef4444; width: 30px; height: 30px; border-radius: 50%; border: 3px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.3);"></div>`,
-                iconSize: [30, 30],
-                iconAnchor: [15, 15]
-            })
-        }).addTo(newMap).bindPopup(`
-      <div style="font-family: system-ui, -apple-system, sans-serif;">
-        <strong>Brgy. ${LOCATION_INFO.barangay}</strong><br/>
-        ${LOCATION_INFO.municipality}, ${LOCATION_INFO.province}<br/>
-        <small>Population: ${LOCATION_INFO.population.toLocaleString()}</small>
-      </div>
-    `);
+                html: `<div style="background-color:#ef4444;width:26px;height:26px;border-radius:50%;border:3px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.4);"></div>`,
+            }),
+        })
+            .addTo(map)
+            .bindPopup(
+                `<b>Brgy. ${LOCATION_INFO.barangay}</b><br>${LOCATION_INFO.municipality}, ${LOCATION_INFO.province}<br><small>Population: ${LOCATION_INFO.population.toLocaleString()}</small>`
+            );
 
-        setMap(newMap);
-        updateMarkers(newMap, businesses);
+        leafletMap.current = map;
+        renderClusters(businesses);
     };
 
-    const updateMarkers = (leafletMap: any, businessesToShow: typeof businesses) => {
+    // ✅ Render live clusters
+    const renderClusters = (data: typeof businesses) => {
         // @ts-ignore
         const L = window.L;
+        if (!leafletMap.current) return;
 
-        // Clear existing markers
-        markers.forEach(marker => leafletMap.removeLayer(marker));
+        if (clusterLayer.current) leafletMap.current.removeLayer(clusterLayer.current);
 
-        const categoryColors: Record<string, string> = {
-            'HARDWARE': '#3b82f6',
-            'Cafe': '#8b5cf6',
-            'Retail': '#10b981',
-            'Services': '#f59e0b',
-            'Restaurant': '#ef4444',
-            'Pharmacy': '#06b6d4',
-            'Furniture Store': '#ec4899',
-            'Resort': '#84cc16',
-            'Bakery': '#f97316',
-            'Pet Store': '#a855f7',
-            'Hardware': '#0ea5e9'
+        // @ts-ignore
+        const clusters = L.markerClusterGroup({
+            showCoverageOnHover: false,
+            maxClusterRadius: 60,
+            disableClusteringAtZoom: 17,
+            spiderfyDistanceMultiplier: 2,
+        });
+
+        const colorMap: Record<string, string> = {
+            HARDWARE: "#3b82f6",
+            Cafe: "#8b5cf6",
+            Retail: "#10b981",
+            Services: "#f59e0b",
+            Restaurant: "#ef4444",
+            Pharmacy: "#06b6d4",
+            "Furniture Store": "#ec4899",
+            Resort: "#84cc16",
+            Bakery: "#f97316",
+            "Pet Store": "#a855f7",
         };
 
-        const newMarkers = businessesToShow.map(business => {
-            const color = categoryColors[business.category] || '#6b7280';
-
-            const marker = L.circleMarker([business.latitude, business.longitude], {
+        const bounds = L.latLngBounds([]);
+        data.forEach((biz) => {
+            const color = colorMap[biz.category] || "#6b7280";
+            const marker = L.circleMarker([biz.latitude, biz.longitude], {
                 radius: 8,
                 fillColor: color,
-                color: '#fff',
+                color: "#fff",
                 weight: 2,
                 opacity: 1,
-                fillOpacity: 0.8
-            }).addTo(leafletMap);
-
-            marker.bindPopup(`
-        <div style="font-family: system-ui, -apple-system, sans-serif; min-width: 200px;">
-          <strong>${business.business_name}</strong><br/>
-          <span style="color: ${color}; font-weight: 600;">${business.category}</span><br/>
-          <small>${business.street}</small><br/>
-          <small>Zone: ${business.zone_type}</small><br/>
-          <small style="color: #6b7280;">
-            ${business.latitude.toFixed(6)}, ${business.longitude.toFixed(6)}
-          </small>
+                fillOpacity: 0.9,
+            }).bindPopup(`
+        <div style="font-family: system-ui, sans-serif; min-width: 220px;">
+          <strong>${biz.business_name}</strong><br/>
+          <span style="color:${color};font-weight:600;">${biz.category}</span><br/>
+          <small>${biz.street}</small><br/>
+          <small>Zone: ${biz.zone_type}</small><br/>
+          <small style="color:#6b7280;">${biz.latitude.toFixed(5)}, ${biz.longitude.toFixed(5)}</small>
         </div>
       `);
 
-            return marker;
+            clusters.addLayer(marker);
+            bounds.extend([biz.latitude, biz.longitude]);
         });
 
-        setMarkers(newMarkers);
+        leafletMap.current.addLayer(clusters);
+        clusterLayer.current = clusters;
+
+        if (bounds.isValid()) leafletMap.current.fitBounds(bounds, { padding: [50, 50], maxZoom: 16 });
+        setTotalMarkers(data.length);
     };
 
+    // ✅ Dynamic updates
     useEffect(() => {
-        if (!map) return;
+        if (!leafletMap.current) return;
+        let filtered = businesses;
 
-        let filteredBusinesses = businesses;
+        if (selectedCategory !== "all")
+            filtered = filtered.filter((b) => b.category === selectedCategory);
+        if (selectedZone !== "all")
+            filtered = filtered.filter((b) => b.zone_type === selectedZone);
 
-        if (selectedCategory !== "all") {
-            filteredBusinesses = filteredBusinesses.filter(b => b.category === selectedCategory);
-        }
+        renderClusters(filtered);
+    }, [selectedCategory, selectedZone]);
 
-        if (selectedZone !== "all") {
-            filteredBusinesses = filteredBusinesses.filter(b => b.zone_type === selectedZone);
-        }
-
-        updateMarkers(map, filteredBusinesses);
-    }, [selectedCategory, selectedZone, map]);
+    // ✅ Reset button
+    const resetView = () => {
+        if (!leafletMap.current) return;
+        leafletMap.current.setView(
+            [LOCATION_INFO.center_latitude, LOCATION_INFO.center_longitude],
+            15
+        );
+        setSelectedCategory("all");
+        setSelectedZone("all");
+        renderClusters(businesses);
+    };
 
     return (
         <div className="space-y-6">
             {/* Filters */}
             <Card>
                 <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
+                    <CardTitle className="flex items-center gap-2 text-lg">
                         <Filter className="w-5 h-5" />
                         Map Filters
                     </CardTitle>
                     <CardDescription>Filter businesses by category and zone type</CardDescription>
                 </CardHeader>
+
                 <CardContent>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="space-y-2">
-                            <Label htmlFor="map-category">Business Category</Label>
+                            <Label>Business Category</Label>
                             <Select value={selectedCategory} onValueChange={setSelectedCategory}>
-                                <SelectTrigger id="map-category" className="bg-input-background">
+                                <SelectTrigger className="bg-input-background">
                                     <SelectValue placeholder="All Categories" />
                                 </SelectTrigger>
                                 <SelectContent>
                                     <SelectItem value="all">All Categories</SelectItem>
-                                    {categories.map((cat) => (
-                                        <SelectItem key={cat} value={cat}>
-                                            {cat}
-                                        </SelectItem>
+                                    {categories.map((c) => (
+                                        <SelectItem key={c} value={c}>{c}</SelectItem>
                                     ))}
                                 </SelectContent>
                             </Select>
                         </div>
 
                         <div className="space-y-2">
-                            <Label htmlFor="map-zone">Zone Type</Label>
+                            <Label>Zone Type</Label>
                             <Select value={selectedZone} onValueChange={setSelectedZone}>
-                                <SelectTrigger id="map-zone" className="bg-input-background">
+                                <SelectTrigger className="bg-input-background">
                                     <SelectValue placeholder="All Zones" />
                                 </SelectTrigger>
                                 <SelectContent>
@@ -182,16 +211,20 @@ export function MapPage() {
                         </div>
                     </div>
 
-                    <div className="mt-4 flex flex-wrap gap-2">
-                        <Badge variant="secondary" className="flex items-center gap-1">
+                    <div className="mt-6 flex flex-wrap items-center gap-3">
+                        <Button onClick={resetView} variant="outline" className="flex items-center gap-2">
+                            <RefreshCcw className="w-4 h-4" /> Reset Map View
+                        </Button>
+
+                        <Badge variant="secondary" className="flex items-center gap-2">
                             <MapPin className="w-3 h-3" />
-                            Showing {markers.length} of {businesses.length} businesses
+                            Showing {totalMarkers} of {businesses.length} businesses
                         </Badge>
                     </div>
                 </CardContent>
             </Card>
 
-            {/* Map Container */}
+            {/* Map */}
             <Card>
                 <CardHeader>
                     <CardTitle>Interactive Business Map</CardTitle>
@@ -217,20 +250,18 @@ export function MapPage() {
                     <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
                         {categories.map((category) => {
                             const colors: Record<string, string> = {
-                                'HARDWARE': '#3b82f6',
-                                'Cafe': '#8b5cf6',
-                                'Retail': '#10b981',
-                                'Services': '#f59e0b',
-                                'Restaurant': '#ef4444',
-                                'Pharmacy': '#06b6d4',
-                                'Furniture Store': '#ec4899',
-                                'Resort': '#84cc16',
-                                'Bakery': '#f97316',
-                                'Pet Store': '#a855f7',
-                                'Hardware': '#0ea5e9'
+                                HARDWARE: "#3b82f6",
+                                Cafe: "#8b5cf6",
+                                Retail: "#10b981",
+                                Services: "#f59e0b",
+                                Restaurant: "#ef4444",
+                                Pharmacy: "#06b6d4",
+                                "Furniture Store": "#ec4899",
+                                Resort: "#84cc16",
+                                Bakery: "#f97316",
+                                "Pet Store": "#a855f7",
                             };
-                            const color = colors[category] || '#6b7280';
-
+                            const color = colors[category] || "#6b7280";
                             return (
                                 <div key={category} className="flex items-center gap-2">
                                     <div

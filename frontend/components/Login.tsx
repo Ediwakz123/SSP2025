@@ -107,7 +107,8 @@ export function Login({ onLogin, onShowRegister, onShowForgotPassword }: LoginPr
                         </Button>
                         <div className="text-center space-y-2">
                             <div className="text-sm text-muted-foreground">
-                                Demo: admin@example.com / admin
+                                SSP THESIS 2025
+
                             </div>
                             <div className="text-sm">
                                 Don't have an account?{" "}
