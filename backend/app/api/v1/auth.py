@@ -14,51 +14,56 @@ from app.core.security import (
 )
 from app.core.config import settings
 from app.models.user import User
-from app.schemas.user import UserCreate, User as UserSchema
+from app.schemas.user import UserCreate, UserResponse,User as UserSchema
 from app.schemas.token import Token
 from fastapi import status
 
 router = APIRouter()
 
-@router.post("/register", response_model=Token)
-async def register(user_in: UserCreate, db: Session = Depends(get_db)):
-    """Register a new user"""
-    # Check if user already exists
-    existing_user = db.query(User).filter(User.email == user_in.email).first()
+@router.post("/register")
+def register_user(user: UserCreate, db: Session = Depends(get_db)):
+    existing_user = db.query(User).filter(User.email == user.email).first()
     if existing_user:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Email already registered"
-        )
-    
-    # Create new user
-    hashed_password = get_password_hash(user_in.password)
-    db_user = User(
-        email=user_in.email,
-        name=user_in.name,
-        hashed_password=hashed_password
+        raise HTTPException(status_code=400, detail="Email already registered")
+
+    hashed_password = get_password_hash(user.password)
+    new_user = User(
+        email=user.email,
+        hashed_password=hashed_password,
+        first_name=user.first_name,
+        last_name=user.last_name,
+        contact_number=user.contact_number,
+        address=user.address,
+        age=user.age,
+        gender=user.gender,
     )
-    db.add(db_user)
+
+    db.add(new_user)
     db.commit()
-    db.refresh(db_user)
-    
-    # Create access token
-    access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
-    access_token = create_access_token(
-        data={"sub": db_user.email}, expires_delta=access_token_expires
-    )
-    
+    db.refresh(new_user)
+
+    access_token = create_access_token(data={"sub": new_user.email})
+
     return {
         "access_token": access_token,
         "token_type": "bearer",
         "user": {
-            "id": db_user.id,
-            "email": db_user.email,
-            "name": db_user.name,
-            "is_active": db_user.is_active,
-            "created_at": db_user.created_at.isoformat()
-        }
+            "id": new_user.id,
+            "email": new_user.email,
+            "first_name": new_user.first_name,
+            "last_name": new_user.last_name,
+        },
     }
+
+from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.security import OAuth2PasswordRequestForm
+from sqlalchemy.orm import Session
+from app.core.database import get_db
+from app.core.security import verify_password, create_access_token
+from app.models.user import User
+from app.schemas.token import Token  # ensure your Token schema has access_token, token_type, and user
+
+router = APIRouter()
 
 @router.post("/login", response_model=Token)
 async def login(
@@ -82,19 +87,25 @@ async def login(
             detail="Inactive user"
         )
 
-    # ✅ Generate JWT token
+    # ✅ Create JWT token
     access_token = create_access_token(data={"sub": user.email})
 
-    # ✅ Return valid response matching Token schema
+    # ✅ Return token + basic user info
     return {
         "access_token": access_token,
         "token_type": "bearer",
         "user": {
             "id": user.id,
             "email": user.email,
-            "full_name": getattr(user, "full_name", None)
-        }
+            "first_name": user.first_name,
+            "last_name": user.last_name,
+            "contact_number": user.contact_number,
+            "address": user.address,
+            "age": user.age,
+            "gender": user.gender,
+        },
     }
+
 
 
     

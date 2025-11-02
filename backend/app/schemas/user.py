@@ -11,7 +11,12 @@ class UserCreate(UserBase):
 
 class UserUpdate(BaseModel):
     email: Optional[EmailStr] = None
-    name: Optional[str] = None
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    contact_number: Optional[str] = None
+    address: Optional[str] = None
+    age: Optional[int] = None
+    gender: Optional[str] = None
     password: Optional[str] = None
 
 class UserInDB(UserBase):
@@ -19,9 +24,15 @@ class UserInDB(UserBase):
     is_active: bool
     is_superuser: bool
     created_at: datetime
+
+    
+class UserResponse(UserBase):
+    id: int
+    is_active: bool
     
     class Config:
-        from_attributes = True
+         orm_mode = True
+
 
 class User(UserInDB):
     pass

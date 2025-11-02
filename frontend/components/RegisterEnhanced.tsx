@@ -1,18 +1,13 @@
 import { useState } from "react";
 import { toast } from "sonner";
-import { Button } from "../components/ui/button";
-import { Input } from "../components/ui/input";
-import { Card, CardHeader, CardTitle, CardContent } from "../components/ui/card";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
+import { Button } from "./ui/button";
+import { Input } from "./ui/input";
+import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 
 const API_BASE_URL = "http://127.0.0.1:8000";
 
-interface RegisterProps {
-    onRegisterSuccess: () => void;
-    onBackToLogin: () => void;
-}
-
-export function Register({ onRegisterSuccess, onBackToLogin }: RegisterProps) {
+export default function RegisterEnhanced({ onRegisterSuccess }: { onRegisterSuccess: () => void }) {
     const [formData, setFormData] = useState({
         firstName: "",
         lastName: "",
@@ -42,30 +37,36 @@ export function Register({ onRegisterSuccess, onBackToLogin }: RegisterProps) {
             toast.error("Please enter your full name.");
             return false;
         }
+
         if (!email.includes("@")) {
             toast.error("Please enter a valid email address.");
             return false;
         }
+
         if (password.length < 8) {
             toast.error("Password must be at least 8 characters long.");
             return false;
         }
+
         if (password !== confirmPassword) {
             toast.error("Passwords do not match.");
             return false;
         }
+
         if (!age || isNaN(Number(age)) || Number(age) < 18) {
             toast.error("You must be at least 18 years old to register.");
             return false;
         }
+
         return true;
     };
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!validateForm()) return;
 
+        if (!validateForm()) return;
         setIsLoading(true);
+
         try {
             const response = await fetch(`${API_BASE_URL}/api/v1/auth/register`, {
                 method: "POST",
@@ -86,19 +87,21 @@ export function Register({ onRegisterSuccess, onBackToLogin }: RegisterProps) {
                 const error = await response.json().catch(() => ({}));
                 const message =
                     error.detail?.includes("already")
-                        ? "This email is already registered."
-                        : error.detail || "Registration failed.";
+                        ? "That email is already registered."
+                        : error.detail || `Registration failed (HTTP ${response.status})`;
                 throw new Error(message);
             }
 
             const data = await response.json();
+
+            // Store token and user info
             localStorage.setItem("token", data.access_token);
             if (data.user) localStorage.setItem("user", JSON.stringify(data.user));
 
-            toast.success("Registration successful!");
-            onRegisterSuccess();
+            toast.success("Account created successfully!");
+            onRegisterSuccess(); // e.g. navigate("/login");
         } catch (err) {
-            const errorMessage = err instanceof Error ? err.message : "Registration failed.";
+            const errorMessage = err instanceof Error ? err.message : "Registration failed";
             toast.error(errorMessage);
         } finally {
             setIsLoading(false);
@@ -113,7 +116,7 @@ export function Register({ onRegisterSuccess, onBackToLogin }: RegisterProps) {
                         Create Account
                     </CardTitle>
                     <p className="text-center text-sm text-muted-foreground">
-                        Register to access the Store Placement System
+                        Join the Store Placement Analysis System
                     </p>
                 </CardHeader>
                 <CardContent>
@@ -207,20 +210,19 @@ export function Register({ onRegisterSuccess, onBackToLogin }: RegisterProps) {
                             </Select>
                         </div>
 
-                        <Button type="submit" className="w-full mt-4" disabled={isLoading}>
+                        <Button
+                            type="submit"
+                            className="w-full mt-4"
+                            disabled={isLoading}
+                        >
                             {isLoading ? "Creating Account..." : "Create Account"}
                         </Button>
 
                         <p className="text-center text-sm text-muted-foreground mt-2">
                             Already have an account?{" "}
-                            <button
-                                type="button"
-                                onClick={onBackToLogin}
-                                className="text-indigo-600 hover:underline"
-                                disabled={isLoading}
-                            >
+                            <a href="/login" className="text-indigo-600 hover:underline">
                                 Sign in here
-                            </button>
+                            </a>
                         </p>
                     </form>
                 </CardContent>

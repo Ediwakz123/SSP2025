@@ -11,6 +11,8 @@ import { Alert, AlertDescription, AlertTitle } from "./ui/alert";
 import { Progress } from "./ui/progress";
 import { Badge } from "./ui/badge";
 import { Separator } from "./ui/separator";
+import ImportExportDialog from "../components/ImportExportDialog";
+import { toast } from "sonner";
 
 export function ClusteringPage() {
     const [selectedCategory, setSelectedCategory] = useState<string>("");
@@ -23,6 +25,32 @@ export function ClusteringPage() {
     const [map, setMap] = useState<any>(null);
 
     const categories = getUniqueCategories();
+
+    const [businesses, setBusinesses] = useState<any[]>([]);
+    const [isRefreshing, setIsRefreshing] = useState(false);
+
+
+    // 🔄 Fetch Businesses (refresh data after import)
+    const fetchBusinesses = async () => {
+        try {
+            const token = localStorage.getItem("access_token");
+            const res = await fetch("http://127.0.0.1:8000/api/v1/businesses", {
+                headers: { Authorization: `Bearer ${token}` },
+            });
+            if (!res.ok) throw new Error("Failed to fetch businesses");
+            const data = await res.json();
+            setBusinesses(data);
+            toast.success("✅ Businesses updated from database!");
+        } catch (err) {
+            console.error(err);
+            toast.error("❌ Failed to fetch businesses from server.");
+        }
+    };
+
+
+    useEffect(() => {
+        fetchBusinesses();
+    }, []);
 
     // Initialize map when result is available
     useEffect(() => {
@@ -268,9 +296,25 @@ export function ClusteringPage() {
                                 value={customCategory}
                                 onChange={(e) => setCustomCategory(e.target.value)}
                                 className="bg-input-background"
+
+                            />
+
+                            <ImportExportDialog
+                                onImportSuccess={() => {
+                                    fetchBusinesses();
+                                    toast.success("✅ Import completed — data refreshed!");
+                                }}
+                                onExportSuccess={() => toast.success("📦 Export completed successfully!")}
                             />
                         </div>
                     )}
+                    {/* ⏳ Show Refresh Indicator */}
+                    {isRefreshing && (
+                        <p className="text-sm text-blue-600 mt-2 animate-pulse">
+                            🔄 Refreshing business data...
+                        </p>
+                    )}
+
 
                     {/* Run Button */}
                     <Button

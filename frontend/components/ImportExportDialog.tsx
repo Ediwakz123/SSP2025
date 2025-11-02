@@ -5,7 +5,15 @@ import axios from "axios";
 import { Button } from "../components/ui/button";
 import { Upload, FileJson, FileSpreadsheet, FileText, X } from "lucide-react";
 
-export default function ImportExportDialog() {
+interface ImportExportDialogProps {
+    onImportSuccess?: () => void;
+    onExportSuccess?: () => void;
+}
+
+export default function ImportExportDialog({
+    onImportSuccess,
+    onExportSuccess,
+}: ImportExportDialogProps) {
     const [activeTab, setActiveTab] = useState("export");
     const [selectedFormat, setSelectedFormat] = useState("report");
     const [file, setFile] = useState<File | null>(null);
@@ -27,6 +35,8 @@ export default function ImportExportDialog() {
             });
             alert("✅ File imported successfully!");
             setFile(null);
+            // 🔁 Trigger callback to refresh business data
+            if (onImportSuccess) onImportSuccess();
         } catch (err) {
             console.error(err);
             alert("❌ Import failed. Check console for details.");
@@ -60,6 +70,9 @@ export default function ImportExportDialog() {
             document.body.appendChild(link);
             link.click();
             link.parentNode?.removeChild(link);
+
+            // ✅ Trigger success callback
+            if (onExportSuccess) onExportSuccess();
         } catch (err) {
             console.error(err);
             alert("❌ Failed to export data.");
