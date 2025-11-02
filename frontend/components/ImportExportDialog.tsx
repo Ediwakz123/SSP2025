@@ -4,6 +4,7 @@ import { useState } from "react";
 import axios from "axios";
 import { Button } from "../components/ui/button";
 import { Upload, FileJson, FileSpreadsheet, FileText, X } from "lucide-react";
+import { toast } from "sonner";
 
 interface ImportExportDialogProps {
     onImportSuccess?: () => void;
@@ -18,10 +19,15 @@ export default function ImportExportDialog({
     const [selectedFormat, setSelectedFormat] = useState("report");
     const [file, setFile] = useState<File | null>(null);
     const [uploading, setUploading] = useState(false);
+    const [open, setOpen] = useState(false);
 
-    // Import Handler
+    // ✅ Import Handler
     const handleImport = async () => {
-        if (!file) return alert("Please select a file to upload.");
+        if (!file) {
+            toast.error("Please select a file to upload.");
+            return;
+        }
+
         setUploading(true);
         const formData = new FormData();
         formData.append("file", file);
@@ -33,26 +39,32 @@ export default function ImportExportDialog({
                     Authorization: `Bearer ${localStorage.getItem("access_token")}`,
                 },
             });
-            alert("✅ File imported successfully!");
+
+            toast.success("✅ File imported successfully!");
             setFile(null);
-            // 🔁 Trigger callback to refresh business data
             if (onImportSuccess) onImportSuccess();
+
+            // ✅ Auto-close dialog after success
+            setOpen(false);
+            setActiveTab("export");
         } catch (err) {
             console.error(err);
-            alert("❌ Import failed. Check console for details.");
+            toast.error("❌ Import failed. Please check your file or connection.");
         } finally {
             setUploading(false);
         }
     };
 
-    // Export Handler
+    // ✅ Export Handler
     const handleExport = async () => {
         try {
             const response = await axios.get(
-                "http://127.0.0.1:8000/api/v1/clustering/export/latest",
+                `http://127.0.0.1:8000/api/v1/clustering/export/latest?format=${selectedFormat}`,
                 {
                     responseType: "blob",
-                    headers: { Authorization: `Bearer ${localStorage.getItem("access_token")}` },
+                    headers: {
+                        Authorization: `Bearer ${localStorage.getItem("access_token")}`,
+                    },
                 }
             );
 
@@ -71,16 +83,23 @@ export default function ImportExportDialog({
             link.click();
             link.parentNode?.removeChild(link);
 
-            // ✅ Trigger success callback
+            toast.success(`📦 Exported successfully as ${extension.toUpperCase()}`);
             if (onExportSuccess) onExportSuccess();
+
+            // ✅ Auto-close dialog after export
+            setOpen(false);
+            setActiveTab("export");
         } catch (err) {
             console.error(err);
-            alert("❌ Failed to export data.");
+            toast.error("❌ Failed to export data. Please try again.");
         }
     };
 
     return (
-        <Dialog.Root>
+        <Dialog.Root open={open} onOpenChange={(newOpen) => {
+            setOpen(newOpen);
+            if (!newOpen) setActiveTab("export"); // Reset tab when closing
+        }}>
             <Dialog.Trigger asChild>
                 <Button variant="outline" className="flex items-center gap-2">
                     <Upload className="w-4 h-4" /> Import/Export
@@ -99,11 +118,7 @@ export default function ImportExportDialog({
                         </Dialog.Close>
                     </div>
 
-                    <Tabs.Root
-                        value={activeTab}
-                        onValueChange={setActiveTab}
-                        className="w-full"
-                    >
+                    <Tabs.Root value={activeTab} onValueChange={setActiveTab} className="w-full">
                         <Tabs.List className="flex justify-center space-x-2 bg-gray-100 rounded-lg p-1">
                             <Tabs.Trigger
                                 value="export"
@@ -153,10 +168,7 @@ export default function ImportExportDialog({
                                 </Button>
                             </div>
 
-                            <Button
-                                onClick={handleExport}
-                                className="w-full mt-4"
-                            >
+                            <Button onClick={handleExport} className="w-full mt-4">
                                 Export as {selectedFormat.toUpperCase()}
                             </Button>
                         </Tabs.Content>

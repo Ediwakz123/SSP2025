@@ -4,6 +4,8 @@ from sqlalchemy.orm import Session
 from datetime import timedelta
 from fastapi import BackgroundTasks
 from app.utils.email import send_reset_email
+from app.core.security import get_current_active_user
+
 
 
 from app.core.database import get_db
@@ -179,3 +181,7 @@ async def request_password_reset(email: str, db: Session = Depends(get_db)):
     
     # Don't reveal if user exists for security
     return {"message": "If the email exists, a password reset link has been sent"}
+
+@router.get("/verify")
+async def verify_token(current_user: User = Depends(get_current_active_user)):
+    return {"status": "valid", "user": current_user.email}

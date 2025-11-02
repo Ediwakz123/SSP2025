@@ -220,9 +220,32 @@ export default function RegisterEnhanced({ onRegisterSuccess }: { onRegisterSucc
 
                         <p className="text-center text-sm text-muted-foreground mt-2">
                             Already have an account?{" "}
-                            <a href="/login" className="text-indigo-600 hover:underline">
+                            <a href="/login" className="text-primary hover:underline">
                                 Sign in here
                             </a>
+                            {/* Security Note */}
+                            <div className="mt-4 bg-blue-50 border border-blue-200 text-blue-700 text-sm rounded-md p-3">
+                                <p>
+                                    <strong>Note:</strong> Your information is encrypted and used only to register your account in the Store Placement System.
+                                </p>
+                            </div>
+
+                            {/* Back Button */}
+                            <div className="mt-4 flex justify-center">
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    onClick={() => (window.location.href = "/login")}
+                                    className="text-sm font-medium"
+                                    disabled={isLoading}
+                                >
+                                    ← Back to Login
+                                </Button>
+                            </div>
+
+
+
+
                         </p>
                     </form>
                 </CardContent>

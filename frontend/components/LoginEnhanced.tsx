@@ -187,7 +187,7 @@ export default function LoginEnhanced({
                         {/* Footer Section */}
                         <div className="text-center space-y-2">
                             <div className="text-sm text-muted-foreground">
-                                Demo: admin@example.com / admin123
+                                SSP THESIS 2025
                             </div>
                             <div className="text-sm">
                                 Don’t have an account?{" "}

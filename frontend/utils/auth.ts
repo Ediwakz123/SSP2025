@@ -92,7 +92,7 @@ export async function register(email: string, password: string, name: string): P
  * Logout user
  */
 export function logout(): void {
-    localStorage.removeItem("auth_token");
+    localStorage.removeItem("access_token");
     localStorage.removeItem("user");
 }
 
@@ -112,17 +112,33 @@ export function getCurrentUser(): User | null {
 /**
  * Check if user is authenticated
  */
-export function isAuthenticated(): boolean {
-    const token = localStorage.getItem("access_token");
+export const isAuthenticated = async (): Promise<boolean> => {
+    const token = localStorage.getItem("token");
     if (!token) return false;
 
-    const decoded = decodeToken(token);
-    if (!decoded || decoded.exp * 1000 < Date.now()) {
-        logout();
+    try {
+        // Decode the token (assumes JWT)
+        const payload = JSON.parse(atob(token.split(".")[1]));
+        const isExpired = payload.exp * 1000 < Date.now();
+        if (isExpired) {
+            localStorage.removeItem("token");
+            localStorage.removeItem("user");
+            return false;
+        }
+
+        // Optionally, you can also ping your backend to confirm it's valid:
+        const response = await fetch("http://127.0.0.1:8000/api/v1/auth/", {
+            headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!response.ok) throw new Error("Invalid token");
+        return true;
+    } catch (err) {
+        console.error("Invalid or expired token:", err);
+        localStorage.removeItem("token");
+        localStorage.removeItem("user");
         return false;
     }
-    return true;
-}
+};
 
 /**
  * Request password reset
@@ -139,9 +155,4 @@ export async function requestPasswordReset(email: string): Promise<void> {
     }
 }
 
-/**
- * Verify token validity
- */
-export function verifyToken(): boolean {
-    return isAuthenticated();
-}
+
