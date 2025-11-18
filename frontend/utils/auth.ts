@@ -15,7 +15,7 @@ export interface AuthToken {
 }
 
 // Base API URL — replace with your deployed backend or localhost
-const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:8000/api/v1/auth";
+const API_BASE_URL = import.meta.env.VITE_API_URL || "";
 
 /**
  * Decode a JWT token (without verification)

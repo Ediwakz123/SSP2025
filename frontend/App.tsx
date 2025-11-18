@@ -1,16 +1,16 @@
 import { useState, useEffect } from "react";
 import { Login } from "./components/Login";
-import { Register } from "./components/Register";
+import { Register } from "./components/auth/Register";
 import { ForgotPassword } from "./components/ForgotPassword";
 import { DashboardLayout } from "./components/DashboardLayout";
-import { DashboardPage } from "./components/DashboardPage";
+import { DashboardPage } from "./components/users/DashboardPage";
 import { ClusteringPage } from "./components/ClusteringPage";
-import { AnalyticsPage } from "./components/AnalyticsPage";
+import { AnalyticsPage } from "./components/users/AnalyticsPage";
 import { MapPage } from "./components/MapPage";
-import { OpportunitiesPage } from "./components/OpportunitiesPage";
+import { OpportunitiesPage } from "./components/users/OpportunitiesPage";
 import { Toaster } from "./components/ui/sonner";
 import { isAuthenticated, logout } from "./utils/auth";
-import { Profile } from './components/Profile';
+import { Profile } from './components/users/Profile';
 import type { User } from "./utils";
 
 
