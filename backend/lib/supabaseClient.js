@@ -1,16 +1,16 @@
-// backend/lib/supabaseClient.js
-const { createClient } = require('@supabase/supabase-js');
+import { createClient } from '@supabase/supabase-js';
+import dotenv from 'dotenv';
+
+dotenv.config({ override: true });
 
 const supabaseUrl = process.env.SUPABASE_URL;
-const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
+const supabaseAnonKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 if (!supabaseUrl || !supabaseAnonKey) {
   throw new Error(
-    'Missing SUPABASE_URL or SUPABASE_ANON_KEY env vars. ' +
-      'Check your .env.local / Vercel project settings.'
+    'Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY env vars. ' +
+    'Check your .env.local / Vercel project settings.'
   );
 }
 
-const supabase = createClient(supabaseUrl, supabaseAnonKey);
-
-module.exports = { supabase };
+export const supabase = createClient(supabaseUrl, supabaseAnonKey);

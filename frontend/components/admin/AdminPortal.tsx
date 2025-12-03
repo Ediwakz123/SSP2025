@@ -1,5 +1,6 @@
-import { useState, useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../../lib/supabase";
+
 import {
   Card,
   CardContent,
@@ -7,107 +8,136 @@ import {
   CardHeader,
   CardTitle,
 } from "../ui/card";
-import { Button } from "../ui/button";
 import { Badge } from "../ui/badge";
+import { Button } from "../ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../ui/tabs";
-import { ScrollArea } from "../ui/scroll-area";
-import { Separator } from "../ui/separator";
-import { toast } from "sonner";
+import { Progress } from "../ui/progress";
+
 import {
-  Users,
-  Activity,
-  BarChart3,
-  Database,
   RefreshCw,
-  TrendingUp,
-  Clock,
-  CheckCircle2,
   MapPin,
+  Target,
+  Store,
+  Users,
+  Layers,
+  Database,
+  CheckCircle,
+  Shield,
+  Trophy,
+  TrendingUp,
   Building2,
 } from "lucide-react";
 
-// Types from your UI (unchanged)
-interface AdminStats {
-  total_users: number;
-  active_users: number;
-  recent_signups: number;
-  total_analyses: number;
-  seed_businesses: number;
-  system_status: string;
-  last_updated: string;
-}
+import {
+  ResponsiveContainer,
+  PieChart,
+  Pie,
+  Tooltip,
+  Legend,
+  Cell,
+} from "recharts";
 
-interface SeedStats {
-  total_businesses: number;
-  categories: Record<string, number>;
-  zones: Record<string, number>;
-  avg_population_density: number;
-  avg_foot_traffic: number;
+import { toast } from "sonner";
+
+const BARANGAY_INFO = {
+  name: "Brgy. Sta. Cruz",
+  municipality: "Santa Maria",
+  province: "Bulacan",
+  region: "Central Luzon (Region III)",
+  postalCode: "3022",
+  population2020: 11364,
+  centerLat: 14.8373,
+  centerLng: 120.9558,
+  elevation: 17,
+};
+
+const COLORS = ["#3b82f6", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6", "#ec4899"];
+
+type BusinessRow = {
+  id: number;
+  business_id: number | null;
+  business_name: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  street: string | null;
+  zone_type: string | null;
+  zone_encoded: number | null;
+  status: string | null;
+  business_density_50m: number | null;
+  business_density_100m: number | null;
+  business_density_200m: number | null;
+  competitor_density_50m: number | null;
+  competitor_density_100m: number | null;
+  competitor_density_200m: number | null;
+  category: string | null;
+  type: string | null;
+  general_category: string | null;
+  created_at: string;
+};
+
+interface UserAnalysis {
+  id: string | number;
+  user_name: string;
+  business_type: string;
+  score: number;
+  created_at: string;
+  num_clusters: number;
 }
 
 export function AdminPortal() {
-  const [stats, setStats] = useState<AdminStats | null>(null);
-  const [seedStats, setSeedStats] = useState<SeedStats | null>(null);
-  const [users, setUsers] = useState<any[]>([]);
-  const [analyses, setAnalyses] = useState<any[]>([]);
+  const [businesses, setBusinesses] = useState<BusinessRow[]>([]);
+  const [analyses, setAnalyses] = useState<UserAnalysis[]>([]);
   const [activityLogs, setActivityLogs] = useState<any[]>([]);
+
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
+  const [selectedTab, setSelectedTab] = useState("overview");
   const [loading, setLoading] = useState(true);
   const [autoRefresh, setAutoRefresh] = useState(true);
 
-  // ⭐ NEW: Fetch everything from Supabase
+  // FETCH DATA --------------------------------------------------------------
   const fetchData = async () => {
     try {
-      // Load everything in parallel
-      const [userRes, seedRes, analysisRes, activityRes] = await Promise.all([
-        supabase.from("users").select("*"),
+      setLoading(true);
+
+      const [businessRes, activityRes] = await Promise.all([
         supabase.from("businesses").select("*"),
-        supabase.from("clustering_results").select("*"),
+        // supabase
+        //   .from("clustering_results")
+        //   .select("*")
+        //   .order("overall_score", { ascending: false })
+        //   .limit(10),
+
         supabase
           .from("activity_logs")
           .select("*")
-          .order("created_at", { ascending: false }),
+          .order("created_at", { ascending: false })
+          .limit(10),
       ]);
 
-      // Users
-      setUsers(userRes.data || []);
+      // Handle Errors
+      if (businessRes.error) console.error("Business Error:", businessRes.error);
+      // if (analysisRes.error) console.error("Analysis Error:", analysisRes.error);
+      if (activityRes.error) console.error("Activity Error:", activityRes.error);
 
-      // Clustering Runs
-      setAnalyses(analysisRes.data || []);
+      setBusinesses((businessRes.data || []) as BusinessRow[]);
 
-      // Activity Logs
+      // const mappedAnalyses: UserAnalysis[] = (analysisRes.data || []).map(
+      //   (row: any): UserAnalysis => ({
+      //     id: row.id,
+      //     user_name: row.user_name ?? row.user_email ?? "Unknown user",
+      //     business_type: row.business_type ?? row.target_business_type ?? "N/A",
+      //     score: Number(row.score ?? row.overall_score ?? 0),
+      //     created_at: row.created_at,
+      //     num_clusters: Number(row.num_clusters ?? row.k ?? 0),
+      //   })
+      // );
+
+      setAnalyses([]); // mappedAnalyses
       setActivityLogs(activityRes.data || []);
-
-      // Seed data stats
-      const businesses = seedRes.data || [];
-
-      const categories: Record<string, number> = {};
-      const zones: Record<string, number> = {};
-
-      businesses.forEach((b) => {
-        categories[b.category] = (categories[b.category] || 0) + 1;
-        zones[b.zone_type] = (zones[b.zone_type] || 0) + 1;
-      });
-
-      setSeedStats({
-        total_businesses: businesses.length,
-        categories,
-        zones,
-        avg_population_density: 0,
-        avg_foot_traffic: 0,
-      });
-
-      // Admin stats (computed)
-      setStats({
-        total_users: userRes.data?.length ?? 0,
-        active_users: userRes.data?.length ?? 0,
-        recent_signups: 0,
-        total_analyses: analysisRes.data?.length ?? 0,
-        seed_businesses: businesses.length,
-        system_status: "operational",
-        last_updated: new Date().toISOString(),
-      });
-    } catch (err) {
-      console.error(err);
+      setLastUpdated(new Date());
+    } catch (error: any) {
+      console.error("AdminPortal Error:", error);
       toast.error("Failed to load admin data");
     } finally {
       setLoading(false);
@@ -118,232 +148,642 @@ export function AdminPortal() {
     fetchData();
   }, []);
 
-  // Auto-refresh
+  // AUTO-REFRESH -------------------------------------------------------------
   useEffect(() => {
     if (!autoRefresh) return;
-    const interval = setInterval(fetchData, 30000);
-    return () => clearInterval(interval);
+    const id = setInterval(fetchData, 30000);
+    return () => clearInterval(id);
   }, [autoRefresh]);
 
-  const handleRefresh = () => {
-    setLoading(true);
-    fetchData();
-    toast.success("Data refreshed");
+  // REALTIME SUBSCRIPTION -----------------------------------------------------
+  useEffect(() => {
+    // Subscribe to changes in the businesses table
+    const channel = supabase
+      .channel('businesses-changes')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'businesses' },
+        (payload) => {
+          console.log('Businesses table changed:', payload);
+          // Refresh data when businesses table updates
+          fetchData();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    await fetchData();
+    setIsRefreshing(false);
+    toast.success("Dashboard refreshed.");
   };
 
-  if (loading) {
+  // COMPUTED STATS -----------------------------------------------------------
+  const stats = useMemo(() => {
+    if (!businesses.length) {
+      return {
+        totalBusinesses: 0,
+        businessTypeCount: 0,
+        typeDistribution: {},
+        commercialCount: 0,
+        residentialCount: 0,
+        avgBusinessDensity: 0,
+        totalStreets: 0,
+        streetsArray: [],
+      };
+    }
+
+    const totalBusinesses = businesses.length;
+    const categoriesSet = new Set<string>();
+    const typeDistribution: Record<string, number> = {};
+
+    let sumDensity200m = 0;
+    let densityCount = 0;
+    let commercialCount = 0;
+    let residentialCount = 0;
+    const streetsSet = new Set<string>();
+
+    businesses.forEach((b) => {
+      // Business Type
+      const businessType = (b.general_category || "Unknown").trim();
+      categoriesSet.add(businessType);
+      typeDistribution[businessType] =
+        (typeDistribution[businessType] || 0) + 1;
+
+      // Density
+      if (typeof b.business_density_200m === "number") {
+        sumDensity200m += b.business_density_200m;
+        densityCount++;
+      }
+
+      // Zone
+      const zone = (b.zone_type || "").toLowerCase();
+      if (zone.includes("commercial")) commercialCount++;
+      if (zone.includes("residential")) residentialCount++;
+
+      if (b.street) streetsSet.add(b.street.trim());
+    });
+
+    return {
+      totalBusinesses,
+      businessTypeCount: categoriesSet.size,
+      typeDistribution,
+      commercialCount,
+      residentialCount,
+      avgBusinessDensity:
+        densityCount > 0 ? Math.round(sumDensity200m / densityCount) : 0,
+      totalStreets: streetsSet.size,
+      streetsArray: Array.from(streetsSet),
+    };
+  }, [businesses]);
+
+  // Chart Data
+  const businessTypeChartData = Object.entries(stats.typeDistribution).map(
+    ([name, count]) => ({
+      name,
+      value: count,
+      percentage: ((count / (stats.totalBusinesses || 1)) * 100).toFixed(1),
+    })
+  );
+
+  const zoneDistributionData = [
+    { name: "Commercial", value: stats.commercialCount, color: "#3b82f6" },
+    { name: "Residential", value: stats.residentialCount, color: "#8b5cf6" },
+  ];
+
+  // UI LOADING SCREEN -----------------------------------------------------
+  if (loading && !businesses.length)
     return (
       <div className="flex items-center justify-center min-h-[600px]">
         <RefreshCw className="size-8 animate-spin text-muted-foreground" />
       </div>
     );
-  }
+
+  // ------------------------------------------------------------------------
+  // UI RENDER
+  // ------------------------------------------------------------------------
 
   return (
     <div className="space-y-6">
-      {/* Header */}
+      {/* HEADER ------------------------------------------------------------ */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl">Admin Portal</h1>
+          <h2 className="text-3xl">Admin Dashboard</h2>
           <p className="text-muted-foreground">
-            System overview and management dashboard
+            System overview and monitoring
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
+          <div className="text-right text-sm text-muted-foreground">
+            <p>Last updated</p>
+            <p>{lastUpdated.toLocaleTimeString()}</p>
+          </div>
+
           <Button
             variant={autoRefresh ? "default" : "outline"}
             size="sm"
-            onClick={() => setAutoRefresh(!autoRefresh)}
+            className="gap-2"
+            onClick={() => setAutoRefresh((v) => !v)}
           >
-            <RefreshCw className="size-4 mr-2" />
-            Auto-Refresh {autoRefresh ? "On" : "Off"}
+            <RefreshCw className="size-4" />
+            Auto {autoRefresh ? "On" : "Off"}
           </Button>
 
-          <Button onClick={handleRefresh} size="sm">
-            <RefreshCw className="size-4 mr-2" />
-            Refresh Now
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleRefresh}
+            disabled={isRefreshing}
+            className="gap-2"
+          >
+            <RefreshCw
+              className={`size-4 ${isRefreshing ? "animate-spin" : ""}`}
+            />
+            Refresh
           </Button>
         </div>
       </div>
 
-      {/* Everything below is your UI 100% unchanged */}
+      {/* TOP CARDS --------------------------------------------------------- */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <StatCard
+          title="Total Businesses"
+          value={stats.totalBusinesses}
+          subtitle="Real locations tracked"
+          icon={<Database className="size-5 text-blue-600" />}
+          gradient="from-blue-50 to-blue-100"
+        />
 
-      {/* ⭐ System Status */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <CheckCircle2 className="size-5 text-green-500" />
-            System Status
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex items-center justify-between">
-            <div>
-              <Badge variant="default">
-                {stats?.system_status?.toUpperCase()}
-              </Badge>
-              <p className="text-sm text-muted-foreground mt-2">
-                Last updated:{" "}
-                {stats?.last_updated
-                  ? new Date(stats.last_updated).toLocaleString()
-                  : "N/A"}
-              </p>
-            </div>
-            <div className="text-right">
-              <p className="text-sm text-muted-foreground">
-                Brgy. Sta. Cruz, Santa Maria, Bulacan
-              </p>
-              <p className="text-sm">Region III - Central Luzon</p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+        <StatCard
+          title="Business Categories"
+          value={stats.businessTypeCount}
+          subtitle="Different types"
+          icon={<Target className="size-5 text-green-600" />}
+          gradient="from-green-50 to-green-100"
+        />
 
-      {/* ⭐ Your key metrics, seed data, tabs... unchanged */}
-      {/* (Everything below stays EXACTLY the same) */}
+        <StatCard
+          title="Avg. Business Density"
+          value={stats.avgBusinessDensity}
+          subtitle="Within 200m radius"
+          icon={<Store className="size-5 text-purple-600" />}
+          gradient="from-purple-50 to-purple-100"
+        />
 
-      {/* Key Metrics */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm flex items-center gap-2">
-              <Users className="size-4" />
-              Total Users
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl">{stats?.total_users || 0}</div>
-            <p className="text-xs text-muted-foreground">Registered accounts</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm flex items-center gap-2">
-              <Activity className="size-4 text-green-500" />
-              Active Users
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl">{stats?.active_users || 0}</div>
-            <p className="text-xs text-muted-foreground">Last 7 days</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm flex items-center gap-2">
-              <TrendingUp className="size-4 text-blue-500" />
-              Recent Signups
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl">{stats?.recent_signups || 0}</div>
-            <p className="text-xs text-muted-foreground">Last 24 hours</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm flex items-center gap-2">
-              <BarChart3 className="size-4 text-purple-500" />
-              Total Analyses
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl">{stats?.total_analyses || 0}</div>
-            <p className="text-xs text-muted-foreground">Clustering runs</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm flex items-center gap-2">
-              <Database className="size-4 text-orange-500" />
-              Seed Businesses
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl">{stats?.seed_businesses || 0}</div>
-            <p className="text-xs text-muted-foreground">Real data entries</p>
-          </CardContent>
-        </Card>
+        <StatCard
+          title="Total Streets"
+          value={stats.totalStreets}
+          subtitle="Mapped locations"
+          icon={<MapPin className="size-5 text-orange-600" />}
+          gradient="from-orange-50 to-orange-100"
+        />
       </div>
 
-      {/* Seed Data Stats */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Building2 className="size-5" />
-            Seed Data Overview
-          </CardTitle>
-          <CardDescription>
-            Business distribution and metrics from Brgy. Sta. Cruz field survey
-          </CardDescription>
-        </CardHeader>
+      {/* TABS -------------------------------------------------------------- */}
+      <Tabs value={selectedTab} onValueChange={setSelectedTab}>
+        <TabsList className="grid w-full grid-cols-3">
+          <TabsTrigger value="overview">Overview</TabsTrigger>
+          <TabsTrigger value="top-users">Top User Analyses</TabsTrigger>
+          <TabsTrigger value="system">System Info</TabsTrigger>
+        </TabsList>
 
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div>
-              <p className="text-sm text-muted-foreground">
-                Total Businesses
-              </p>
-              <p className="text-2xl">{seedStats?.total_businesses || 0}</p>
-            </div>
+        {/* OVERVIEW TAB -------------------------------------------------- */}
+        <TabsContent value="overview" className="space-y-6">
+          <div className="grid md:grid-cols-2 gap-6">
+            {/* Business Type */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Business Type Distribution</CardTitle>
+                <CardDescription>
+                  Current business categories in Brgy. Sta. Cruz
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <ResponsiveContainer width="100%" height={300}>
+                  <PieChart>
+                    <Pie
+                      data={businessTypeChartData}
+                      cx="50%"
+                      cy="50%"
+                      labelLine={false}
+                      label={({ name, percentage }) =>
+                        `${name}: ${percentage}%`
+                      }
+                      outerRadius={100}
+                      fill="#8884d8"
+                      dataKey="value"
+                    >
+                      {businessTypeChartData.map((entry, index) => (
+                        <Cell
+                          key={`cell-${index}`}
+                          fill={COLORS[index % COLORS.length]}
+                        />
+                      ))}
+                    </Pie>
+                    <Tooltip />
+                  </PieChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
 
-            <div>
-              <p className="text-sm text-muted-foreground">
-                Avg. Population Density
-              </p>
-              <p className="text-2xl">{seedStats?.avg_population_density || 0}</p>
-            </div>
+            {/* Zone Distribution */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Zone Distribution</CardTitle>
+                <CardDescription>
+                  Commercial vs Residential zones
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <ResponsiveContainer width="100%" height={300}>
+                  <PieChart>
+                    <Pie
+                      data={zoneDistributionData}
+                      cx="50%"
+                      cy="50%"
+                      outerRadius={100}
+                      label={({ name, value }) => `${name}: ${value}`}
+                      dataKey="value"
+                    >
+                      {zoneDistributionData.map((entry, index) => (
+                        <Cell key={index} fill={entry.color} />
+                      ))}
+                    </Pie>
+                    <Tooltip />
+                    <Legend />
+                  </PieChart>
+                </ResponsiveContainer>
 
-            <div>
-              <p className="text-sm text-muted-foreground">Avg. Foot Traffic</p>
-              <p className="text-2xl">{seedStats?.avg_foot_traffic || 0}</p>
-            </div>
+                <div className="mt-4 space-y-3">
+                  <ZoneProgress
+                    label="Commercial"
+                    value={
+                      (stats.commercialCount / (stats.totalBusinesses || 1)) *
+                      100
+                    }
+                  />
 
-            <div>
-              <p className="text-sm text-muted-foreground">Commercial Zones</p>
-              <p className="text-2xl">{seedStats?.zones?.Commercial || 0}</p>
-            </div>
+                  <ZoneProgress
+                    label="Residential"
+                    value={
+                      (stats.residentialCount / (stats.totalBusinesses || 1)) *
+                      100
+                    }
+                  />
+                </div>
+              </CardContent>
+            </Card>
           </div>
 
-          <Separator />
+          {/* Barangay Information */}
+          <Card className="bg-gradient-to-br from-blue-50 to-indigo-50 border-blue-200">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <MapPin className="size-5 text-blue-600" />
+                Barangay Information
+              </CardTitle>
+              <CardDescription>
+                Official data – {BARANGAY_INFO.name}
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                <InfoItem label="Municipality" value={BARANGAY_INFO.municipality} />
+                <InfoItem label="Province" value={BARANGAY_INFO.province} />
+                <InfoItem label="Region" value={BARANGAY_INFO.region} />
+                <InfoItem label="Postal Code" value={BARANGAY_INFO.postalCode} />
+                <InfoItem
+                  label="Population (2020)"
+                  value={BARANGAY_INFO.population2020.toLocaleString()}
+                />
+                <InfoItem
+                  label="Coordinates"
+                  value={`${BARANGAY_INFO.centerLat.toFixed(
+                    4
+                  )}, ${BARANGAY_INFO.centerLng.toFixed(4)}`}
+                />
+                <InfoItem
+                  label="Elevation"
+                  value={`${BARANGAY_INFO.elevation}m ASL`}
+                />
+                <InfoItem
+                  label="Total Streets"
+                  value={`${stats.totalStreets} streets`}
+                />
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
 
-          <div>
-            <p className="text-sm mb-2">Business Categories</p>
-            <div className="flex flex-wrap gap-2">
-              {seedStats &&
-                Object.entries(seedStats.categories).map(([category, count]) => (
-                  <Badge key={category} variant="secondary">
-                    {category}: {count}
+        {/* TOP USER ANALYSES TAB ------------------------------------------- */}
+        <TabsContent value="top-users" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Trophy className="size-5 text-yellow-600" />
+                Top User Analyses
+              </CardTitle>
+              <CardDescription>Highest scoring clustering results</CardDescription>
+            </CardHeader>
+
+            <CardContent>
+              {analyses.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  No analyses available.
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {analyses.map((a, index) => (
+                    <div
+                      key={a.id}
+                      className="p-4 border rounded-lg hover:bg-muted/50 transition-colors"
+                    >
+                      <div className="flex items-start gap-4">
+                        <div className="size-12 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 text-white flex items-center justify-center text-lg">
+                          #{index + 1}
+                        </div>
+
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2">
+                            <h4 className="font-medium">{a.user_name}</h4>
+                            <Badge>{a.business_type}</Badge>
+                          </div>
+
+                          <p className="text-xs text-muted-foreground">
+                            {new Date(a.created_at).toLocaleString()}
+                          </p>
+
+                          <div className="grid grid-cols-2 gap-4 mt-3">
+                            <div>
+                              <p className="text-xs text-muted-foreground">Score</p>
+                              <div className="flex items-center gap-1 mt-1">
+                                <TrendingUp className="size-3 text-green-600" />
+                                <span>{a.score}%</span>
+                              </div>
+                            </div>
+
+                            <div>
+                              <p className="text-xs text-muted-foreground">Clusters</p>
+                              <div className="flex items-center gap-1 mt-1">
+                                <Layers className="size-3 text-blue-600" />
+                                <span>{a.num_clusters}</span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        <Badge
+                          variant={
+                            a.score > 90
+                              ? "default"
+                              : a.score > 80
+                                ? "secondary"
+                                : "outline"
+                          }
+                        >
+                          {a.score > 90 ? "Excellent" : a.score > 80 ? "Good" : "Fair"}
+                        </Badge>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* SYSTEM INFO TAB ------------------------------------------------ */}
+        <TabsContent value="system" className="space-y-6">
+          <div className="grid md:grid-cols-2 gap-6">
+            {/* System Status */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Shield className="size-5 text-green-600" />
+                  System Status
+                </CardTitle>
+              </CardHeader>
+
+              <CardContent className="space-y-3">
+                <SystemStatus label="Supabase Database" />
+                <SystemStatus label="API Services" />
+                <SystemStatus label="Authentication" />
+
+                <div className="flex items-center justify-between p-3 bg-blue-50 rounded-lg">
+                  <div className="flex items-center gap-2">
+                    <Target className="size-4 text-blue-600" />
+                    <span className="text-sm">K-Means Clustering</span>
+                  </div>
+                  <Badge className="bg-blue-100 text-blue-700 border-blue-300">
+                    Active
                   </Badge>
-                ))}
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+                </div>
+              </CardContent>
+            </Card>
 
-      {/* Tabs (Users, Analyses, Activity Logs) — unchanged */}
-      {/** EXACT same UI... no changes below */}
-      <Tabs defaultValue="users" className="space-y-4">
-        ...
+            {/* Data Quality */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Database className="size-5 text-blue-600" />
+                  Data Quality
+                </CardTitle>
+              </CardHeader>
+
+              <CardContent className="space-y-4">
+                <QualityRow label="Data Completeness" value={100} />
+                <QualityRow label="GPS Accuracy" value={100} />
+                <QualityRow label="Business Verification" value={100} />
+
+                <QualityRow
+                  label="Active Analyses"
+                  value={Math.min(100, analyses.length * 10)}
+                  suffix={`${analyses.length} analyses`}
+                />
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Database Schema */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Database Schema & Columns</CardTitle>
+              <CardDescription>Core data structure from field survey</CardDescription>
+            </CardHeader>
+
+            <CardContent>
+              <div className="grid md:grid-cols-4 gap-4">
+                <SchemaCard
+                  icon={<MapPin className="size-4 text-blue-600" />}
+                  title="Location Data"
+                  pills={["latitude", "longitude", "street", "zone_type", "zone_encoded"]}
+                  color="bg-blue-500"
+                />
+
+                <SchemaCard
+                  icon={<Store className="size-4 text-green-600" />}
+                  title="Business Density"
+                  pills={[
+                    "business_density_50m",
+                    "business_density_100m",
+                    "business_density_200m",
+                  ]}
+                  color="bg-green-500"
+                />
+
+                <SchemaCard
+                  icon={<Users className="size-4 text-purple-600" />}
+                  title="Competitor Data"
+                  pills={[
+                    "competitor_density_50m",
+                    "competitor_density_100m",
+                    "competitor_density_200m",
+                  ]}
+                  color="bg-purple-500"
+                />
+
+                <SchemaCard
+                  icon={<Building2 className="size-4 text-orange-600" />}
+                  title="Business Info"
+                  pills={["business_name", "type", "category", "general_category", "status"]}
+                  color="bg-orange-500"
+                />
+              </div>
+
+              <div className="mt-4 p-4 bg-blue-50 rounded-lg">
+                <p className="text-xs text-blue-900">
+                  <strong>Data Source:</strong> Field survey of real businesses in Brgy. Sta. Cruz, Santa
+                  Maria, Bulacan. All coordinates verified.
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
       </Tabs>
     </div>
   );
 }
 
-// Format action text (unchanged)
-function formatActivityAction(action: string): string {
-  const actionMap: Record<string, string> = {
-    user_signup: "New user registration",
-    user_login: "User logged in",
-    clustering_analysis: "Performed clustering analysis",
-    seed_data_updated: "Updated seed data",
-    seed_data_reset: "Reset seed data to default",
-  };
+/* --------------------------- SMALL COMPONENTS --------------------------- */
 
-  return actionMap[action] || action.replace(/_/g, " ");
+function StatCard({
+  title,
+  value,
+  subtitle,
+  icon,
+  gradient,
+}: {
+  title: string;
+  value: number;
+  subtitle: string;
+  icon: React.ReactNode;
+  gradient: string;
+}) {
+  return (
+    <Card className={`bg-gradient-to-br ${gradient} border`}>
+      <CardHeader className="pb-2">
+        <CardTitle className="text-sm flex items-center justify-between">
+          {title}
+          {icon}
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="text-3xl">{value}</div>
+        <p className="text-xs mt-1">{subtitle}</p>
+      </CardContent>
+    </Card>
+  );
+}
+
+function InfoItem({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="space-y-1">
+      <p className="text-xs text-muted-foreground">{label}</p>
+      <p className="text-sm">{value}</p>
+    </div>
+  );
+}
+
+function ZoneProgress({ label, value }: { label: string; value: number }) {
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-1">
+        <span className="text-sm">{label}</span>
+        <span className="text-sm">{value.toFixed(1)}%</span>
+      </div>
+      <Progress value={value} className="h-2" />
+    </div>
+  );
+}
+
+function QualityRow({
+  label,
+  value,
+  suffix,
+}: {
+  label: string;
+  value: number;
+  suffix?: string;
+}) {
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-sm">{label}</span>
+        <span className="text-sm">
+          {value}%{suffix ? ` • ${suffix}` : ""}
+        </span>
+      </div>
+      <Progress value={value} className="h-2" />
+    </div>
+  );
+}
+
+function SchemaCard({
+  icon,
+  title,
+  pills,
+  color,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  pills: string[];
+  color: string;
+}) {
+  return (
+    <div className="p-4 border rounded-lg bg-muted/30">
+      <h4 className="text-sm mb-3 flex items-center gap-2">
+        {icon}
+        {title}
+      </h4>
+
+      <div className="space-y-2 text-xs">
+        {pills.map((p) => (
+          <div key={p} className="flex items-center gap-2">
+            <div className={`size-1.5 rounded-full ${color}`} />
+            <span>{p}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function SystemStatus({ label }: { label: string }) {
+  return (
+    <div className="flex items-center justify-between p-3 bg-green-50 rounded-lg">
+      <div className="flex items-center gap-2">
+        <CheckCircle className="size-4 text-green-600" />
+        <span className="text-sm">{label}</span>
+      </div>
+      <Badge className="bg-green-100 text-green-700 border-green-300">
+        Operational
+      </Badge>
+    </div>
+  );
 }

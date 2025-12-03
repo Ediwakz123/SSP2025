@@ -18,25 +18,26 @@ export default async function handler(req, res) {
     const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
     const prompt = `
-      Classify this business idea into:
-      - Food & Beverage
+      Classify this business idea into one of the following categories:
       - Retail
-      - Services
-      - Hardware / Construction
-      - Entertainment / Tech
+      - Service
+      - Merchandising / Trading
       - Miscellaneous
+      - Entertainment / Leisure
+
+      Consider the nature of the business, what it offers, and its business model.
 
       Business Idea: "${businessIdea}"
 
-      Return JSON only:
-      { "category": "", "explanation": "" }
+      Return ONLY the best matching category name (no explanation).
     `;
 
     const aiRes = await model.generateContent(prompt);
     const text = aiRes.response.text();
-    const json = JSON.parse(text.match(/\{[\s\S]*\}/)[0]);
 
-    return res.status(200).json(json);
+    // The prompt asks for ONLY the category name, so we just trim the result.
+    // We wrap it in a JSON object for the frontend.
+    return res.status(200).json({ category: text.trim() });
 
   } catch (err) {
     console.error(err);

@@ -3,7 +3,13 @@
   "version": "1.0.0",
   "type": "module",
   "dependencies": {
+    "dotenv": "^17.2.3",
+    "jspdf": "^3.0.4",
+    "jspdf-autotable": "^5.0.2",
     "node-fetch": "^3.3.2",
-    "dotenv": "^17.2.3"
+    "papaparse": "^5.5.3"
+  },
+  "devDependencies": {
+    "@types/papaparse": "^5.5.0"
   }
 }

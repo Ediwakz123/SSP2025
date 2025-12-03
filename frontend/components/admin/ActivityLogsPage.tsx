@@ -2,232 +2,324 @@ import { useEffect, useMemo, useState } from "react";
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
+  CardDescription,
 } from "../ui/card";
-import { Button } from "../ui/button";
 import { Input } from "../ui/input";
+import { Button } from "../ui/button";
 import { Badge } from "../ui/badge";
 import { ScrollArea } from "../ui/scroll-area";
 import {
   Select,
-  SelectContent,
-  SelectItem,
   SelectTrigger,
+  SelectItem,
   SelectValue,
+  SelectContent,
 } from "../ui/select";
+
 import {
   Activity,
-  Users,
+  LogIn,
   BarChart3,
   Database,
-  LogIn,
   Clock,
-  RefreshCw,
   Search,
+  RefreshCcw,
 } from "lucide-react";
 
-import { supabase } from "../../lib/supabase"; // ✅ New Supabase client
+import { supabase } from "../../lib/supabase";
 
-// ❌ Removed props interface — no props are required anymore
-
+// ---------------- TYPES ----------------
 interface ActivityLog {
   id: number;
   action: string;
-  status?: "success" | "error" | "info";
-  user_email?: string;
-  context?: string;
-  details?: string;
-  created_at?: string;
+  status?: string;
+  user_id?: string | null;
+  user_email?: string | null;
+  details?: string | null;
+  context?: Record<string, any> | null;
+  created_at: string;
 }
+
+// Helper to safely parse context
+const parseContext = (value: any): Record<string, any> | null => {
+  if (!value) return null;
+  if (typeof value === "object") return value;
+  if (typeof value === "string") {
+    try {
+      return JSON.parse(value);
+    } catch {
+      return { raw: value };
+    }
+  }
+  return { value };
+};
 
 export function ActivityLogsPage() {
   const [logs, setLogs] = useState<ActivityLog[]>([]);
   const [loading, setLoading] = useState(true);
-  const [typeFilter, setTypeFilter] = useState<"all" | "success" | "error" | "info">("all");
+  const [actionFilter, setActionFilter] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
 
-  // ✅ NEW: Fetch from Supabase instead of API-client
+  // ---------------- FETCH LOGS ----------------
   const fetchLogs = async () => {
-    try {
-      setLoading(true);
+    setLoading(true);
 
-      const { data, error } = await supabase
-        .from("activity_logs")
-        .select("*")
-        .order("created_at", { ascending: false });
+    const { data, error } = await supabase
+      .from("activity_logs")
+      .select("*")
+      .order("created_at", { ascending: false });
 
-      if (!error) {
-        setLogs(data || []);
-      }
-    } finally {
-      setLoading(false);
+    if (error) {
+      console.error("Error loading logs:", error);
+      setLogs([]);
+    } else {
+      const normalized: ActivityLog[] = (data || []).map((row: any) => ({
+        ...row,
+        context: parseContext(row.context),
+      }));
+      setLogs(normalized);
     }
+
+    setLoading(false);
   };
 
   useEffect(() => {
     fetchLogs();
-  }, []); // ❌ Removed accessToken dependency
+  }, []);
 
-  // Filters & search logic (UNCHANGED)
+  // 🔥 Real-time listener
+  useEffect(() => {
+    const channel = supabase
+      .channel("realtime_activity_logs")
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "activity_logs" },
+        (payload) => {
+          setLogs((prev) => [
+            { ...(payload.new as any), context: parseContext((payload.new as any).context) },
+            ...prev,
+          ]);
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel); // synchronous cleanup
+    };
+  }, []);
+
+  // ---------------- FILTERING & SEARCH ----------------
   const filteredLogs = useMemo(() => {
     return logs
-      .filter((log) => (typeFilter === "all" ? true : log.status === typeFilter))
+      .filter((log) =>
+        actionFilter === "all" ? true : log.action === actionFilter
+      )
       .filter((log) => {
-        if (!searchQuery) return true;
         const q = searchQuery.toLowerCase();
         return (
-          (log.action ?? "").toLowerCase().includes(q) ||
-          (log.details ?? "").toLowerCase().includes(q) ||
-          (log.context ?? "").toLowerCase().includes(q) ||
-          (log.user_email ?? "").toLowerCase().includes(q)
+          log.action.toLowerCase().includes(q) ||
+          (log.user_email || "").toLowerCase().includes(q) ||
+          (log.user_id || "").toLowerCase().includes(q) ||
+          (log.details || "").toLowerCase().includes(q) ||
+          JSON.stringify(log.context || {})
+            .toLowerCase()
+            .includes(q)
         );
       });
-  }, [logs, typeFilter, searchQuery]);
+  }, [logs, actionFilter, searchQuery]);
 
+  // ---------------- STATS ----------------
+  const totalActivities = logs.length;
+  const loginCount = logs.filter((l) => l.action === "user_login").length;
+  const analysisCount = logs.filter(
+    (l) => l.action === "clustering_analysis"
+  ).length;
+  const dataChanges = logs.filter((l) =>
+    ["seed_data_reset", "seed_data_updated"].includes(l.action)
+  ).length;
+
+  // ---------------- HELPERS ----------------
+  const getIcon = (action: string) => {
+    if (action === "user_login") return <LogIn className="text-blue-600" />;
+    if (action === "clustering_analysis")
+      return <BarChart3 className="text-purple-600" />;
+    if (action.includes("seed_data"))
+      return <Database className="text-orange-500" />;
+    return <Activity className="text-gray-400" />;
+  };
+
+  const formatAction = (action: string) => {
+    const map: Record<string, string> = {
+      user_login: "User Login",
+      clustering_analysis: "Clustering Analysis",
+      seed_data_reset: "Seed Reset",
+      seed_data_updated: "Seed Update",
+    };
+    return map[action] || action.replace(/_/g, " ");
+  };
+
+  // ---------------- RENDER ----------------
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col justify-between gap-4 md:flex-row md:items-center">
-        <div>
-          <h2 className="flex items-center gap-2 text-xl font-semibold tracking-tight">
-            <Activity className="h-5 w-5 text-purple-600" />
-            Activity Logs
-          </h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Track sign-ins, clustering requests, and admin actions.
-          </p>
-        </div>
-        <div className="flex items-center gap-3">
-          <Button
-            size="sm"
-            variant="outline"
-            className="gap-2 border-purple-200 text-purple-700 hover:bg-purple-50"
-            onClick={fetchLogs}
-            disabled={loading}
-          >
-            <RefreshCw className="h-4 w-4" />
-            Refresh
-          </Button>
-        </div>
+    <div className="space-y-8">
+      {/* HEADER COUNTERS */}
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm">Total Activities</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{totalActivities}</div>
+            <p className="text-xs text-muted-foreground">Logged actions</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm">User Logins</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{loginCount}</div>
+            <p className="text-xs text-muted-foreground">
+              Authentication events
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm">Analyses</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{analysisCount}</div>
+            <p className="text-xs text-muted-foreground">
+              Clustering operations
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm">Data Changes</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{dataChanges}</div>
+            <p className="text-xs text-muted-foreground">Seed data updates</p>
+          </CardContent>
+        </Card>
       </div>
 
-      {/* Filters */}
-      <Card className="border-purple-100">
-        <CardHeader className="pb-3">
-          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-            <div>
-              <CardTitle className="text-sm">Filters</CardTitle>
-              <CardDescription>Filter logs by type and keyword.</CardDescription>
-            </div>
-
-            <div className="flex flex-wrap items-center gap-2">
-              <div className="relative w-full min-w-[220px] md:w-72">
-                <Search className="pointer-events-none absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Search by action, user, or details"
-                  className="pl-8 text-sm"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                />
-              </div>
-
-              <Select
-                value={typeFilter}
-                onValueChange={(value: "all" | "success" | "error" | "info") =>
-                  setTypeFilter(value)
-                }
-              >
-                <SelectTrigger className="w-[140px] text-sm">
-                  <SelectValue placeholder="Type" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All types</SelectItem>
-                  <SelectItem value="success">Success</SelectItem>
-                  <SelectItem value="error">Error</SelectItem>
-                  <SelectItem value="info">Info</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
+      {/* MAIN CARD */}
+      <Card className="p-4">
+        <CardHeader>
+          <CardTitle>Recent Activities</CardTitle>
+          <CardDescription>
+            Showing {filteredLogs.length} of {logs.length} activities
+          </CardDescription>
         </CardHeader>
 
-        <CardContent className="pb-3">
-          <ScrollArea className="h-[420px] pr-3">
-            <div className="space-y-2">
-              {filteredLogs.map((log) => {
-                let icon = <Activity className="h-3.5 w-3.5 text-slate-500" />;
-                let badgeClass =
-                  "border-slate-200 bg-slate-50 text-[10px] text-slate-700";
+        {/* Search & Filter Row */}
+        <div className="flex items-center gap-4 px-4 pb-4">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
+            <Input
+              className="pl-10"
+              placeholder="Search activities..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+          </div>
 
-                if (log.status === "success") {
-                  icon = <LogIn className="h-3.5 w-3.5 text-green-600" />;
-                  badgeClass =
-                    "border-green-200 bg-green-50 text-[10px] text-green-700";
-                } else if (log.status === "error") {
-                  icon = <BarChart3 className="h-3.5 w-3.5 text-red-600" />;
-                  badgeClass =
-                    "border-red-200 bg-red-50 text-[10px] text-red-700";
-                } else if (log.status === "info") {
-                  icon = <Database className="h-3.5 w-3.5 text-purple-600" />;
-                  badgeClass =
-                    "border-purple-200 bg-purple-50 text-[10px] text-purple-700";
-                }
+          <Select value={actionFilter} onValueChange={setActionFilter}>
+            <SelectTrigger className="w-[200px]">
+              <SelectValue placeholder="All Actions" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Actions</SelectItem>
+              {Array.from(new Set(logs.map((l) => l.action))).map((action) => (
+                <SelectItem key={action} value={action}>
+                  {formatAction(action)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
 
-                return (
-                  <div
-                    key={log.id}
-                    className="flex items-start gap-3 rounded-lg border border-purple-50 bg-white px-3 py-2 text-xs shadow-[0_1px_0_0_rgba(15,23,42,0.03)]"
-                  >
-                    <div className="mt-0.5">{icon}</div>
-                    <div className="flex-1">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <span className="font-medium">
-                            {log.action || "Action"}
-                          </span>
-                          <Badge variant="outline" className={badgeClass}>
-                            {log.status ?? "info"}
-                          </Badge>
-                        </div>
-
-                        <span className="flex items-center gap-1 text-[10px] text-muted-foreground">
-                          <Clock className="h-3 w-3" />
-                          {log.created_at
-                            ? new Date(log.created_at).toLocaleString()
-                            : "—"}
-                        </span>
-                      </div>
-
-                      <p className="mt-0.5 text-[11px] text-muted-foreground">
-                        {log.details || log.context || "No additional details"}
-                      </p>
-
-                      {log.user_email && (
-                        <p className="mt-0.5 text-[10px] text-slate-500">
-                          User: <span className="font-medium">{log.user_email}</span>
-                        </p>
-                      )}
-                    </div>
+        {/* LOG LIST */}
+        <ScrollArea className="h-[600px] pr-4 pb-4">
+          <div className="space-y-3">
+            {filteredLogs.map((log) => (
+              <div
+                key={log.id}
+                className="w-full space-y-2 rounded-xl border bg-[#fafafa] p-5"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="rounded-full border bg-white p-2">
+                    {getIcon(log.action)}
                   </div>
-                );
-              })}
 
-              {!loading && filteredLogs.length === 0 && (
-                <p className="py-6 text-center text-sm text-muted-foreground">
-                  No logs match this filter.
-                </p>
-              )}
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-medium">
+                        {formatAction(log.action)}
+                      </p>
+                      <Badge variant="outline" className="text-xs">
+                        {log.action}
+                      </Badge>
+                    </div>
 
-              {loading && (
-                <p className="py-6 text-center text-sm text-muted-foreground">
-                  Loading activity logs...
-                </p>
-              )}
-            </div>
-          </ScrollArea>
-        </CardContent>
+                    <p className="flex items-center gap-1 text-xs text-muted-foreground">
+                      <Clock className="h-3 w-3" />
+                      {new Date(log.created_at).toLocaleString()}
+                    </p>
+
+                    {log.user_email && (
+                      <p className="text-xs text-muted-foreground">
+                        email:{" "}
+                        <span className="font-medium">{log.user_email}</span>
+                      </p>
+                    )}
+
+                    {log.user_id && (
+                      <p className="text-xs text-muted-foreground">
+                        user id:{" "}
+                        <span className="font-medium">{log.user_id}</span>
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                {/* Simple details text */}
+                {log.details && (
+                  <div className="rounded-lg border bg-white p-3 text-xs">
+                    <p>{log.details}</p>
+                  </div>
+                )}
+
+                {/* Context metadata (e.g. num_clusters, business_type, etc.) */}
+                {log.context && Object.keys(log.context).length > 0 && (
+                  <div className="rounded-lg border bg-white p-3 text-xs">
+                    {Object.entries(log.context).map(([key, value]) => (
+                      <div key={key} className="flex gap-2">
+                        <span className="text-muted-foreground">
+                          {key}:
+                        </span>
+                        <span>{String(value)}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+
+            {!loading && filteredLogs.length === 0 && (
+              <p className="py-6 text-center text-muted-foreground">
+                No activities found.
+              </p>
+            )}
+          </div>
+        </ScrollArea>
       </Card>
     </div>
   );

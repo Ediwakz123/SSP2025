@@ -1,5 +1,5 @@
 // -----------------------------------------------------------------------------
-// K-MEANS LOCATION ANALYSIS (Traffic-Based Scoring + Grid Candidates)
+// SMART BUSINESS LOCATION ANALYSIS (No Grid, Road-Snapping, Traffic-Aware)
 // -----------------------------------------------------------------------------
 
 import {
@@ -15,7 +15,7 @@ import {
 export interface Business {
   business_id: number;
   business_name: string;
-  general_category: string;     // <-- FIXED
+  general_category: string;
   latitude: number;
   longitude: number;
   street: string;
@@ -56,17 +56,21 @@ export interface ClusteringResult {
     competitorsWithin2km: number;
     marketSaturation: number;
     recommendedStrategy: string;
+   opportunity_score?: number;
+
+
   };
   zoneType: string;
   analysis: {
     confidence: number;
     opportunity: string;
+    opportunity_score?: number;
     competitorCount: number;
   };
 }
 
 // -----------------------------------------------------------------------------
-// CONSTANTS
+// COLORS
 // -----------------------------------------------------------------------------
 
 const CLUSTER_COLORS = [
@@ -92,7 +96,7 @@ function fixEmptyClusters(clusters: Cluster[], points: Business[]): void {
 }
 
 // -----------------------------------------------------------------------------
-// K-MEANS++ INITIALIZATION
+// K-MEANS++ CENTROID INITIALIZATION
 // -----------------------------------------------------------------------------
 
 function initializeKMeansPlusPlus(points: Business[], k: number): GeoPoint[] {
@@ -131,7 +135,7 @@ function initializeKMeansPlusPlus(points: Business[], k: number): GeoPoint[] {
 }
 
 // -----------------------------------------------------------------------------
-// TRAFFIC + STREET POPULARITY SCORE
+// TRAFFIC SCORING
 // -----------------------------------------------------------------------------
 
 function computeTrafficScore(
@@ -142,139 +146,45 @@ function computeTrafficScore(
   const streetPopularity = streetStats[key] ?? 0;
 
   return (
-    b.business_density_50m * 0.30 +
-    b.business_density_100m * 0.20 +
-    b.business_density_200m * 0.10 -
+    b.business_density_50m * 0.3 +
+    b.business_density_100m * 0.2 +
+    b.business_density_200m * 0.1 -
     b.competitor_density_50m * 0.25 -
-    b.competitor_density_100m * 0.10 -
+    b.competitor_density_100m * 0.1 -
     b.competitor_density_200m * 0.05 +
-    b.zone_encoded * 0.10 +
+    b.zone_encoded * 0.1 +
     streetPopularity * 0.15
   );
 }
 
 // -----------------------------------------------------------------------------
-// ⭐ Generate grid candidate points
+// BARANGAY LIMITS
 // -----------------------------------------------------------------------------
 
-function generateCandidateGrid(cluster: Cluster, spacingMeters = 40): GeoPoint[] {
-  const LAT_METER = 0.000009;
-  const LNG_METER = 0.000009;
+const BRGY_BOUNDS = {
+  minLat: 14.8338,   // South boundary
+  maxLat: 14.8413,   // North boundary
+  minLng: 120.9518,  // West boundary
+  maxLng: 120.9608,  // East boundary
+};
 
-  const latitudes = cluster.points.map((p) => p.latitude);
-  const longitudes = cluster.points.map((p) => p.longitude);
-
-  const minLat = Math.min(...latitudes);
-  const maxLat = Math.max(...latitudes);
-  const minLng = Math.min(...longitudes);
-  const maxLng = Math.max(...longitudes);
-
-  const grid: GeoPoint[] = [];
-  const latStep = LAT_METER * spacingMeters;
-  const lngStep = LNG_METER * spacingMeters;
-
-  for (let lat = minLat; lat <= maxLat; lat += latStep) {
-    for (let lng = minLng; lng <= maxLng; lng += lngStep) {
-      grid.push({ latitude: lat, longitude: lng });
-    }
-  }
-
-  return grid;
+function clampToBarangay(lat: number, lng: number) {
+  return {
+    latitude: Math.min(Math.max(lat, BRGY_BOUNDS.minLat), BRGY_BOUNDS.maxLat),
+    longitude: Math.min(Math.max(lng, BRGY_BOUNDS.minLng), BRGY_BOUNDS.maxLng),
+  };
 }
 
 // -----------------------------------------------------------------------------
-// ⭐ Score a candidate grid point
+// ELBOW METHOD — AUTOMATIC K SELECTION (K = 2 → 6)
 // -----------------------------------------------------------------------------
 
-function scoreCandidatePoint(
-  p: GeoPoint,
-  allBusinesses: Business[],
-  streetStats: Record<string, number>,
-  category: string
-): number {
-  let businessDensity50 = 0;
-  let businessDensity100 = 0;
-  let businessDensity200 = 0;
-
-  let competitorDensity50 = 0;
-  let competitorDensity100 = 0;
-  let competitorDensity200 = 0;
-
-  for (const b of allBusinesses) {
-    const dist = haversineDistance(p, { latitude: b.latitude, longitude: b.longitude });
-
-    if (dist <= 0.05) businessDensity50++;
-    if (dist <= 0.1) businessDensity100++;
-    if (dist <= 0.2) businessDensity200++;
-
-    if (b.general_category.trim().toLowerCase() === category.trim().toLowerCase()) {
-      if (dist <= 0.05) competitorDensity50++;
-      if (dist <= 0.1) competitorDensity100++;
-      if (dist <= 0.2) competitorDensity200++;
-    }
-  }
-
-  const nearest = allBusinesses
-    .map((b) => ({
-      street: b.street,
-      dist: haversineDistance(p, { latitude: b.latitude, longitude: b.longitude }),
-    }))
-    .sort((a, b) => a.dist - b.dist)[0];
-
-  const streetKey = nearest.street?.trim().toLowerCase() || "unknown";
-  const streetPopularity = streetStats[streetKey] ?? 0;
-
-  return (
-    businessDensity50 * 0.30 +
-    businessDensity100 * 0.20 +
-    businessDensity200 * 0.10 -
-    competitorDensity50 * 0.25 -
-    competitorDensity100 * 0.10 -
-    competitorDensity200 * 0.05 +
-    streetPopularity * 0.15 +
-    0.05
-  );
-}
-
-// -----------------------------------------------------------------------------
-// ⭐ MAIN — findOptimalLocation
-// -----------------------------------------------------------------------------
-
-export function findOptimalLocation(
-  businesses: Business[],
-  category: string
-): ClusteringResult {
-  
-  const normalized = category.trim().toLowerCase();
-
-  // FIXED — category → general_category
-  const filtered = businesses.filter(
-    (b) => b.general_category.trim().toLowerCase() === normalized
-  );
-
-  const points = filtered.length ? filtered : businesses;
-
-  // Street popularity map
-  const streetStats: Record<string, number> = {};
-  for (const b of businesses) {
-    const key = b.street?.trim().toLowerCase() || "unknown";
-    streetStats[key] = (streetStats[key] || 0) + 1;
-  }
-
-  // Determine K
-  let K = 2;
-  if (points.length > 20) K = 3;
-  if (points.length > 40) K = 4;
-  if (points.length > 80) K = 5;
-  if (points.length > 150) K = 6;
-  if (points.length > 250) K = 7;
-
-  let centroids = initializeKMeansPlusPlus(points, K);
+function computeInertia(points: Business[], k: number): number {
+  let centroids = initializeKMeansPlusPlus(points, k);
   let clusters: Cluster[] = [];
 
-  // ITERATE
-  for (let iteration = 0; iteration < 40; iteration++) {
-    clusters = Array.from({ length: K }, (_, i) => ({
+  for (let iteration = 0; iteration < 25; iteration++) {
+    clusters = Array.from({ length: k }, (_, i) => ({
       id: i,
       color: CLUSTER_COLORS[i % CLUSTER_COLORS.length],
       centroid: centroids[i],
@@ -315,6 +225,118 @@ export function findOptimalLocation(
     );
 
     if (JSON.stringify(newCentroids) === JSON.stringify(centroids)) break;
+    centroids = newCentroids;
+  }
+
+  // inertia = sum of squared distances
+  let inertia = 0;
+  clusters.forEach((cluster) => {
+    cluster.points.forEach((p) => {
+      const d = haversineDistance(
+        { latitude: p.latitude, longitude: p.longitude },
+        cluster.centroid
+      );
+      inertia += d * d;
+    });
+  });
+
+  return inertia;
+}
+
+function selectOptimalK(points: Business[]): number {
+  const Ks = [2, 3, 4, 5, 6];
+  const inertias = Ks.map((k) => computeInertia(points, k));
+
+  const deltas = [];
+  for (let i = 1; i < inertias.length; i++) {
+    deltas.push(inertias[i - 1] - inertias[i]);
+  }
+
+  const firstDrop = deltas[0];
+  const threshold = firstDrop * 0.25;
+
+  for (let i = 1; i < deltas.length; i++) {
+    if (deltas[i] < threshold) {
+      return Ks[i]; // elbow found
+    }
+  }
+
+  return 6; // fallback = max K
+}
+
+
+// -----------------------------------------------------------------------------
+// FINAL FUNCTION — findOptimalLocation
+// -----------------------------------------------------------------------------
+
+export function findOptimalLocation(
+  businesses: Business[],
+  category: string
+): ClusteringResult {
+
+  const normalized = category.trim().toLowerCase();
+  const filtered = businesses.filter(
+    (b) => b.general_category.trim().toLowerCase() === normalized
+  );
+  const points = filtered.length ? filtered : businesses;
+
+  // Build street popularity map
+  const streetStats: Record<string, number> = {};
+  for (const b of businesses) {
+    const key = b.street?.trim().toLowerCase() || "unknown";
+    streetStats[key] = (streetStats[key] || 0) + 1;
+  }
+
+  const K = selectOptimalK(points);
+
+  let centroids = initializeKMeansPlusPlus(points, K);
+  let clusters: Cluster[] = [];
+
+  // K-MEANS LOOP
+  for (let iteration = 0; iteration < 40; iteration++) {
+    clusters = Array.from({ length: K }, (_, i) => ({
+      id: i,
+      color: CLUSTER_COLORS[i % CLUSTER_COLORS.length],
+      centroid: centroids[i],
+      points: [],
+    }));
+
+    // Assign businesses to centroids
+    for (const b of points) {
+      let bestIdx = 0;
+      let bestDist = Infinity;
+
+      centroids.forEach((c, idx) => {
+        const d = haversineDistance(
+          { latitude: b.latitude, longitude: b.longitude },
+          c
+        );
+        if (d < bestDist) {
+          bestDist = d;
+          bestIdx = idx;
+        }
+      });
+
+      clusters[bestIdx].points.push({
+        latitude: b.latitude,
+        longitude: b.longitude,
+        business: b,
+      });
+    }
+
+    fixEmptyClusters(clusters, points);
+
+    // Recompute centroids
+    const newCentroids = clusters.map((cluster) =>
+      calculateGeographicCentroid(
+        cluster.points.map((p) => ({
+          latitude: p.latitude,
+          longitude: p.longitude,
+        }))
+      )
+    );
+
+    if (JSON.stringify(newCentroids) === JSON.stringify(centroids)) break;
 
     centroids = newCentroids;
   }
@@ -330,47 +352,159 @@ export function findOptimalLocation(
     return { cluster, score: avgScore };
   });
 
-  const best = scoredClusters.sort((a, b) => b.score - a.score)[0].cluster;
+  // Choose best cluster
+  let best = scoredClusters.sort((a, b) => b.score - a.score)[0].cluster;
 
-  // Candidate grid scoring
-  const grid = generateCandidateGrid(best, 40);
-  const scoredGrid = grid.map((p) => ({
-    point: p,
-    score: scoreCandidatePoint(p, businesses, streetStats, category),
-  }));
+  // Avoid low-traffic clusters
+  const trafficOfBest =
+    best.points.reduce(
+      (sum, p) => sum + computeTrafficScore(p.business, streetStats),
+      0
+    ) / best.points.length;
 
-  const bestCandidate = scoredGrid.sort((a, b) => b.score - a.score)[0];
-  const recommended = bestCandidate.point;
+  if (trafficOfBest < 1 && scoredClusters.length > 1) {
+    best = scoredClusters[1].cluster;
+  }
 
-  // Nearby businesses
-  const nearbyBusinesses = points
+  // ------------------------------------------------------
+  // SAFE SNAPPING LOGIC
+  // ------------------------------------------------------
+
+  const threshold = Math.max(
+    3,
+    Math.floor(
+      Object.values(streetStats).reduce((a, b) => a + b, 0) /
+        Object.keys(streetStats).length
+    )
+  );
+
+  const majorRoads = Object.entries(streetStats)
+    .filter(([_, count]) => count >= threshold)
+    .map(([street]) => street.toLowerCase());
+
+  const centroid = best.centroid;
+
+  // Base recommended point = centroid
+  let recommended = { ...centroid };
+
+  // Snapping (only inside barangay + radius <300m)
+  const candidateRoadBiz = businesses
+    .filter((b) => majorRoads.includes(b.street.toLowerCase()))
+    .filter(
+      (b) =>
+        b.latitude >= BRGY_BOUNDS.minLat &&
+        b.latitude <= BRGY_BOUNDS.maxLat &&
+        b.longitude >= BRGY_BOUNDS.minLng &&
+        b.longitude <= BRGY_BOUNDS.maxLng
+    )
     .map((b) => ({
       business: b,
-      distance: haversineDistance(
-        recommended,
-        { latitude: b.latitude, longitude: b.longitude }
-      ),
+      distance: haversineDistance(centroid, {
+        latitude: b.latitude,
+        longitude: b.longitude,
+      }),
+    }))
+    .sort((a, b) => a.distance - b.distance)[0];
+
+  if (candidateRoadBiz && candidateRoadBiz.distance < 0.3) {
+    recommended = {
+      latitude: candidateRoadBiz.business.latitude,
+      longitude: candidateRoadBiz.business.longitude,
+    };
+  }
+
+  // Clamp inside barangay
+  recommended = clampToBarangay(recommended.latitude, recommended.longitude);
+
+  // Determine zone type based on nearest business to recommended point
+  const closestBizForZone = businesses
+    .map((b) => ({
+      business: b,
+      distance: haversineDistance(recommended, {
+        latitude: b.latitude,
+        longitude: b.longitude,
+      }),
+    }))
+    .sort((a, b) => a.distance - b.distance)[0];
+
+  const inferredZoneType = closestBizForZone.business.zone_type;
+
+  // --------------------------------------
+  // NEARBY BUSINESSES (for UI only, show 10 closest)
+  // --------------------------------------
+  const nearbyBusinesses = businesses
+    .map((b) => ({
+      business: b,
+      distance: haversineDistance(recommended, {
+        latitude: b.latitude,
+        longitude: b.longitude,
+      }),
     }))
     .sort((a, b) => a.distance - b.distance)
     .slice(0, 10);
 
-  // Competitor analysis
-  const competitorCount = filtered.length;
-  const nearestCompetitor = nearbyBusinesses[1]?.business ?? null;
-  const distanceToNearest = nearbyBusinesses[1]?.distance ?? 0;
+  // --------------------------------------
+  // COMPETITOR ANALYSIS (same category only)
+  // --------------------------------------
 
-  const competitorsWithin500m = nearbyBusinesses.filter(
-    (p) => p.distance <= 0.5
-  ).length;
-  const competitorsWithin1km = nearbyBusinesses.filter(
-    (p) => p.distance <= 1
-  ).length;
-  const competitorsWithin2km = nearbyBusinesses.filter(
-    (p) => p.distance <= 2
+  // Competitors = same general_category as category input
+  const competitors = businesses.filter(
+    (b) => b.general_category.trim().toLowerCase() === normalized
+  );
+
+  // Pre-compute competitor distances from the recommended point
+  const competitorDistances = competitors.map((b) => ({
+    business: b,
+    distance: haversineDistance(recommended, {
+      latitude: b.latitude,
+      longitude: b.longitude,
+    }),
+  }));
+
+  // Total competitors (same category)
+  const competitorCount = competitorDistances.length;
+
+  // Nearest competitor
+  const sortedCompetitors = [...competitorDistances].sort(
+    (a, b) => a.distance - b.distance
+  );
+  const nearestCompetitorEntry = sortedCompetitors[0] || null;
+
+  const nearestCompetitor = nearestCompetitorEntry
+    ? nearestCompetitorEntry.business
+    : null;
+
+  const distanceToNearest = nearestCompetitorEntry
+    ? nearestCompetitorEntry.distance
+    : 0;
+
+  // Competitors within radius ranges (in km)
+  const competitorsWithin500m = competitorDistances.filter(
+    (c) => c.distance <= 0.5
   ).length;
 
-  const marketSaturation = competitorCount / points.length;
+  const competitorsWithin1km = competitorDistances.filter(
+    (c) => c.distance <= 1
+  ).length;
 
+  const competitorsWithin2km = competitorDistances.filter(
+    (c) => c.distance <= 2
+  ).length;
+
+  // Businesses within 1km (all categories) for saturation baseline
+  const businessesWithin1km = businesses.filter(
+    (b) =>
+      haversineDistance(recommended, {
+        latitude: b.latitude,
+        longitude: b.longitude,
+      }) <= 1
+  ).length;
+
+  // Market saturation: share of businesses within 1km that are competitors
+  const marketSaturation =
+    businessesWithin1km > 0 ? competitorsWithin1km / businessesWithin1km : 0;
+
+  // Confidence scoring (unchanged)
   const confidence =
     best.points.length / points.length >= 0.45
       ? 0.82
@@ -402,9 +536,7 @@ export function findOptimalLocation(
           ? "Ideal location for business entry."
           : "Proceed with clear differentiation.",
     },
-    zoneType:
-      best.points[0]?.business.zone_type ||
-      "Unknown",
+    zoneType: inferredZoneType,
     analysis: {
       confidence,
       opportunity,
@@ -412,3 +544,36 @@ export function findOptimalLocation(
     },
   };
 }
+
+export function computeOpportunityScore(metrics: {
+  competitorCount: number;
+  businessDensity50m: number;
+  businessDensity100m: number;
+  businessDensity200m: number;
+  clusterStrength: number;
+}) {
+  // Competitor impact (inverse)
+  const comp = Math.max(0, Math.min(1, 1 - metrics.competitorCount / 5));
+
+  // Business density weighted more strongly
+  const densityRaw =
+    metrics.businessDensity50m * 0.5 +
+    metrics.businessDensity100m * 0.3 +
+    metrics.businessDensity200m * 0.2;
+
+  const density = Math.min(1, densityRaw / 20);
+
+  // Cluster strength (favor strong clusters)
+  const cluster = Math.min(1, metrics.clusterStrength / 5);
+
+  // New balanced formula:
+  const score =
+    comp * 0.45 +   // competition is most important
+    density * 0.30 +
+    cluster * 0.25;
+
+  return Number(score.toFixed(3));
+}
+
+
+

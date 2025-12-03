@@ -7,7 +7,12 @@ const config: Config = {
         "./src/**/*.{ts,tsx,js,jsx}",
     ],
     theme: {
-        extend: {},
+        extend: {
+            fontFamily: {
+                sans: ["Inter", "sans-serif"],
+                heading: ["Outfit", "sans-serif"],
+            },
+        },
     },
     plugins: [],
 };

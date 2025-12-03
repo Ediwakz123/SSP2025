@@ -11,16 +11,14 @@ import { UserLogin } from "./components/auth/UserLogin";
 import { AdminLoginPage } from "./components/auth/AdminLoginPage";
 import { Register } from "./components/auth/Register";
 import { ForgotPasswordPage } from "./components/auth/ForgotPasswordPage";
-
-// NEW OTP RESET COMPONENTS
 import { EnterCodePage } from "./components/auth/EnterCodePage";
 import { ResetPasswordPage } from "./components/auth/ResetPasswordPage";
 import { ResetPasswordSuccessPage } from "./components/auth/ResetPasswordSuccessPage";
 
 // USER PAGES
-import { DashboardLayout as UserDashboardLayout } from "./components/auth/DashboardLayout";
+import { DashboardLayout } from "./components/auth/DashboardLayout";
 import { DashboardPage as UserDashboardPage } from "./components/users/DashboardPage";
-import { UserAnalyticsPage as UserAnalyticsPage } from "./components/users/UserAnalyticsPage";
+import { UserAnalyticsPage } from "./components/users/UserAnalyticsPage";
 import { ClusteringPage } from "./components/users/ClusteringPage";
 import { MapPage } from "./components/users/MapPage";
 import { OpportunitiesPage } from "./components/users/OpportunitiesPage";
@@ -31,16 +29,17 @@ import { AdminLayout } from "./components/admin/AdminLayout";
 import { AdminPortal } from "./components/admin/AdminPortal";
 import { ActivityLogsPage } from "./components/admin/ActivityLogsPage";
 import { UserManagement } from "./components/admin/UserManagement";
-import { SeedDataManagement } from "./components/admin/SeedDataManagement";
+import SeedDataManagement from "./components/admin/SeedDataManagement";
 import { AdminAnalyticsPage } from "./components/admin/AdminAnalyticsPage";
 
-// UI
 import { Toaster } from "./components/ui/sonner";
+
+import { NotFound } from "./components/NotFound";
 
 export function App() {
   return (
     <AuthProvider>
-      <Toaster position="top-right" />
+      <Toaster position="bottom-right" />
 
       <Routes>
 
@@ -50,34 +49,29 @@ export function App() {
         <Route path="/admin/login" element={<AdminLoginPage />} />
         <Route path="/register" element={<Register />} />
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
-
-        {/* 🔵 ENTER OTP CODE */}
         <Route path="/enter-code" element={<EnterCodePage />} />
-
-        {/* 🟩 FINAL PASSWORD RESET PAGE */}
         <Route path="/reset-password-final" element={<ResetPasswordPage />} />
-
-        {/* 🟧 SUCCESS PAGE */}
         <Route path="/reset-password-success" element={<ResetPasswordSuccessPage />} />
 
-        {/* USER PROTECTED ROUTES */}
+        {/* USER ROUTES */}
         <Route
           path="/user"
           element={
             <ProtectedRoute>
-              <UserDashboardLayout />
+              <DashboardLayout />
             </ProtectedRoute>
           }
         >
-          <Route index element={<UserDashboardPage />} />
-          <Route path="analytics" element={<UserAnalyticsPage />} />
+          <Route index element={<Navigate to="dashboard" replace />} />
+          <Route path="dashboard" element={<UserDashboardPage />} />
           <Route path="clustering" element={<ClusteringPage />} />
+          <Route path="analytics" element={<UserAnalyticsPage />} />
           <Route path="map" element={<MapPage />} />
           <Route path="opportunities" element={<OpportunitiesPage />} />
           <Route path="profile" element={<Profile />} />
         </Route>
 
-        {/* ADMIN PROTECTED ROUTES */}
+        {/* ADMIN ROUTES */}
         <Route
           path="/admin"
           element={
@@ -93,8 +87,8 @@ export function App() {
           <Route path="seed-data" element={<SeedDataManagement />} />
         </Route>
 
-        {/* FALLBACK */}
-        <Route path="*" element={<Navigate to="/" />} />
+        {/* 404 CATCH-ALL */}
+        <Route path="*" element={<NotFound />} />
 
       </Routes>
     </AuthProvider>

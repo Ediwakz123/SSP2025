@@ -1,0 +1,56 @@
+import pandas as pd, os
+import chardet
+import numpy as np
+from sklearn.neighbors import BallTree
+
+# detect encoding
+rawdata = open('../backend/rawbusinessdata.csv', 'rb').read()
+result = chardet.detect(rawdata)
+print(result)
+
+df = pd.read_csv('../backend/rawbusinessdata.csv', encoding=result['encoding'])
+df.head()
+df.info()
+
+
+coords = np.radians(df[['latitude','longitude']].values)
+tree = BallTree(coords, metric='haversine')
+coords[:5]
+
+# Radii in meters
+radii_meters = {
+    "50m": 50,
+    "100m": 100,
+    "200m": 200
+}
+
+# Earth radius in meters
+earth_radius_m = 6371000
+
+# Convert to radians
+radii_radians = {k: v / earth_radius_m for k, v in radii_meters.items()}
+radii_radians
+
+# Initialize
+for label in radii_meters.keys():
+    df[f'business_density_{label}'] = 0
+    df[f'competitor_density_{label}'] = 0
+
+# Compute densities
+for i, row in df.iterrows():
+    for label, rad in radii_radians.items():
+        idx = tree.query_radius([coords[i]], r=rad)[0]
+
+        df.at[i, f'business_density_{label}'] = len(idx) - 1
+
+        nearby = df.iloc[idx]
+        same = nearby[nearby['general_category'] == row['general_category']]
+        df.at[i, f'competitor_density_{label}'] = len(same) - 1
+
+df.head()
+
+df['zone_encoded'] = df['zone_type'].astype('category').cat.codes
+df[['zone_type','zone_encoded']].head()
+
+df.to_csv('../backend/enhanced_businessdata.csv', index=False)
+'enhanced_businessdata.csv saved.'

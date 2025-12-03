@@ -1,0 +1,40 @@
+======================================================================
+CSV TO SUPABASE IMPORT SCRIPT
+======================================================================
+
+Clearing existing data from business_raw table...
+Existing data cleared successfully
+
+Reading CSV file: rawbusinessdata.csv
+Found 100 businesses to import
+
+Category Distribution:
+   Retail: 39
+   Services: 24
+   Restaurant: 14
+   Merchandise / Trading: 12
+   Food & Beverages: 8
+   Entertainment / Leisure: 2
+   Pet Store: 1
+
+Importing batch 1 (100 businesses)...
+   Batch imported successfully
+
+Import complete! Total businesses imported: 100
+
+Verifying import...
+Total businesses in database: 100
+Unique categories: 7
+
+Category counts in database:
+   Retail: 39
+   Services: 24
+   Restaurant: 14
+   Merchandise / Trading: 12
+   Food & Beverages: 8
+   Entertainment / Leisure: 2
+   Pet Store: 1
+
+======================================================================
+IMPORT SUCCESSFUL!
+======================================================================

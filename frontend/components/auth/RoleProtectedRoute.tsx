@@ -1,6 +1,7 @@
-import React from "react";
+import { useEffect, useState } from "react";
 import { Navigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
+import { supabase } from "../../lib/supabase";
 
 interface Props {
   children: JSX.Element;
@@ -9,17 +10,43 @@ interface Props {
 
 export function RoleProtectedRoute({ children, role }: Props) {
   const { user, loading } = useAuth();
+  const [userRole, setUserRole] = useState<string | null>(null);
+  const [checking, setChecking] = useState(true);
 
-  if (loading) return <div>Loading...</div>;
+  useEffect(() => {
+    if (!user) {
+      setChecking(false);
+      return;
+    }
 
-  // Not logged in
-  if (!user) return <Navigate to="/user/login" replace />;
+    async function loadRole() {
+      let table = role === "admin" ? "admin_profiles" : "profiles";
 
-  // Get Supabase role from metadata
-  const userRole = user.user_metadata?.role;
+      const { data } = await supabase
+        .from(table)
+        .select("role")
+        .eq("id", user.id)
+        .single();
 
-  // If role mismatch → block access
-  if (userRole !== role) {
+      setUserRole(data?.role ?? null);
+      setChecking(false);
+    }
+
+    loadRole();
+  }, [user, role]);
+
+  // ⏳ Wait for Supabase AND role lookup
+  if (loading || checking) return <div className="p-4">Checking permissions...</div>;
+
+  // ❌ Not logged in
+  if (!user) {
+    return role === "admin"
+      ? <Navigate to="/admin/login" replace />
+      : <Navigate to="/user/login" replace />;
+  }
+
+  // ❌ Wrong role
+  if (role !== userRole) {
     return <Navigate to="/unauthorized" replace />;
   }
 

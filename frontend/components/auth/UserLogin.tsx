@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { Eye, EyeOff } from "lucide-react";
 import { Input } from "../ui/input";
 import { Button } from "../ui/button";
+import { logActivity } from "../../utils/activity";
 
 export function UserLogin() {
   const navigate = useNavigate();
@@ -31,44 +32,66 @@ export function UserLogin() {
   // 🔥 LOGIN HANDLER
   // ------------------------------------------------------------
   const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
+  e.preventDefault();
 
-    setError("");
-    setLoading(true);
+  setError("");
+  setLoading(true);
 
-    try {
-      // 🧠 Save or remove remembered email
-      if (rememberMe) {
-        localStorage.setItem("rememberEmail", email);
-      } else {
-        localStorage.removeItem("rememberEmail");
-      }
-
-      // Supabase Login
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
-
-      if (error) {
-        throw new Error(error.message || "Invalid login credentials.");
-      }
-
-      toast.success("Login Successful!");
-
-      // Role check
-      const role = data.user?.user_metadata?.role;
-
-      if (role === "admin") navigate("/admin");
-      else navigate("/user");
-
-    } catch (err: any) {
-      console.error("Login error:", err.message);
-      setError(err.message);
-    } finally {
-      setLoading(false);
+  try {
+    // 🧠 Save remembered email
+    if (rememberMe) {
+      localStorage.setItem("rememberEmail", email);
+    } else {
+      localStorage.removeItem("rememberEmail");
     }
-  };
+
+    // 1. Login
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+
+    if (error) throw new Error(error.message || "Invalid login credentials.");
+
+    const user = data.user;
+    if (!user) throw new Error("Login failed: no user returned.");
+
+    toast.success("Login Successful!");
+
+
+    // 2. Fetch role from profiles table
+    const { data: profile, error: profileErr } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", user.id)
+      .single();
+
+    if (profileErr) {
+      console.error("Profile fetch error:", profileErr);
+      throw new Error("Unable to load user profile.");
+    }
+
+    const userRole = profile?.role;
+
+    // 3. Update last_login timestamp
+    await supabase.from("profiles")
+      .update({ last_login: new Date().toISOString() })
+      .eq("id", user.id);
+
+    // 4. Redirect based on role
+    if (userRole === "admin") {
+      navigate("/admin", { replace: true });
+    } else {
+      navigate("/user/dashboard", { replace: true });
+    }
+
+  } catch (err: any) {
+    console.error("Login error:", err.message);
+    setError(err.message);
+  } finally {
+    setLoading(false);
+  }
+};
 
   // ------------------------------------------------------------
   // UI START — No changes except adding Remember Me

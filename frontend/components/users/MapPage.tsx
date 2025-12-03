@@ -5,6 +5,7 @@ import {
   CardHeader,
   CardTitle,
   CardDescription,
+
 } from "../ui/card";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
@@ -16,41 +17,95 @@ import {
   SelectValue,
 } from "../ui/select";
 import { Label } from "../ui/label";
-import { MapPin, Filter, RefreshCcw } from "lucide-react";
+import { MapPin, Filter, RefreshCcw ,Loader2 } from "lucide-react";
+import { useLocation } from "react-router-dom";
+import { supabase } from "../../lib/supabase";
+import { LOCATION_INFO } from "../../data/businesses";
+import { useActivity, logActivity } from "../../utils/activity";
+import { toast } from "sonner";
 
-import { supabase } from "../../lib/supabase"; // 🔁 adjust path if needed
-import { LOCATION_INFO } from "../../data/businesses"; // keeps your static barangay info
 
-// ---- Types ----
+// ---------------------------------------------------------
+// TYPES
+// ---------------------------------------------------------
 type Business = {
   id: number;
   business_name: string;
-  category: string;
+  general_category: string;
   zone_type: string;
   street: string | null;
   latitude: number;
   longitude: number;
 };
 
-// shared colors for map + legend
+// ---------------------------------------------------------
+// CATEGORY COLORS
+// ---------------------------------------------------------
 const CATEGORY_COLORS: Record<string, string> = {
-  Hardware: "#3b82f6",
-  Cafe: "#8b5cf6",
+  "Food & Beverages": "#0ea5e9",          // Sky Blue
   Retail: "#10b981",
   Services: "#f59e0b",
-  Restaurant: "#ef4444",
-  Pharmacy: "#06b6d4",
-  "Furniture Store": "#ec4899",
-  Resort: "#84cc16",
-  Bakery: "#f97316",
-  "Pet Store": "#a855f7",
+  "Merchandising / Trading": "#ef4444",
+  "Entertainment / Leisure": "#a78bfa",
+  Miscellaneous: "#475569",
 };
 
+
+
+
+
+// ---------------------------------------------------------
+// NORMALIZATION (prevents duplicate legend entries)
+// ---------------------------------------------------------
+function normalizeCategory(raw?: string | null): string {
+  if (!raw) return "Miscellaneous";
+
+  const cleaned = raw.trim();
+
+  const allowed = [
+    "Food & Beverages",
+    "Retail",
+    "Services",
+    "Merchandising / Trading",
+    "Entertainment / Leisure",
+    "Miscellaneous",
+  ];
+
+  if (allowed.includes(cleaned)) return cleaned;
+
+  return "Miscellaneous";
+}
+
+
+// ---------------------------------------------------------
+// BOUNDARY LIMITS (same as ClusteringPage)
+// ---------------------------------------------------------
+const BRGY_BOUNDS = {
+  minLat: 14.8338,
+  maxLat: 14.8413,
+  minLng: 120.9518,
+  maxLng: 120.9608,
+};
+
+function clampToStaCruz(lat: number, lng: number) {
+  return {
+    latitude: Math.min(Math.max(lat, BRGY_BOUNDS.minLat), BRGY_BOUNDS.maxLat),
+    longitude: Math.min(
+      Math.max(lng, BRGY_BOUNDS.minLng),
+      BRGY_BOUNDS.maxLng
+    ),
+  };
+}
+
+// ---------------------------------------------------------
+// MAIN COMPONENT
+// ---------------------------------------------------------
 export function MapPage() {
+  useActivity();
   const mapRef = useRef<HTMLDivElement>(null);
   const leafletMap = useRef<any>(null);
   const clusterLayer = useRef<any>(null);
-
+const { state } = useLocation();
   const [businesses, setBusinesses] = useState<Business[]>([]);
   const [categories, setCategories] = useState<string[]>([]);
   const [selectedCategory, setSelectedCategory] = useState("all");
@@ -58,11 +113,13 @@ export function MapPage() {
   const [totalMarkers, setTotalMarkers] = useState(0);
   const [isLeafletReady, setIsLeafletReady] = useState(false);
 
-  // ================================
-  // 1. Load REAL DATA from Supabase
-  // ================================
+
+  
+  // ---------------------------------------------------------
+  // LOAD SUPABASE DATA
+  // ---------------------------------------------------------
   useEffect(() => {
-    const loadData = async () => {
+    async function load() {
       const { data, error } = await supabase.from("businesses").select("*");
 
       if (error) {
@@ -72,45 +129,45 @@ export function MapPage() {
 
       const list = (data || []) as Business[];
 
-      // keep only rows with valid coords
       const valid = list.filter(
         (b) =>
           typeof b.latitude === "number" &&
           typeof b.longitude === "number" &&
-          !Number.isNaN(b.latitude) &&
-          !Number.isNaN(b.longitude)
+          !isNaN(b.latitude) &&
+          !isNaN(b.longitude)
       );
 
       setBusinesses(valid);
 
-      // unique categories
       const uniqueCats = Array.from(
-        new Set(valid.map((b) => b.category).filter(Boolean))
-      ) as string[];
+        new Set(
+          valid
+            .map((b) => normalizeCategory(b.general_category))
+            .filter((c) => c && c.trim() !== "")
+        )
+      );
       setCategories(uniqueCats);
-    };
+    }
 
-    loadData();
+    load();
   }, []);
 
-  // ============================================
-  // 2. Load Leaflet + MarkerCluster (once)
-  // ============================================
+  // ---------------------------------------------------------
+  // LOAD LEAFLET
+  // ---------------------------------------------------------
   useEffect(() => {
     const loadLeaflet = async () => {
       const w = window as any;
-
-      // already loaded?
       if (w.L && w.L.markerClusterGroup) {
         setIsLeafletReady(true);
         return;
       }
 
       const addCSS = (href: string) => {
-        const link = document.createElement("link");
-        link.rel = "stylesheet";
-        link.href = href;
-        document.head.appendChild(link);
+        const l = document.createElement("link");
+        l.rel = "stylesheet";
+        l.href = href;
+        document.head.appendChild(l);
       };
 
       addCSS("https://unpkg.com/leaflet@1.9.4/dist/leaflet.css");
@@ -121,171 +178,176 @@ export function MapPage() {
         "https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css"
       );
 
-      // load Leaflet js
       await new Promise<void>((resolve) => {
-        const leafletScript = document.createElement("script");
-        leafletScript.src = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";
-        leafletScript.onload = () => resolve();
-        document.head.appendChild(leafletScript);
+        const s = document.createElement("script");
+        s.src = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";
+        s.onload = () => resolve();
+        document.body.appendChild(s);
       });
 
-      // load markercluster js
       await new Promise<void>((resolve) => {
-        const clusterScript = document.createElement("script");
-        clusterScript.src =
+        const s = document.createElement("script");
+        s.src =
           "https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js";
-        clusterScript.onload = () => resolve();
-        document.head.appendChild(clusterScript);
+        s.onload = () => resolve();
+        document.body.appendChild(s);
       });
 
-      if (w.L && w.L.markerClusterGroup) {
-        setIsLeafletReady(true);
-      }
+      setIsLeafletReady(true);
     };
 
     loadLeaflet();
   }, []);
 
-  // ============================================
-  // 3. Init map AFTER data + leaflet ready
-  // ============================================
+  // ---------------------------------------------------------
+  // INIT MAP
+  // ---------------------------------------------------------
   useEffect(() => {
-    if (!isLeafletReady) return;
-    if (!businesses.length) return;
-    if (leafletMap.current) return; // already initialized
-
+    if (!isLeafletReady || !businesses.length || leafletMap.current) return;
     initMap();
     renderClusters(businesses);
   }, [isLeafletReady, businesses]);
 
   const initMap = () => {
-    const w = window as any;
-    const L = w.L;
-    if (!mapRef.current || leafletMap.current) return;
+    const L = (window as any).L;
 
-    const map = L.map(mapRef.current as HTMLElement, {
-      zoomControl: true,
-      attributionControl: false,
-    }).setView(
+    const map = L.map(mapRef.current!).setView(
       [LOCATION_INFO.center_latitude, LOCATION_INFO.center_longitude],
       15
     );
 
-    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-      attribution: "&copy; OpenStreetMap contributors",
-    }).addTo(map);
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png").addTo(
+      map
+    );
 
-    // Barangay center marker
-    L.marker([LOCATION_INFO.center_latitude, LOCATION_INFO.center_longitude], {
-      icon: L.divIcon({
-        html: `<div style="background-color:#ef4444;width:26px;height:26px;border-radius:50%;border:3px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.4);"></div>`,
-      }),
-    })
-      .addTo(map)
-      .bindPopup(
-        `<b>Brgy. ${LOCATION_INFO.barangay}</b><br>${LOCATION_INFO.municipality}, ${LOCATION_INFO.province}<br><small>Population: ${LOCATION_INFO.population.toLocaleString()}</small>`
-      );
+    map.setMaxBounds([
+      [BRGY_BOUNDS.minLat - 0.002, BRGY_BOUNDS.minLng - 0.002],
+      [BRGY_BOUNDS.maxLat + 0.002, BRGY_BOUNDS.maxLng + 0.002],
+    ]);
 
     leafletMap.current = map;
   };
 
-  // ============================================
-  // 4. Render clusters from data
-  // ============================================
+  // ---------------------------------------------------------
+  // RENDER BUSINESS MARKERS
+  // ---------------------------------------------------------
   const renderClusters = (data: Business[]) => {
-    const w = window as any;
-    const L = w.L;
+    const L = (window as any).L;
+
     if (!leafletMap.current) return;
 
-    if (clusterLayer.current) {
+    if (clusterLayer.current)
       leafletMap.current.removeLayer(clusterLayer.current);
-    }
 
     const clusters = L.markerClusterGroup({
-      showCoverageOnHover: false,
       maxClusterRadius: 60,
       disableClusteringAtZoom: 17,
-      spiderfyDistanceMultiplier: 2,
     });
 
     const bounds = L.latLngBounds([]);
 
-    data.forEach((biz) => {
-      const color = CATEGORY_COLORS[biz.category] || "#6b7280";
+    data.forEach((b) => {
+      const cleanCategory = normalizeCategory(b.general_category);
+      const color = CATEGORY_COLORS[cleanCategory] || "#6b7280";
 
-      const marker = L.circleMarker([biz.latitude, biz.longitude], {
-        radius: 8,
-        fillColor: color,
-        color: "#fff",
-        weight: 2,
-        opacity: 1,
-        fillOpacity: 0.9,
-      }).bindPopup(`
-        <div style="font-family: system-ui, sans-serif; min-width: 220px;">
-          <strong>${biz.business_name}</strong><br/>
-          <span style="color:${color};font-weight:600;">${biz.category}</span><br/>
-          <small>${biz.street ?? ""}</small><br/>
-          <small>Zone: ${biz.zone_type}</small><br/>
-          <small style="color:#6b7280;">${biz.latitude.toFixed(
-            5
-          )}, ${biz.longitude.toFixed(5)}</small>
-        </div>
-      `);
+      const safe = clampToStaCruz(b.latitude, b.longitude);
+
+      const marker = L.circleMarker([safe.latitude, safe.longitude], {
+  radius: 8,
+  fillColor: color,
+  color: "#fff",
+  weight: 2,
+  fillOpacity: 0.9,
+})
+  // 👇 ADD THIS CLICK EVENT
+  .on("click", () => {
+    toast.message(`Viewing: ${b.business_name}`);
+
+    logActivity("Viewed Business Marker", {
+      business_name: b.business_name,
+      category: cleanCategory,
+      zone: b.zone_type,
+      street: b.street,
+    });
+  })
+
+  // keep your popup — no changes
+  .bindPopup(`
+    <strong>${b.business_name}</strong><br/>
+    <span style="color:${color};font-weight:600;">${cleanCategory}</span><br/>
+    <small>${b.street ?? ""}</small><br/>
+    <small>Zone: ${b.zone_type}</small>
+  `);
+
 
       clusters.addLayer(marker);
-      bounds.extend([biz.latitude, biz.longitude]);
+      bounds.extend([safe.latitude, safe.longitude]);
     });
 
     leafletMap.current.addLayer(clusters);
     clusterLayer.current = clusters;
 
     if (bounds.isValid()) {
-      leafletMap.current.fitBounds(bounds, {
-        padding: [50, 50],
-        maxZoom: 16,
-      });
+      leafletMap.current.fitBounds(bounds, { padding: [40, 40], maxZoom: 16 });
     }
 
     setTotalMarkers(data.length);
   };
 
-  // ============================================
-  // 5. React to filter changes
-  // ============================================
+  // ---------------------------------------------------------
+  // FILTERS
+  // ---------------------------------------------------------
   useEffect(() => {
     if (!leafletMap.current) return;
 
     let filtered = businesses;
 
     if (selectedCategory !== "all") {
-      filtered = filtered.filter((b) => b.category === selectedCategory);
+      filtered = filtered.filter(
+        (b) =>
+          normalizeCategory(b.general_category) === selectedCategory
+      );
     }
+
     if (selectedZone !== "all") {
       filtered = filtered.filter((b) => b.zone_type === selectedZone);
     }
 
     renderClusters(filtered);
-  }, [selectedCategory, selectedZone, businesses]);
+  }, [selectedCategory, selectedZone]);
 
-  // ============================================
-  // 6. Reset view
-  // ============================================
+  // ---------------------------------------------------------
+  // RESET
+  // ---------------------------------------------------------
   const resetView = () => {
-    if (!leafletMap.current) return;
+  setSelectedCategory("all");
+  setSelectedZone("all");
+  renderClusters(businesses);
 
-    leafletMap.current.setView(
-      [LOCATION_INFO.center_latitude, LOCATION_INFO.center_longitude],
-      15
-    );
-    setSelectedCategory("all");
-    setSelectedZone("all");
-    renderClusters(businesses);
-  };
+  toast.success("Map view reset");
+  logActivity("Reset Map View");
+};
 
-  // ============================================
-  // Render UI (same as your sample)
-  // ============================================
+
+
+
+// ---------------------------
+// MAP LOADING SCREEN
+// ---------------------------
+if (!isLeafletReady || businesses.length === 0) {
   return (
+    <div className="flex flex-col items-center justify-center h-[60vh]">
+      <Loader2 className="w-6 h-6 animate-spin mb-2" />
+      Loading map...
+    </div>
+  );
+}
+
+  // ---------------------------------------------------------
+  // UI
+  // ---------------------------------------------------------
+  return (
+    
     <div className="space-y-6">
       {/* Filters */}
       <Card>
@@ -301,14 +363,23 @@ export function MapPage() {
 
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Category Select */}
+            {/* Category */}
             <div className="space-y-2">
               <Label>Business Category</Label>
               <Select
-                value={selectedCategory}
-                onValueChange={setSelectedCategory}
-              >
-                <SelectTrigger className="bg-input-background">
+  value={selectedCategory}
+  onValueChange={(value) => {
+    setSelectedCategory(value);
+    toast.info(
+      value === "all"
+        ? "Showing all business categories"
+        : `Filtered by category: ${value}`
+    );
+    logActivity("Filtered Map by Category", { category: value });
+  }}
+>
+
+                <SelectTrigger>
                   <SelectValue placeholder="All Categories" />
                 </SelectTrigger>
                 <SelectContent>
@@ -322,11 +393,11 @@ export function MapPage() {
               </Select>
             </div>
 
-            {/* Zone Select */}
+            {/* Zone */}
             <div className="space-y-2">
               <Label>Zone Type</Label>
               <Select value={selectedZone} onValueChange={setSelectedZone}>
-                <SelectTrigger className="bg-input-background">
+                <SelectTrigger>
                   <SelectValue placeholder="All Zones" />
                 </SelectTrigger>
                 <SelectContent>
@@ -338,13 +409,8 @@ export function MapPage() {
             </div>
           </div>
 
-          {/* Reset Button + Count */}
           <div className="mt-6 flex flex-wrap items-center gap-3">
-            <Button
-              onClick={resetView}
-              variant="outline"
-              className="flex items-center gap-2"
-            >
+            <Button onClick={resetView} variant="outline">
               <RefreshCcw className="w-4 h-4" /> Reset Map View
             </Button>
 
@@ -361,7 +427,7 @@ export function MapPage() {
         <CardHeader>
           <CardTitle>Interactive Business Map</CardTitle>
           <CardDescription>
-            Click on markers to view business details. Red marker indicates
+            Click markers to view business details. Red marker indicates
             barangay center.
           </CardDescription>
         </CardHeader>
@@ -369,7 +435,6 @@ export function MapPage() {
           <div
             ref={mapRef}
             className="w-full h-[600px] rounded-lg border border-border"
-            style={{ zIndex: 0 }}
           />
         </CardContent>
       </Card>
@@ -381,18 +446,20 @@ export function MapPage() {
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-            {categories.map((category) => {
-              const color = CATEGORY_COLORS[category] || "#6b7280";
-              return (
-                <div key={category} className="flex items-center gap-2">
-                  <div
-                    className="w-4 h-4 rounded-full border-2 border-white shadow"
-                    style={{ backgroundColor: color }}
-                  />
-                  <span className="text-sm">{category}</span>
-                </div>
-              );
-            })}
+    {categories.map((category) => {
+  const color = CATEGORY_COLORS[category] || "#6b7280"; // fallback gray
+
+  return (
+    <div key={category} className="flex items-center gap-2">
+      <div
+        className="w-4 h-4 rounded-full border-2 border-white shadow"
+        style={{ backgroundColor: color }}
+      />
+      <span className="text-sm">{category}</span>
+    </div>
+  );
+})}
+
           </div>
         </CardContent>
       </Card>

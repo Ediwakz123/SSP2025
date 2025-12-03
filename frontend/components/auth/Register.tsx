@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { supabase } from "../../lib/supabase"; 
+import { supabase } from "../../lib/supabase";
 
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
@@ -63,65 +63,67 @@ export function Register() {
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
-  e.preventDefault();
-  if (!validateForm()) return;
+    e.preventDefault();
+    if (!validateForm()) return;
 
-  setIsLoading(true);
+    setIsLoading(true);
 
-  try {
-    // 1. Supabase sign-up
-    const { data, error } = await supabase.auth.signUp({
-      email: formData.email.trim(),
-      password: formData.password,
-      options: {
-        data: {
-          first_name: formData.firstName.trim(),
-          last_name: formData.lastName.trim(),
-          contact_number: formData.contactNumber.trim(),
-          address: formData.address.trim(),
-          age: parseInt(formData.age),
-          gender: formData.gender,
-          date_of_birth: formData.date_of_birth,
-          role: "user",
-
+    try {
+      // 1. Supabase Auth signup
+      // The handle_new_user trigger on the backend will automatically create the profile record
+      const { data, error } = await supabase.auth.signUp({
+        email: formData.email.trim(),
+        password: formData.password,
+        options: {
+          data: {
+            first_name: formData.firstName.trim(),
+            last_name: formData.lastName.trim(),
+            full_name: `${formData.firstName.trim()} ${formData.lastName.trim()}`,
+            contact_number: formData.contactNumber.trim(),
+            address: formData.address.trim(),
+            age: parseInt(formData.age),
+            gender: formData.gender,
+            date_of_birth: formData.date_of_birth,
+            role: "user",
+          },
         },
-      },
-    });
+      });
 
-    if (error) {
-      // handle Supabase errors
-      if (error.message.includes("already registered")) {
-        toast.error("This email is already registered.");
-      } else {
+      if (error) {
         toast.error(error.message);
+        return;
       }
-      return;
+
+      const user = data.user;
+
+      if (!user) {
+        toast.error("Sign-up failed: No user returned.");
+        return;
+      }
+
+      toast.success("Registration successful! You may now log in.");
+      navigate("/user/login");
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Registration failed.";
+      toast.error(msg);
+    } finally {
+      setIsLoading(false);
     }
+  };
 
-    toast.success("Registration successful! You can now login your account!");
-
-    // optional: navigate after sign-up
-    navigate("/user/login");
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : "Registration failed.";
-    toast.error(msg);
-  } finally {
-    setIsLoading(false);
-  }
-};
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-white via-[#f7f8ff] to-[#ece8ff] p-4">
 
       <Card className="w-full max-w-lg bg-white text-black shadow-xl rounded-2xl">
-        
+
         <CardHeader>
           {/* Back button → blue link */}
           <Button
-  variant="ghost"
-  className="w-fit -ml-2 text-black hover:underline"
-  onClick={() => navigate("/user/login")}
->
-  ← Back to Login
+            variant="ghost"
+            className="w-fit -ml-2 text-black hover:underline"
+            onClick={() => navigate("/user/login")}
+          >
+            ← Back to Login
           </Button>
 
           <CardTitle className="text-center text-2xl font-semibold">
@@ -146,7 +148,7 @@ export function Register() {
                   onChange={handleChange}
                   required
                   disabled={isLoading}
-                  className="bg-white"
+                  className="bg-gray-300"
                 />
               </div>
 
@@ -158,7 +160,7 @@ export function Register() {
                   onChange={handleChange}
                   required
                   disabled={isLoading}
-                  className="bg-white"
+                  className="bg-gray-300"
                 />
               </div>
             </div>
@@ -173,7 +175,7 @@ export function Register() {
                 onChange={handleChange}
                 required
                 disabled={isLoading}
-                className="bg-white"
+                className="bg-gray-300"
               />
             </div>
 
@@ -187,7 +189,7 @@ export function Register() {
                 onChange={handleChange}
                 required
                 disabled={isLoading}
-                className="bg-white"
+                className="bg-gray-300"
               />
             </div>
 
@@ -200,7 +202,7 @@ export function Register() {
                 onChange={handleChange}
                 required
                 disabled={isLoading}
-                className="bg-white"
+                className="bg-gray-300"
               />
             </div>
 
@@ -212,7 +214,7 @@ export function Register() {
                 value={formData.contactNumber}
                 onChange={handleChange}
                 disabled={isLoading}
-                className="bg-white"
+                className="bg-gray-300"
               />
             </div>
 
@@ -224,7 +226,7 @@ export function Register() {
                 value={formData.address}
                 onChange={handleChange}
                 disabled={isLoading}
-                className="bg-white"
+                className="bg-gray-300"
               />
             </div>
 
@@ -238,7 +240,7 @@ export function Register() {
                 onChange={handleChange}
                 required
                 disabled={isLoading}
-                className="bg-white"
+                className="bg-gray-300"
               />
             </div>
 
@@ -246,26 +248,28 @@ export function Register() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium mb-1">Age *</label>
-             <Input
-  type="text"
-  inputMode="numeric"
-  pattern="[0-9]*"
-  name="age"
-  value={formData.age}
-  onChange={handleChange}
-  required
-  disabled={isLoading}
-  className="bg-[#DCDCDC]"
-/>
+                <Input
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  name="age"
+                  value={formData.age}
+                  onChange={handleChange}
+                  required
+                  disabled={isLoading}
+                  className="bg-gray-300"
+                />
 
               </div>
 
               <div>
-                <label className="block text-sm font-medium mb-1">Gender *</label>
+                <label className="block text-sm font-medium mb-1 bg-gray">Gender *</label>
+
                 <Select onValueChange={handleGenderChange} disabled={isLoading}>
-                  <SelectTrigger className="text-black">
+                  <SelectTrigger className="w-full px-3 py-2 border border-gray-300 rounded-md bg- text-black focus:outline-none focus:ring-2">
                     <SelectValue placeholder="Select Gender" />
                   </SelectTrigger>
+
                   <SelectContent>
                     <SelectItem value="Male">Male</SelectItem>
                     <SelectItem value="Female">Female</SelectItem>
@@ -290,7 +294,7 @@ export function Register() {
               <button
                 type="button"
                 className="text-blue-600 hover:underline"
-              onClick={() => navigate("/user/login")}
+                onClick={() => navigate("/user/login")}
 
               >
                 Sign in here

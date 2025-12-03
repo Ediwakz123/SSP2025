@@ -26,7 +26,6 @@ import {
 import { Alert, AlertDescription, AlertTitle } from "../ui/alert";
 import { Progress } from "../ui/progress";
 import { Badge } from "../ui/badge";
-import { Separator } from "../ui/separator";
 import { toast } from "sonner";
 import { supabase } from "../../lib/supabase";
 import { LOCATION_INFO } from "../../data/businesses";
@@ -36,11 +35,25 @@ import {
   Business,
 } from "../../utils/kmeans";
 import { haversineDistance } from "../../utils/haversine";
+import { useActivity, logActivity } from "../../utils/activity";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "../ui/dialog";
+import * as XLSX from "xlsx";
+import { computeOpportunityScore } from "../../utils/kmeans";
+import { useNavigate } from "react-router-dom";
+
+
+
+
 
 // ---------------------------------------------------------
 // TYPES & CONSTANTS (moved outside component)
 // ---------------------------------------------------------
-
 type ExtendedResult = ClusteringResult & {
   gridPoints?: Array<{ latitude: number; longitude: number }>;
 };
@@ -48,28 +61,24 @@ type ExtendedResult = ClusteringResult & {
 // Your new general category set — make sure DB categories match these strings
 const CATEGORY_OPTIONS = [
   {
-    value: "Food & Beverage",
-    label: "Food & Beverage",
-  },
-  {
     value: "Retail",
     label: "Retail",
   },
   {
-    value: "Services",
-    label: "Services",
+    value: "Service",
+    label: "Service",
   },
   {
-    value: "Hardware / Construction",
-    label: "Hardware / Construction",
-  },
-  {
-    value: "Entertainment / Tech",
-    label: "Entertainment / Tech",
+    value: "Merchandising / Trading",
+    label: "Merchandising / Trading",
   },
   {
     value: "Miscellaneous",
     label: "Miscellaneous",
+  },
+  {
+    value: "Entertainment / Leisure",
+    label: "Entertainment / Leisure",
   },
 ];
 
@@ -77,6 +86,7 @@ const CATEGORY_OPTIONS = [
 // COMPONENT
 // ---------------------------------------------------------------------------
 export function ClusteringPage() {
+  useActivity();
   // -----------------------
   // NEW: AI business idea + category states
   // -----------------------
@@ -88,10 +98,11 @@ export function ClusteringPage() {
   const [aiCategoryLoading, setAiCategoryLoading] = useState<boolean>(false);
   const [categoryLockedByUser, setCategoryLockedByUser] =
     useState<boolean>(false);
+  const [isExportModalOpen, setIsExportModalOpen] = useState(false);
 
   // Selected general category (drives clustering)
   const [selectedCategory, setSelectedCategory] = useState<string>("");
-
+  const navigate = useNavigate();
   const [isProcessing, setIsProcessing] = useState(false);
   const [result, setResult] = useState<ExtendedResult | null>(null);
   const [progress, setProgress] = useState(0);
@@ -114,16 +125,51 @@ export function ClusteringPage() {
     return null;
   };
 
+
+
+
+  function normalizeOpportunity(raw: string):
+    "High" | "Moderate" | "Low" | "Very Low" {
+
+    const r = raw.toLowerCase();
+
+    if (
+      r.includes("strong") ||
+      r.includes("excellent") ||
+      r.includes("very high") ||
+      r.includes("high potential")
+    )
+      return "High";
+
+    if (
+      r.includes("good") ||
+      r.includes("moderate") ||
+      r.includes("medium")
+    )
+      return "Moderate";
+
+    if (
+      r.includes("low") ||
+      r.includes("weak")
+    )
+      return "Low";
+
+    return "Very Low";
+  }
+
+
   // ---------------------------------------------------------------------------
   // LOAD BUSINESSES FROM SUPABASE
   // ---------------------------------------------------------------------------
+
   useEffect(() => {
     const loadBusinesses = async () => {
-      setIsLoadingBusinesses(true);
 
-      const { data, error } = await supabase
-        .from("businesses")
-        .select(`
+      setIsLoadingBusinesses(true);
+      try {
+        const { data, error } = await supabase
+          .from("businesses")
+          .select(`
           business_id,
           business_name,
           general_category,
@@ -140,81 +186,88 @@ export function ClusteringPage() {
           zone_encoded,
           status
         `)
-        .eq("status", "active");
+          .ilike("status", "active"); // ✅ FIXED
 
-      if (error) {
-        console.error(error);
-        toast.error("Failed to load businesses from Supabase.");
-      } else {
-        setBusinesses(data as Business[]);
+        if (error) {
+          console.error(error);
+          toast.error("Failed to load businesses from database.");
+        } else {
+          setBusinesses(data || []); // ⭐ MUST SET THE DATA
+        }
+      } catch (err) {
+        console.error(err);
+        toast.error("Unexpected error loading businesses.");
       }
 
       setIsLoadingBusinesses(false);
     };
 
     loadBusinesses();
-  }, []);
-
-// Auto-switch between local dev and production
-const API_BASE = "";
+  }, []); // ⭐ RUN ONCE, NOT PER CATEGORY
 
 
-useEffect(() => {
-  if (!businessIdea.trim()) {
-    setAiCategory(null);
-    setAiCategoryExplanation(null);
-    setAiCategoryLoading(false);
-    setCategoryLockedByUser(false);
-    return;
-  }
 
-  setAiCategoryLoading(true);
 
-  const controller = new AbortController();
+  // Auto-switch between local dev and production
+  const API_BASE = "";
 
-  const timeoutId = setTimeout(async () => {
-    try {
-      const response = await fetch(
-        `${API_BASE}/api/ai/categories`,   // ✅ Auto-switching endpoint
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ businessIdea }),
-          signal: controller.signal,
-        }
-      );
 
-      if (!response.ok) {
-        throw new Error("Failed to detect category");
-      }
-
-      const data = await response.json();
-
-      const detected = data.category?.trim() || "";
-      const explanation = data.explanation || null;
-
-      if (detected) {
-        setAiCategory(detected);
-        setAiCategoryExplanation(explanation);
-
-        if (!categoryLockedByUser) {
-          setSelectedCategory(detected);
-        }
-      }
-    } catch (err: any) {
-      if (err.name !== "AbortError") {
-        console.error("AI Category Error:", err);
-      }
-    } finally {
+  useEffect(() => {
+    if (!businessIdea.trim()) {
+      setAiCategory(null);
+      setAiCategoryExplanation(null);
       setAiCategoryLoading(false);
+      setCategoryLockedByUser(false);
+      return;
     }
-  }, 600);
 
-  return () => {
-    clearTimeout(timeoutId);
-    controller.abort();
-  };
-}, [businessIdea, categoryLockedByUser]);
+    setAiCategoryLoading(true);
+
+    const controller = new AbortController();
+
+    const timeoutId = setTimeout(async () => {
+      try {
+        const response = await fetch(
+          `${API_BASE}/api/ai/categories`,   // ✅ Auto-switching endpoint
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ businessIdea }),
+            signal: controller.signal,
+          }
+        );
+
+        if (!response.ok) {
+          throw new Error("Failed to detect category");
+        }
+
+        const data = await response.json();
+
+        const detected = data.category?.trim() || "";
+        const explanation = data.explanation || null;
+
+        if (detected) {
+          setAiCategory(detected);
+          setAiCategoryExplanation(explanation);
+
+          if (!categoryLockedByUser) {
+            setSelectedCategory(detected);
+          }
+        }
+      } catch (err: any) {
+        if (err.name !== "AbortError") {
+          console.error("AI Category Error:", err);
+        }
+      } finally {
+        setAiCategoryLoading(false);
+      }
+    }, 600);
+
+    return () => {
+      clearTimeout(timeoutId);
+      controller.abort();
+    };
+  }, [businessIdea, categoryLockedByUser]);
 
 
   // ---------------------------------------------------------------------------
@@ -245,6 +298,21 @@ useEffect(() => {
     }
   };
 
+  const BRGY_BOUNDS = {
+    minLat: 14.8338,   // South boundary
+    maxLat: 14.8413,   // North boundary
+    minLng: 120.9518,  // West boundary
+    maxLng: 120.9608,  // East boundary
+  };
+
+  function clampToStaCruz(lat: number, lng: number) {
+    return {
+      latitude: Math.min(Math.max(lat, BRGY_BOUNDS.minLat), BRGY_BOUNDS.maxLat),
+      longitude: Math.min(Math.max(lng, BRGY_BOUNDS.minLng), BRGY_BOUNDS.maxLng),
+    };
+  }
+
+
   const createMap = () => {
     if (!result || !mapRef.current) return;
 
@@ -267,17 +335,6 @@ useEffect(() => {
       attribution: "&copy; OpenStreetMap contributors",
     }).addTo(newMap);
 
-    // OPTIONAL — Show grid candidate points
-    if (result.gridPoints) {
-      result.gridPoints.forEach((p) => {
-        L.circleMarker([p.latitude, p.longitude], {
-          radius: 2,
-          color: "#6EE7B7",
-          fillColor: "#6EE7B7",
-          fillOpacity: 0.5,
-        }).addTo(newMap);
-      });
-    }
 
     // ⭐ Recommended Location Marker
     const recommendedIcon = L.divIcon({
@@ -360,8 +417,8 @@ useEffect(() => {
             <div style="margin-bottom: 10px;">
               <strong>Zone Type:</strong> ${result.zoneType}<br/>
               <strong>Confidence:</strong> ${(result.analysis.confidence * 100).toFixed(
-                0
-              )}%
+        0
+      )}%
             </div>
 
             <div>
@@ -376,54 +433,56 @@ useEffect(() => {
       `)
       .openPopup();
 
-    //⭐ Cluster Centroids + Business Points
+    // ⭐ Cluster Centroids + Business Points
     result.clusters.forEach((cluster) => {
-      // ⛔ Skip clusters that have no points
       if (!cluster.points || cluster.points.length === 0) return;
 
       const clusterIcon = L.divIcon({
         className: "custom-div-icon",
         html: `
-          <div style="
-            background:${cluster.color};
-            width:24px;height:24px;
-            border-radius:50%;
-            border:3px solid white;
-            box-shadow:0 2px 4px rgba(0,0,0,0.3);
-            display:flex;align-items:center;justify-content:center;
-            color:white;font-size:12px;font-weight:bold;
-          ">
-            ${cluster.id + 1}
-          </div>
-        `,
+      <div style="
+        background:${cluster.color};
+        width:24px;height:24px;
+        border-radius:50%;
+        border:3px solid white;
+        box-shadow:0 2px 4px rgba(0,0,0,0.3);
+        display:flex;align-items:center;justify-content:center;
+        color:white;font-size:12px;font-weight:bold;
+      ">
+        ${cluster.id + 1}
+      </div>
+    `,
         iconSize: [24, 24],
         iconAnchor: [12, 12],
       });
 
-      // Centroid
-      L.marker(
-        [cluster.centroid.latitude, cluster.centroid.longitude],
-        {
-          icon: clusterIcon,
-        }
-      )
+      // ⭐ Clamp centroid ONLY FOR UI
+      const safeCentroid = clampToStaCruz(
+        cluster.centroid.latitude,
+        cluster.centroid.longitude
+      );
+
+      // ⭐ Draw centroid inside Sta. Cruz bounds
+      L.marker([safeCentroid.latitude, safeCentroid.longitude], {
+        icon: clusterIcon,
+      })
         .addTo(newMap)
         .bindPopup(`
-          <div style="font-family:system-ui;">
-            <strong style="color:${cluster.color};">Cluster ${
-          cluster.id + 1
-        } Centroid</strong><br/>
-            <small>Businesses: ${cluster.points.length}</small><br/>
-            <small>Lat: ${cluster.centroid.latitude.toFixed(6)}</small><br/>
-            <small>Lon: ${cluster.centroid.longitude.toFixed(6)}</small>
-          </div>
-        `);
+      <div style="font-family:system-ui;">
+        <strong style="color:${cluster.color};">
+          Cluster ${cluster.id + 1} Centroid
+        </strong><br/>
+        <small>Businesses: ${cluster.points.length}</small><br/>
+        <small>Lat: ${safeCentroid.latitude.toFixed(6)}</small><br/>
+        <small>Lon: ${safeCentroid.longitude.toFixed(6)}</small>
+      </div>
+    `);
 
-      // Points inside the cluster
+      // ⭐ Clamp each business point for UI
       cluster.points.forEach((point) => {
-        if (!point.business) return;
+        const safePoint = clampToStaCruz(point.latitude, point.longitude);
 
-        L.circleMarker([point.latitude, point.longitude], {
+        L.circleMarker([safePoint.latitude, safePoint.longitude], {
           radius: 5,
           fillColor: cluster.color,
           color: "#fff",
@@ -433,15 +492,16 @@ useEffect(() => {
         })
           .addTo(newMap)
           .bindPopup(`
-            <div style="font-family:system-ui;">
-              <strong>${point.business.business_name}</strong><br/>
-              <span style="color:${cluster.color};">${point.business.general_category}</span><br/>
-              <small>${point.business.street}</small>
-            </div>
-          `);
+        <div style="font-family:system-ui;">
+          <strong>${point.business.business_name}</strong><br/>
+          <span style="color:${cluster.color};">
+            ${point.business.general_category}
+          </span><br/>
+          <small>${point.business.street}</small>
+        </div>
+      `);
       });
     });
-
     // ⭐ Barangay Center
     L.marker(
       [LOCATION_INFO.center_latitude, LOCATION_INFO.center_longitude],
@@ -468,6 +528,9 @@ useEffect(() => {
   // RUN CLUSTERING
   // ---------------------------------------------------------------------------
   const handleRunClustering = async () => {
+
+
+
     const categoryToAnalyze = selectedCategory;
 
     const validationError = validateCategory(categoryToAnalyze);
@@ -503,20 +566,89 @@ useEffect(() => {
       setProgress(step.progress);
     }
 
+
+
     try {
+
+
       const clusteringResult = findOptimalLocation(
         businesses as Business[],
         categoryToAnalyze
       );
 
-      setResult(clusteringResult);
+      // ✅ Inject grid points so map can render them
+      const enhancedResult: ExtendedResult = {
+        ...clusteringResult,
+        gridPoints:
+          (clusteringResult as any).grid ||
+          (clusteringResult as any).gridPoints ||
+          []
+
+
+      };
+
+
+
+
+      setResult(enhancedResult);
+
+
+
+      await supabase.from("clustering_opportunities").insert({
+        // ✔ must match DB column: business_category
+        business_category: categoryToAnalyze,
+
+        // ✔ created_at column already has default = now()
+        //   (optional, but allowed)
+        created_at: new Date().toISOString(),
+
+        // ✔ recommended business location
+        recommended_lat: enhancedResult.recommendedLocation.latitude,
+        recommended_lng: enhancedResult.recommendedLocation.longitude,
+
+        // ✔ correct zone column
+        zone_type: enhancedResult.zoneType,
+
+        // ✔ your computed scores
+        opportunity: enhancedResult.analysis.opportunity, // only if this exists
+        opportunity_score: enhancedResult.analysis.opportunity_score,
+        confidence: enhancedResult.analysis.confidence,
+
+        // ✔ new columns (your schema supports these)
+        num_clusters: enhancedResult.clusters.length,
+        locations: enhancedResult.clusters.flatMap((cluster) =>
+          cluster.points.map((p) => ({
+            street: p.business.street,
+            general_category: p.business.general_category,
+            business_density_200m: p.business.business_density_200m,
+            competitor_density_200m: p.business.competitor_density_200m,
+            zone_type: p.business.zone_type,
+            latitude: p.business.latitude,
+            longitude: p.business.longitude,
+            cluster: cluster.id + 1,
+            score: enhancedResult.analysis.opportunity_score,
+          }))
+        ),
+      });
+
+
+      logActivity("Ran Clustering", { page: "clustering" });
+
+
     } catch (err) {
       console.error(err);
       toast.error("Failed to run clustering.");
+
     } finally {
       setIsProcessing(false);
+      toast.success("Clustering Completed Successfully! 🎉", {
+        description: "You can now view the summarized business opportunities.",
+      });
     }
+
   };
+
+
 
   const getConfidenceColor = (c: number) =>
     c >= 0.8 ? "text-green-600" : c >= 0.6 ? "text-yellow-600" : "text-red-600";
@@ -561,13 +693,15 @@ useEffect(() => {
     }
 
     return best;
+
+
   };
 
 
   async function generateAIRecommendation(result: any) {
-  setAiLoading(true);
+    setAiLoading(true);
 
-  const prompt = `
+    const prompt = `
     You are an AI business strategist.
     Provide simple recommendations for opening a business in this area.
 
@@ -587,547 +721,709 @@ useEffect(() => {
     4. Short conclusion
   `;
 
-  try {
-    const response = await fetch(
-      `${import.meta.env.VITE_BACKEND_URL}/api/ai-businesses`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt })
-      }
-    );
+    try {
+      const response = await fetch(
+        `${import.meta.env.VITE_BACKEND_URL}/api/ai-businesses`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ prompt })
+        }
+      );
 
-    const data = await response.json();
-    setAiRecommendation(data.text);
-  } catch (err) {
-    console.error(err);
-    setAiRecommendation("AI service is unavailable.");
+      const data = await response.json();
+      setAiRecommendation(data.text);
+    } catch (err) {
+      console.error(err);
+      setAiRecommendation("AI service is unavailable.");
+    }
+
+    setAiLoading(false);
   }
 
-  setAiLoading(false);
-}
+  // ---------------------------------------------
+  // EXPORT FUNCTIONS
+  // ---------------------------------------------
+
+  const exportPDF = async () => {
+    const content = `
+📍 Recommended Location Report
+
+Latitude: ${result?.recommendedLocation.latitude}
+Longitude: ${result?.recommendedLocation.longitude}
+Zone Type: ${result?.zoneType}
+
+Confidence: ${(result?.analysis.confidence! * 100).toFixed(0)}%
+Opportunity: ${result?.analysis.opportunity}
+
+Competitors: ${result?.analysis.competitorCount}
+Within 500m: ${result?.competitorAnalysis.competitorsWithin500m}
+Within 1km: ${result?.competitorAnalysis.competitorsWithin1km}
+Within 2km: ${result?.competitorAnalysis.competitorsWithin2km}
+
+Recommended Strategy:
+${result?.competitorAnalysis.recommendedStrategy}
+`;
+
+    const blob = new Blob([content], { type: "text/plain" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "business-location-report.pdf";
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const exportCSV = () => {
+    const rows = [
+      ["Field", "Value"],
+      ["Latitude", result?.recommendedLocation.latitude],
+      ["Longitude", result?.recommendedLocation.longitude],
+      ["Zone Type", result?.zoneType],
+      ["Confidence", (result?.analysis.confidence! * 100).toFixed(0) + "%"],
+      ["Opportunity", result?.analysis.opportunity],
+      ["Total Competitors", result?.analysis.competitorCount],
+      ["Within 500m", result?.competitorAnalysis.competitorsWithin500m],
+      ["Within 1km", result?.competitorAnalysis.competitorsWithin1km],
+      ["Within 2km", result?.competitorAnalysis.competitorsWithin2km],
+    ];
+
+    let csv = rows.map((r) => r.join(",")).join("\n");
+
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "business-location-report.csv";
+    a.click();
+  };
+
+  const exportExcel = async () => {
+    const workbook = XLSX.utils.book_new();
+
+    const sheetData = [
+      ["Field", "Value"],
+      ["Latitude", result?.recommendedLocation.latitude],
+      ["Longitude", result?.recommendedLocation.longitude],
+      ["Zone Type", result?.zoneType],
+      ["Confidence", (result?.analysis.confidence! * 100).toFixed(0) + "%"],
+      ["Opportunity", result?.analysis.opportunity],
+      ["Total Competitors", result?.analysis.competitorCount],
+      ["Within 500m", result?.competitorAnalysis.competitorsWithin500m],
+      ["Within 1km", result?.competitorAnalysis.competitorsWithin1km],
+      ["Within 2km", result?.competitorAnalysis.competitorsWithin2km],
+    ];
+
+    const sheet = XLSX.utils.aoa_to_sheet(sheetData);
+    XLSX.utils.book_append_sheet(workbook, sheet, "Report");
+
+    XLSX.writeFile(workbook, "business-location-report.xlsx");
+  };
 
 
- return (
-  <div className="space-y-6">
+  if (isLoadingBusinesses) {
+    return (
+      <div className="flex flex-col items-center justify-center h-[60vh]">
+        <Loader2 className="w-6 h-6 animate-spin mb-2" />
+        Loading clustering data...
+      </div>
+    );
+  }
 
-    {/* ---------------------------------------------- */}
-    {/* CONFIG CARD */}
-    {/* ---------------------------------------------- */}
-    <Card>
-      <CardHeader>
-        <CardTitle>K-Means Clustering Configuration</CardTitle>
-        <CardDescription>
-          Enter your business idea — AI will categorize it and optimize your recommended location.
-        </CardDescription>
-      </CardHeader>
 
-      <CardContent className="space-y-6">
+  return (
+    <div className="space-y-6">
 
-        {/* ---------------------------------------------- */}
-        {/* PREMIUM AI BUSINESS INPUT BLOCK */}
-        {/* ---------------------------------------------- */}
-        <div className="space-y-4 bg-gradient-to-br from-gray-50 to-white p-5 rounded-xl border border-gray-200 shadow-sm">
+      {/* ---------------------------------------------- */}
+      {/* CONFIG CARD */}
+      {/* ---------------------------------------------- */}
+      <Card>
+        <CardHeader>
+          <CardTitle>K-Means Clustering Configuration</CardTitle>
+          <CardDescription>
+            Enter your business idea — AI will categorize it and optimize your recommended location.
+          </CardDescription>
+        </CardHeader>
 
-          {/* BUSINESS IDEA INPUT */}
-          <div className="space-y-2">
-            <Label htmlFor="businessIdea" className="font-semibold text-gray-700">
-              Your Business Idea
-            </Label>
+        <CardContent className="space-y-6">
 
-            <Input
-              id="businessIdea"
-              type="text"
-              placeholder='e.g. "Milk Tea Shop", "Laundry Hub", "Grocery Store"'
-              value={businessIdea}
-              onChange={(e) => {
-                setBusinessIdea(e.target.value);
-                setCategoryLockedByUser(false);
-              }}
-              className="bg-white border-gray-300 focus-visible:ring-green-500"
-            />
+          {/* ---------------------------------------------- */}
+          {/* PREMIUM AI BUSINESS INPUT BLOCK */}
+          {/* ---------------------------------------------- */}
+          <div className="space-y-4 bg-gradient-to-br from-gray-50 to-white p-5 rounded-xl border border-gray-200 shadow-sm">
 
-            <p className="text-xs text-gray-500">
-              AI will automatically determine the most suitable business category.
-            </p>
-          </div>
+            {/* BUSINESS IDEA INPUT */}
+            <div className="space-y-2">
+              <Label htmlFor="businessIdea" className="font-semibold text-gray-700">
+                Your Business Idea
+              </Label>
 
-          {/* CATEGORY SELECT */}
-          <div className="space-y-2">
-            <Label className="font-semibold text-gray-700">
-              AI-Detected Category (You can override it)
-            </Label>
-
-            <Select
-              value={selectedCategory}
-              onValueChange={(v) => {
-                setSelectedCategory(v);
-                setCategoryLockedByUser(true);
-              }}
-            >
-              <SelectTrigger className="bg-white border-gray-300 focus:ring-green-500">
-                <SelectValue placeholder="Select or let AI decide" />
-              </SelectTrigger>
-              <SelectContent>
-                {CATEGORY_OPTIONS.map((cat) => (
-                  <SelectItem key={cat.value} value={cat.value}>
-                    {cat.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
-            {/* AI STATUS + RESULT */}
-            <div className="mt-2 text-sm">
-              {aiCategoryLoading ? (
-                <div className="flex items-center gap-2 text-green-600">
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  <span>AI is analyzing your idea…</span>
-                </div>
-              ) : aiCategory ? (
-                <div className="p-3 rounded-lg border bg-green-50 border-green-200 shadow-sm">
-                  <div className="flex items-center justify-between">
-                    <span className="font-semibold text-green-700">
-                      AI Suggestion:
-                    </span>
-
-                    <Badge className="bg-green-600 text-white">
-                      {aiCategory}
-                    </Badge>
-                  </div>
-
-                  {/* WHY THIS CATEGORY (EXPANDABLE) */}
-                  {aiCategoryExplanation && (
-                    <details className="mt-2 text-gray-700">
-                      <summary className="cursor-pointer text-sm text-green-700 hover:underline">
-                        Why this category?
-                      </summary>
-                      <p className="text-xs mt-2 text-gray-600">
-                        {aiCategoryExplanation}
-                      </p>
-                    </details>
-                  )}
-                </div>
-              ) : (
-                <p className="text-xs text-gray-500">
-                  AI will categorize once you type something above.
-                </p>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* AUTO CLUSTERING NOTICE */}
-        <div className="space-y-1 mt-4">
-          <div className="text-sm font-semibold text-gray-900">Clustering Mode</div>
-          <div className="text-sm text-gray-500">
-            The system automatically chooses the best number of clusters for optimal accuracy.
-          </div>
-        </div>
-
-        {/* RUN BUTTON */}
-        <Button
-          onClick={handleRunClustering}
-          disabled={
-            isProcessing ||
-            (!selectedCategory || selectedCategory.trim() === "")
-          }
-          className="w-full md:w-auto bg-green-600 hover:bg-green-700"
-        >
-          {isProcessing ? (
-            <>
-              <Loader2 className="w-4 h-4 mr-2 animate-spin" /> Processing…
-            </>
-          ) : (
-            <>
-              <Target className="w-4 h-4 mr-2" /> Run K-Means Clustering
-            </>
-          )}
-        </Button>
-
-        {/* PROGRESS BAR */}
-        {isProcessing && (
-          <div className="space-y-2">
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-gray-500">Analyzing data…</span>
-              <span>{progress}%</span>
-            </div>
-            <Progress value={progress} className="h-2" />
-          </div>
-        )}
-      </CardContent>
-    </Card>
-
-    {/* ---------------------------------------------- */}
-    {/* RESULT SECTION */}
-    {/* ---------------------------------------------- */}
-    {result && (
-      <>
-        <Alert className={getConfidenceBg(result.analysis.confidence)}>
-          <CheckCircle2
-            className={`h-5 w-5 ${getConfidenceColor(result.analysis.confidence)}`}
-          />
-          <AlertTitle>
-            Analysis Complete – {(result.analysis.confidence * 100).toFixed(0)}% Confidence
-          </AlertTitle>
-          <AlertDescription>{result.analysis.opportunity}</AlertDescription>
-        </Alert>
-
-        {/* ---------------------------------------------- */}
-        {/* MAP VISUALIZATION */}
-        {/* ---------------------------------------------- */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <MapPin className="w-5 h-5" />
-              Recommended Business Location
-            </CardTitle>
-            <CardDescription>
-              Interactive map showing clusters and the optimized location.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div
-              ref={mapRef}
-              className="w-full h-[500px] rounded-lg border mb-4"
-              style={{ zIndex: 0 }}
-            />
-
-            {/* Coordinate Details */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-              <div className="space-y-2">
-                <h4 className="flex items-center gap-2 font-semibold text-gray-800">
-                  <Navigation className="w-4 h-4" />
-                  Coordinates
-                </h4>
-
-                <div className="bg-gray-50 p-4 rounded-lg border">
-                  <div className="space-y-1 text-sm">
-                    <div className="flex justify-between">
-                      <span className="text-gray-500">Latitude:</span>
-                      <span>{result.recommendedLocation.latitude.toFixed(6)}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-500">Longitude:</span>
-                      <span>{result.recommendedLocation.longitude.toFixed(6)}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-500">Zone Type:</span>
-                      <Badge variant="outline">{result.zoneType}</Badge>
-                    </div>
-                  </div>
-                </div>
-
-                <Button
-                  variant="outline"
-                  className="w-full"
-                  onClick={() =>
-                    window.open(
-                      `https://www.google.com/maps?q=${result.recommendedLocation.latitude},${result.recommendedLocation.longitude}`,
-                      "_blank"
-                    )
-                  }
-                >
-                  Open in Google Maps
-                </Button>
-              </div>
-
-              {/* Map Legend */}
-              <div className="space-y-2">
-                <h4 className="font-semibold">Map Legend</h4>
-
-                <div className="space-y-2 text-sm">
-                  <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center text-white">
-                      ★
-                    </div>
-                    <span>Recommended Location</span>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <div className="w-6 h-6 bg-red-500 rounded-full border-2 border-white" />
-                    <span>Barangay Center</span>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <div className="w-6 h-6 bg-blue-500 rounded-full text-white text-xs flex items-center justify-center">
-                      1
-                    </div>
-                    <span>Cluster Centroids</span>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <div className="w-4 h-4 bg-blue-500 rounded-full border" />
-                    <span>Business Locations</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* ---------------------------------------------- */}
-        {/* WHY THIS LOCATION */}
-        {/* ---------------------------------------------- */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Why This Location?</CardTitle>
-            <CardDescription>
-              Breakdown of factors influencing the recommendation.
-            </CardDescription>
-          </CardHeader>
-
-          <CardContent>
-            {(() => {
-              const anchor = getAnchorBusiness();
-              if (!anchor)
-                return (
-                  <p className="text-sm text-gray-500">
-                    Unable to compute explanation — no anchor business found.
-                  </p>
-                );
-
-              const bd50 = anchor.business_density_50m ?? 0;
-              const bd100 = anchor.business_density_100m ?? 0;
-              const bd200 = anchor.business_density_200m ?? 0;
-              const cd50 = anchor.competitor_density_50m ?? 0;
-              const cd100 = anchor.competitor_density_100m ?? 0;
-              const cd200 = anchor.competitor_density_200m ?? 0;
-
-              return (
-                <div className="space-y-4">
-                  <p className="text-sm text-gray-700">
-                    This location is near{" "}
-                    <span className="font-semibold">{anchor.business_name}</span>{" "}
-                    on <span className="font-semibold">{anchor.street}</span>, inside{" "}
-                    {describeZone(anchor.zone_type)}. The system evaluated business
-                    density, competitor strength, demand pockets, and cluster
-                    centroids.
-                  </p>
-
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-                    {/* Business Presence */}
-                    <div className="bg-emerald-50 border border-emerald-200 p-3 rounded-lg shadow-sm">
-                      <p className="text-emerald-900 font-semibold mb-1">
-                        📈 Business Presence
-                      </p>
-                      <p className="text-emerald-800">
-                        50m: {bd50} ({describeLevel(bd50)})
-                      </p>
-                      <p className="text-emerald-800">
-                        100m: {bd100} ({describeLevel(bd100)})
-                      </p>
-                      <p className="text-emerald-800">
-                        200m: {bd200} ({describeLevel(bd200)})
-                      </p>
-                    </div>
-
-                    {/* Competitor Pressure */}
-                    <div className="bg-rose-50 border border-rose-200 p-3 rounded-lg shadow-sm">
-                      <p className="text-rose-900 font-semibold mb-1">
-                        ⚔️ Competitor Pressure
-                      </p>
-                      <p className="text-rose-800">
-                        50m: {cd50} ({describeLevel(cd50)})
-                      </p>
-                      <p className="text-rose-800">
-                        100m: {cd100} ({describeLevel(cd100)})
-                      </p>
-                      <p className="text-rose-800">
-                        200m: {cd200} ({describeLevel(cd200)})
-                      </p>
-                    </div>
-
-                    {/* Interpretation */}
-                    <div className="bg-sky-50 border border-sky-200 p-3 rounded-lg shadow-sm">
-                      <p className="text-sky-900 font-semibold mb-1">
-                        🧠 Model Interpretation
-                      </p>
-                      <p className="text-sky-800">• Prioritizes streets with activity.</p>
-                      <p className="text-sky-800">
-                        • Favors {anchor.zone_type} zones for visibility.
-                      </p>
-                      <p className="text-sky-800">
-                        • Avoids isolated outlier points far from centroids.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              );
-            })()}
-          </CardContent>
-        </Card>
-
-        {/* ---------------------------------------------- */}
-        {/* COMPETITOR ANALYSIS */}
-        {/* ---------------------------------------------- */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Competitor Analysis</CardTitle>
-            <CardDescription>Market competition overview.</CardDescription>
-          </CardHeader>
-
-          <CardContent className="space-y-4">
-
-            {/* Competitor Summary */}
-            <div className="bg-blue-50 p-4 rounded-lg border border-blue-200 shadow-sm">
-              <h4 className="text-blue-900 mb-2 font-semibold">
-                Competitor Summary
-              </h4>
-
-              <div className="text-sm text-blue-800 space-y-1">
-                <p>
-                  <strong>Total Competitors:</strong>{" "}
-                  {result.analysis.competitorCount}
-                </p>
-                <p>
-                  <strong>Within 500m:</strong>{" "}
-                  {result.competitorAnalysis.competitorsWithin500m}
-                </p>
-                <p>
-                  <strong>Within 1km:</strong>{" "}
-                  {result.competitorAnalysis.competitorsWithin1km}
-                </p>
-                <p>
-                  <strong>Within 2km:</strong>{" "}
-                  {result.competitorAnalysis.competitorsWithin2km}
-                </p>
-              </div>
-            </div>
-
-            {/* Nearest Competitor */}
-            {result.competitorAnalysis.nearestCompetitor ? (
-              <div className="bg-orange-50 p-4 rounded-lg border border-orange-200 shadow-sm">
-                <h4 className="text-orange-900 mb-2 font-semibold">
-                  Nearest Competitor
-                </h4>
-                <div className="text-sm text-orange-800 space-y-1">
-                  <p className="font-semibold">
-                    {result.competitorAnalysis.nearestCompetitor.business_name}
-                  </p>
-                  <p>{result.competitorAnalysis.nearestCompetitor.street}</p>
-                  <p className="text-xs">
-                    Distance:{" "}
-                    {(result.competitorAnalysis.distanceToNearest * 1000).toFixed(0)}
-                    m ({result.competitorAnalysis.distanceToNearest.toFixed(2)} km)
-                  </p>
-                </div>
-              </div>
-            ) : (
-              <div className="bg-orange-50 p-4 rounded-lg border border-orange-200">
-                <h4 className="text-orange-900 mb-2 font-semibold">
-                  Nearest Competitor
-                </h4>
-                <p className="text-sm text-orange-800">No competitor found.</p>
-              </div>
-            )}
-
-            {/* Market Saturation */}
-            <div className="bg-indigo-50 p-4 rounded-lg border border-indigo-200 shadow-sm">
-              <h4 className="text-indigo-900 mb-2 font-semibold">
-                Market Saturation:{" "}
-                {(result.competitorAnalysis.marketSaturation * 100).toFixed(0)}%
-              </h4>
-
-              <Progress
-                value={result.competitorAnalysis.marketSaturation * 100}
-                className="h-2 mb-2"
+              <Input
+                id="businessIdea"
+                type="text"
+                placeholder='e.g. "Milk Tea Shop", "Laundry Hub", "Grocery Store"'
+                value={businessIdea}
+                onChange={(e) => {
+                  setBusinessIdea(e.target.value);
+                  setCategoryLockedByUser(false);
+                }}
+                className="bg-white border-gray-300 focus-visible:ring-green-500"
               />
 
-              <p className="text-sm text-indigo-800">
-                {result.competitorAnalysis.recommendedStrategy}
+              <p className="text-xs text-gray-500">
+                AI will automatically determine the most suitable business category.
               </p>
             </div>
-          </CardContent>
-        </Card>
 
-        {/* ---------------------------------------------- */}
-        {/* NEARBY BUSINESSES */}
-        {/* ---------------------------------------------- */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Nearby Businesses (10 Closest)</CardTitle>
-            <CardDescription>
-              Based on Haversine distance from recommended location.
-            </CardDescription>
-          </CardHeader>
-
-          <CardContent>
+            {/* CATEGORY SELECT */}
             <div className="space-y-2">
-              {result.nearbyBusinesses.map((nb, index) => (
-                <div
-                  key={index}
-                  className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border"
-                >
-                  <div>
-                    <h4 className="text-sm font-semibold">
-                      {nb.business.business_name}
-                    </h4>
-                    <p className="text-xs text-gray-500">
-                      {nb.business.general_category} • {nb.business.street} •{" "}
-                      {nb.business.zone_type}
+              <Label className="font-semibold text-gray-700">
+                AI-Detected Category (You can override it)
+              </Label>
+
+              <Select
+                value={selectedCategory}
+                onValueChange={(v) => {
+                  setSelectedCategory(v);
+                  setCategoryLockedByUser(true);
+                }}
+              >
+                <SelectTrigger className="bg-white border-gray-300 focus:ring-green-500">
+                  <SelectValue placeholder="Select or let AI decide" />
+                </SelectTrigger>
+                <SelectContent>
+                  {CATEGORY_OPTIONS.map((cat) => (
+                    <SelectItem key={cat.value} value={cat.value}>
+                      {cat.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              {/* AI STATUS + RESULT */}
+              <div className="mt-2 text-sm">
+                {aiCategoryLoading ? (
+                  <div className="flex items-center gap-2 text-green-600">
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>AI is analyzing your idea…</span>
+                  </div>
+                ) : aiCategory ? (
+                  <div className="p-3 rounded-lg border bg-green-50 border-green-200 shadow-sm">
+                    <div className="flex items-center justify-between">
+                      <span className="font-semibold text-green-700">
+                        AI Suggestion:
+                      </span>
+
+                      <Badge className="bg-green-600 text-white">
+                        {aiCategory}
+                      </Badge>
+                    </div>
+
+                    {/* WHY THIS CATEGORY (EXPANDABLE) */}
+                    {aiCategoryExplanation && (
+                      <details className="mt-2 text-gray-700">
+                        <summary className="cursor-pointer text-sm text-green-700 hover:underline">
+                          Why this category?
+                        </summary>
+                        <p className="text-xs mt-2 text-gray-600">
+                          {aiCategoryExplanation}
+                        </p>
+                      </details>
+                    )}
+                  </div>
+                ) : (
+                  <p className="text-xs text-gray-500">
+                    AI will categorize once you type something above.
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* AUTO CLUSTERING NOTICE */}
+          <div className="space-y-1 mt-4">
+            <div className="text-sm font-semibold text-gray-900">Clustering Mode</div>
+            <div className="text-sm text-gray-500">
+              The system automatically chooses the best number of clusters for optimal accuracy.
+            </div>
+          </div>
+
+          {/* RUN BUTTON */}
+          <Button
+            onClick={handleRunClustering}
+            disabled={
+              isProcessing ||
+              (!selectedCategory || selectedCategory.trim() === "")
+            }
+            className="w-full md:w-auto bg-green-600 hover:bg-green-700"
+          >
+            {isProcessing ? (
+              <>
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" /> Processing…
+              </>
+            ) : (
+              <>
+                <Target className="w-4 h-4 mr-2" /> Run K-Means Clustering
+              </>
+            )}
+          </Button>
+
+          {/* PROGRESS BAR */}
+          {isProcessing && (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-gray-500">Analyzing data…</span>
+                <span>{progress}%</span>
+              </div>
+              <Progress value={progress} className="h-2" />
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* ---------------------------------------------- */}
+      {/* RESULT SECTION */}
+      {/* ---------------------------------------------- */}
+      {result && (
+        <>
+          <Alert className={getConfidenceBg(result.analysis.confidence)}>
+            <CheckCircle2
+              className={`h-5 w-5 ${getConfidenceColor(result.analysis.confidence)}`}
+            />
+            <AlertTitle>
+              Analysis Complete – {(result.analysis.confidence * 100).toFixed(0)}% Confidence
+            </AlertTitle>
+            <AlertDescription>{result.analysis.opportunity}</AlertDescription>
+          </Alert>
+
+          {/* ---------------------------------------------- */}
+          {/* MAP VISUALIZATION */}
+          {/* ---------------------------------------------- */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <MapPin className="w-5 h-5" />
+                Recommended Business Location
+              </CardTitle>
+              <CardDescription>
+                Interactive map showing clusters and the optimized location.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div
+                ref={mapRef}
+                className="w-full h-[500px] rounded-lg border mb-4"
+                style={{ zIndex: 0 }}
+              />
+
+
+              {/* Coordinate Details */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                <div className="space-y-2">
+                  <h4 className="flex items-center gap-2 font-semibold text-gray-800">
+                    <Navigation className="w-4 h-4" />
+                    Coordinates
+                  </h4>
+
+                  <div className="bg-gray-50 p-4 rounded-lg border">
+                    <div className="space-y-1 text-sm">
+                      <div className="flex justify-between">
+                        <span className="text-gray-500">Latitude:</span>
+                        <span>{result.recommendedLocation.latitude.toFixed(6)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-500">Longitude:</span>
+                        <span>{result.recommendedLocation.longitude.toFixed(6)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-500">Zone Type:</span>
+                        <Badge variant="outline">{result.zoneType}</Badge>
+                      </div>
+                    </div>
+                  </div>
+
+
+                  <Button
+                    variant="outline"
+                    className="w-full"
+                    onClick={() =>
+                      window.open(
+                        `https://www.google.com/maps?q=${result.recommendedLocation.latitude},${result.recommendedLocation.longitude}`,
+                        "_blank"
+                      )
+                    }
+                  >
+                    Open in Google Maps
+                  </Button>
+
+                  <Button
+                    variant="outline"
+                    className="w-full mt-3"
+                    onClick={() => setIsExportModalOpen(true)}
+                  >
+                    Export Reports
+                  </Button>
+
+
+                  <Dialog open={isExportModalOpen} onOpenChange={setIsExportModalOpen}>
+                    <DialogContent className="max-w-md">
+                      <DialogHeader>
+                        <DialogTitle>Select Export Format</DialogTitle>
+                      </DialogHeader>
+
+                      <div className="space-y-3 mt-4">
+                        <Button
+                          className="w-full bg-blue-600 hover:bg-blue-700 text-white"
+                          onClick={() => {
+                            exportPDF();
+                            setIsExportModalOpen(false);
+                          }}
+                        >
+                          Export as PDF
+                        </Button>
+
+                        <Button
+                          className="w-full bg-gray-700 hover:bg-gray-800 text-white"
+                          onClick={() => {
+                            exportCSV();
+                            setIsExportModalOpen(false);
+                          }}
+                        >
+                          Export as CSV
+                        </Button>
+
+                        <Button
+                          className="w-full bg-green-600 hover:bg-green-700 text-white"
+                          onClick={() => {
+                            exportExcel();
+                            setIsExportModalOpen(false);
+                          }}
+                        >
+                          Export as Excel (.xlsx)
+                        </Button>
+                      </div>
+
+                      <DialogFooter>
+                        <Button variant="ghost" onClick={() => setIsExportModalOpen(false)}>
+                          Cancel
+                        </Button>
+                      </DialogFooter>
+                    </DialogContent>
+                  </Dialog>
+
+
+                </div>
+                {/* Right — Map Legend */}
+                <div className="space-y-2">
+                  <h4 className="font-semibold text-gray-800">Map Legend</h4>
+
+                  <div className="bg-gray-50 p-4 rounded-lg border shadow-sm space-y-4">
+
+                    {/* Recommended Location */}
+                    <div className="flex items-center gap-3">
+                      <div className="w-6 h-6 rounded-full bg-green-500 flex items-center justify-center text-white text-xs shadow">
+                        ★
+                      </div>
+                      <span className="text-gray-700">Recommended Location</span>
+                    </div>
+
+                    {/* Barangay Center */}
+                    <div className="flex items-center gap-3">
+                      <div className="w-4 h-4 rounded-full bg-red-500 border-2 border-white shadow" />
+                      <span className="text-gray-700">Barangay Center</span>
+                    </div>
+
+                    {/* Cluster Centroids */}
+                    <div className="flex items-center gap-3">
+                      <div className="w-5 h-5 rounded-full bg-blue-500 text-white flex items-center justify-center text-[10px] shadow">
+                        C
+                      </div>
+                      <span className="text-gray-700">Cluster Centroids</span>
+                    </div>
+
+                    {/* Business Locations */}
+                    <div className="flex items-center gap-3">
+                      <div className="w-3 h-3 rounded-full bg-blue-500 border shadow-inner" />
+                      <span className="text-gray-700">Business Locations</span>
+
+                    </div>
+                    <Button
+                      className="mt-4 w-full md:w-auto bg-blue-600 hover:bg-blue-700 text-white"
+                      onClick={() => navigate("/user/dashboard/opportunities")}
+                    >
+                      View in Opportunities
+                    </Button>
+
+                  </div>
+                </div>
+
+              </div>
+            </CardContent>
+          </Card>
+
+
+
+          {/* ---------------------------------------------- */}
+          {/* WHY THIS LOCATION */}
+          {/* ---------------------------------------------- */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Why This Location?</CardTitle>
+              <CardDescription>
+                Breakdown of factors influencing the recommendation.
+              </CardDescription>
+            </CardHeader>
+
+            <CardContent>
+              {(() => {
+                const anchor = getAnchorBusiness();
+                if (!anchor)
+                  return (
+                    <p className="text-sm text-gray-500">
+                      Unable to compute explanation — no anchor business found.
+                    </p>
+                  );
+
+                const bd50 = anchor.business_density_50m ?? 0;
+                const bd100 = anchor.business_density_100m ?? 0;
+                const bd200 = anchor.business_density_200m ?? 0;
+                const cd50 = anchor.competitor_density_50m ?? 0;
+                const cd100 = anchor.competitor_density_100m ?? 0;
+                const cd200 = anchor.competitor_density_200m ?? 0;
+
+                return (
+                  <div className="space-y-4">
+                    <p className="text-sm text-gray-700">
+                      This location is near{" "}
+                      <span className="font-semibold">{anchor.business_name}</span>{" "}
+                      on <span className="font-semibold">{anchor.street}</span>, inside{" "}
+                      {describeZone(anchor.zone_type)}. The system evaluated business
+                      density, competitor strength, demand pockets, and cluster
+                      centroids.
+                    </p>
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                      {/* Business Presence */}
+                      <div className="bg-emerald-50 border border-emerald-200 p-3 rounded-lg shadow-sm">
+                        <p className="text-emerald-900 font-semibold mb-1">
+                          📈 Business Presence
+                        </p>
+                        <p className="text-emerald-800">
+                          50m: {bd50} ({describeLevel(bd50)})
+                        </p>
+                        <p className="text-emerald-800">
+                          100m: {bd100} ({describeLevel(bd100)})
+                        </p>
+                        <p className="text-emerald-800">
+                          200m: {bd200} ({describeLevel(bd200)})
+                        </p>
+                      </div>
+
+                      {/* Competitor Pressure */}
+                      <div className="bg-rose-50 border border-rose-200 p-3 rounded-lg shadow-sm">
+                        <p className="text-rose-900 font-semibold mb-1">
+                          ⚔️ Competitor Pressure
+                        </p>
+                        <p className="text-rose-800">
+                          50m: {cd50} ({describeLevel(cd50)})
+                        </p>
+                        <p className="text-rose-800">
+                          100m: {cd100} ({describeLevel(cd100)})
+                        </p>
+                        <p className="text-rose-800">
+                          200m: {cd200} ({describeLevel(cd200)})
+                        </p>
+                      </div>
+
+                      {/* Interpretation */}
+                      <div className="bg-sky-50 border border-sky-200 p-3 rounded-lg shadow-sm">
+                        <p className="text-sky-900 font-semibold mb-1">
+                          🧠 Model Interpretation
+                        </p>
+                        <p className="text-sky-800">• Prioritizes streets with activity.</p>
+                        <p className="text-sky-800">
+                          • Favors {anchor.zone_type} zones for visibility.
+                        </p>
+                        <p className="text-sky-800">
+                          • Avoids isolated outlier points far from centroids.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+            </CardContent>
+          </Card>
+
+          {/* ---------------------------------------------- */}
+          {/* COMPETITOR ANALYSIS */}
+          {/* ---------------------------------------------- */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Competitor Analysis</CardTitle>
+              <CardDescription>Market competition overview.</CardDescription>
+            </CardHeader>
+
+            <CardContent className="space-y-4">
+
+              {/* Competitor Summary */}
+              <div className="bg-blue-50 p-4 rounded-lg border border-blue-200 shadow-sm">
+                <h4 className="text-blue-900 mb-2 font-semibold">
+                  Competitor Summary
+                </h4>
+
+                <div className="text-sm text-blue-800 space-y-1">
+                  <p>
+                    <strong>Total Competitors:</strong>{" "}
+                    {result.analysis.competitorCount}
+                  </p>
+                  <p>
+                    <strong>Within 500m:</strong>{" "}
+                    {result.competitorAnalysis.competitorsWithin500m}
+                  </p>
+                  <p>
+                    <strong>Within 1km:</strong>{" "}
+                    {result.competitorAnalysis.competitorsWithin1km}
+                  </p>
+                  <p>
+                    <strong>Within 2km:</strong>{" "}
+                    {result.competitorAnalysis.competitorsWithin2km}
+                  </p>
+                </div>
+              </div>
+
+              {/* Nearest Competitor */}
+              {result.competitorAnalysis.nearestCompetitor ? (
+                <div className="bg-orange-50 p-4 rounded-lg border border-orange-200 shadow-sm">
+                  <h4 className="text-orange-900 mb-2 font-semibold">
+                    Nearest Competitor
+                  </h4>
+                  <div className="text-sm text-orange-800 space-y-1">
+                    <p className="font-semibold">
+                      {result.competitorAnalysis.nearestCompetitor.business_name}
+                    </p>
+                    <p>{result.competitorAnalysis.nearestCompetitor.street}</p>
+                    <p className="text-xs">
+                      Distance:{" "}
+                      {(result.competitorAnalysis.distanceToNearest * 1000).toFixed(0)}
+                      m ({result.competitorAnalysis.distanceToNearest.toFixed(2)} km)
                     </p>
                   </div>
-
-                  <Badge variant="secondary">
-                    {(nb.distance * 1000).toFixed(0)}m
-                  </Badge>
                 </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
+              ) : (
+                <div className="bg-orange-50 p-4 rounded-lg border border-orange-200">
+                  <h4 className="text-orange-900 mb-2 font-semibold">
+                    Nearest Competitor
+                  </h4>
+                  <p className="text-sm text-orange-800">No competitor found.</p>
+                </div>
+              )}
 
-        {/* ---------------------------------------------- */}
-        {/* CLUSTER DETAILS */}
-        {/* ---------------------------------------------- */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Cluster Analysis Details</CardTitle>
-            <CardDescription>
-              Distribution of businesses across clusters.
-            </CardDescription>
-          </CardHeader>
+              {/* Market Saturation */}
+              <div className="bg-indigo-50 p-4 rounded-lg border border-indigo-200 shadow-sm">
+                <h4 className="text-indigo-900 mb-2 font-semibold">
+                  Market Saturation:{" "}
+                  {(result.competitorAnalysis.marketSaturation * 100).toFixed(0)}%
+                </h4>
 
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {result.clusters.map((cluster) => (
-                <div
-                  key={cluster.id}
-                  className="border rounded-lg p-4 bg-white shadow-sm"
-                >
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-3">
-                      <div
-                        className="w-6 h-6 rounded-full flex items-center justify-center text-white text-sm"
-                        style={{ backgroundColor: cluster.color }}
-                      >
-                        {cluster.id + 1}
+                <Progress
+                  value={result.competitorAnalysis.marketSaturation * 100}
+                  className="h-2 mb-2"
+                />
+
+                <p className="text-sm text-indigo-800">
+                  {result.competitorAnalysis.recommendedStrategy}
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* ---------------------------------------------- */}
+          {/* NEARBY BUSINESSES */}
+          {/* ---------------------------------------------- */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Nearby Businesses (10 Closest)</CardTitle>
+              <CardDescription>
+                Based on Haversine distance from recommended location.
+              </CardDescription>
+            </CardHeader>
+
+            <CardContent>
+              <div className="space-y-2">
+                {result.nearbyBusinesses.map((nb, index) => (
+                  <div
+                    key={index}
+                    className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border"
+                  >
+                    <div>
+                      <h4 className="text-sm font-semibold">
+                        {nb.business.business_name}
+                      </h4>
+                      <p className="text-xs text-gray-500">
+                        {nb.business.general_category} • {nb.business.street} •{" "}
+                        {nb.business.zone_type}
+                      </p>
+                    </div>
+
+                    <Badge variant="secondary">
+                      {(nb.distance * 1000).toFixed(0)}m
+                    </Badge>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* ---------------------------------------------- */}
+          {/* CLUSTER DETAILS */}
+          {/* ---------------------------------------------- */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Cluster Analysis Details</CardTitle>
+              <CardDescription>
+                Distribution of businesses across clusters.
+              </CardDescription>
+            </CardHeader>
+
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {result.clusters.map((cluster) => (
+                  <div
+                    key={cluster.id}
+                    className="border rounded-lg p-4 bg-white shadow-sm"
+                  >
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-3">
+                        <div
+                          className="w-6 h-6 rounded-full flex items-center justify-center text-white text-sm"
+                          style={{ backgroundColor: cluster.color }}
+                        >
+                          {cluster.id + 1}
+                        </div>
+                        <h4 className="font-semibold">Cluster {cluster.id + 1}</h4>
                       </div>
-                      <h4 className="font-semibold">Cluster {cluster.id + 1}</h4>
+                      <Badge>{cluster.points.length} businesses</Badge>
                     </div>
-                    <Badge>{cluster.points.length} businesses</Badge>
-                  </div>
 
-                  <div className="grid grid-cols-2 gap-3 text-sm">
-                    <div>
-                      <p className="text-gray-500 text-xs">Centroid Latitude</p>
-                      <p>{cluster.centroid.latitude.toFixed(6)}</p>
-                    </div>
-                    <div>
-                      <p className="text-gray-500 text-xs">Centroid Longitude</p>
-                      <p>{cluster.centroid.longitude.toFixed(6)}</p>
+                    <div className="grid grid-cols-2 gap-3 text-sm">
+                      <div>
+                        <p className="text-gray-500 text-xs">Centroid Latitude</p>
+                        <p>{cluster.centroid.latitude.toFixed(6)}</p>
+                      </div>
+                      <div>
+                        <p className="text-gray-500 text-xs">Centroid Longitude</p>
+                        <p>{cluster.centroid.longitude.toFixed(6)}</p>
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      </>
-    )}
-  </div>
-);
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        </>
+      )}
+    </div>
+  );
 
 }
 

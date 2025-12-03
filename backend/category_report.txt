@@ -1,0 +1,16 @@
+﻿======================================================================
+BUSINESS COUNT BY CATEGORY (from rawbusinessdata.csv)
+======================================================================
+
+Entertainment / Leisure                            :   2
+Food & Beverages                                   :   8
+Merchandise / Trading                              :   9
+Merchandising / Trading                            :   3
+Pet Store                                          :   1
+Restaurant                                         :  14
+Retail                                             :  39
+Services                                           :  24
+
+======================================================================
+TOTAL BUSINESSES: 100
+======================================================================
