@@ -38,7 +38,7 @@ interface Opportunity {
   zone_type: string;
   saturation: number;
   score: number;
-  cluster: number;
+  cluster?: number;
   coordinates: {
     lat: number;
     lng: number;
@@ -60,6 +60,7 @@ interface LocationData {
   competitor_density_200m: number;
   latitude: number;
   longitude: number;
+  cluster?: number;
 }
 
 interface BusinessRow {
@@ -519,7 +520,7 @@ if (loading) {
     const rows = opportunities.map((o: Opportunity) => [
       o.title,
       o.category,
-      o.cluster,
+      o.cluster ?? 0,
       o.businessDensity,
       o.competitors,
       o.zone_type,

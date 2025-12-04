@@ -64,8 +64,13 @@ import { useNavigate } from "react-router-dom";
 // ---------------------------------------------------------
 // TYPES & CONSTANTS (moved outside component)
 // ---------------------------------------------------------
+interface GridPoint {
+  latitude: number;
+  longitude: number;
+}
+
 type ExtendedResult = ClusteringResult & {
-  gridPoints?: Array<{ latitude: number; longitude: number }>;
+  gridPoints?: GridPoint[];
 };
 
 // Your new general category set — make sure DB categories match these strings

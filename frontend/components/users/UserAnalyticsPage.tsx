@@ -45,10 +45,13 @@ import type { Business } from "../../types";
 
 interface AnalyticsStats {
   totalBusinesses: number;
+  total_businesses: number;
   totalCategories: number;
   commercialZones: number;
   residentialZones: number;
   avgDensity: number;
+  categories: { name: string; value: number }[];
+  zones: { name: string; value: number }[];
 }
 
 export function UserAnalyticsPage() {
@@ -185,7 +188,12 @@ export function UserAnalyticsPage() {
 
       // STATS
       setStats({
+        totalBusinesses: list.length,
         total_businesses: list.length,
+        totalCategories: catArr.length,
+        commercialZones: zoneArr.filter(z => z.name === 'Commercial').reduce((acc, z) => acc + z.value, 0),
+        residentialZones: zoneArr.filter(z => z.name === 'Residential').reduce((acc, z) => acc + z.value, 0),
+        avgDensity: list.length / (streetArr.length || 1),
         categories: catArr,
         zones: zoneArr,
       });
