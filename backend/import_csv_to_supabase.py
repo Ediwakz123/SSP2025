@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Import CSV data to Supabase business_raw table.
+Import CSV data to Supabase businesses table.
 
 This script reads rawbusinessdata.csv and imports all businesses into Supabase.
 It handles category normalization and clears existing data before import.
@@ -26,10 +26,10 @@ if not SUPABASE_URL or not SUPABASE_SERVICE_ROLE_KEY:
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
 
 def clear_existing_data():
-    """Clear all existing data from business_raw table."""
-    print("Clearing existing data from business_raw table...")
+    """Clear all existing data from businesses table."""
+    print("Clearing existing data from businesses table...")
     try:
-        result = supabase.table("business_raw").delete().neq("business_id", 0).execute()
+        result = supabase.table("businesses").delete().neq("id", 0).execute()
         print("Existing data cleared successfully")
     except Exception as e:
         print(f"Warning: Could not clear existing data: {e}")
@@ -68,8 +68,9 @@ def import_csv_data(csv_file: str):
             # Normalize category
             category = normalize_category(row['general_category'])
             
+            # Build business object for 'businesses' table
+            # Note: 'id' is auto-generated, so we don't include it
             business = {
-                'business_id': int(row['business_id']),
                 'business_name': row['business_name'].strip(),
                 'general_category': category,
                 'latitude': float(row['latitude']),
@@ -105,7 +106,7 @@ def import_csv_data(csv_file: str):
         print(f"Importing batch {i//BATCH_SIZE + 1} ({len(batch)} businesses)...")
         
         try:
-            result = supabase.table("business_raw").insert(batch).execute()
+            result = supabase.table("businesses").insert(batch).execute()
             total_imported += len(batch)
             print(f"   Batch imported successfully")
         except Exception as e:
@@ -121,12 +122,12 @@ def verify_import():
     
     try:
         # Count total businesses
-        result = supabase.table("business_raw").select("*", count="exact").execute()
+        result = supabase.table("businesses").select("*", count="exact").execute()
         total_count = result.count
         print(f"Total businesses in database: {total_count}")
         
         # Get category distribution
-        all_data = supabase.table("business_raw").select("general_category").execute()
+        all_data = supabase.table("businesses").select("general_category").execute()
         from collections import Counter
         categories = [row['general_category'] for row in all_data.data]
         category_counts = Counter(categories)
@@ -164,9 +165,9 @@ def main():
         
         try:
             # Step 1: Clear existing data
-            log("Clearing existing data from business_raw table...")
+            log("Clearing existing data from businesses table...")
             try:
-                result = supabase.table("business_raw").delete().neq("business_id", 0).execute()
+                result = supabase.table("businesses").delete().neq("id", 0).execute()
                 log("Existing data cleared successfully")
             except Exception as e:
                 log(f"Warning: Could not clear existing data: {e}")
@@ -190,8 +191,9 @@ def main():
                     # Normalize category
                     category = normalize_category(row['general_category'])
                     
+                    # Build business object for 'businesses' table
+                    # Note: 'id' is auto-generated, so we don't include it
                     business = {
-                        'business_id': int(row['business_id']),
                         'business_name': row['business_name'].strip(),
                         'general_category': category,
                         'latitude': float(row['latitude']),
@@ -227,7 +229,7 @@ def main():
                 log(f"Importing batch {i//BATCH_SIZE + 1} ({len(batch)} businesses)...")
                 
                 try:
-                    result = supabase.table("business_raw").insert(batch).execute()
+                    result = supabase.table("businesses").insert(batch).execute()
                     total_imported += len(batch)
                     log(f"   Batch imported successfully")
                 except Exception as e:
@@ -240,12 +242,12 @@ def main():
             log("\nVerifying import...")
             try:
                 # Count total businesses
-                result = supabase.table("business_raw").select("*", count="exact").execute()
+                result = supabase.table("businesses").select("*", count="exact").execute()
                 total_count = result.count
                 log(f"Total businesses in database: {total_count}")
                 
                 # Get category distribution
-                all_data = supabase.table("business_raw").select("general_category").execute()
+                all_data = supabase.table("businesses").select("general_category").execute()
                 categories = [row['general_category'] for row in all_data.data]
                 category_counts = Counter(categories)
                 

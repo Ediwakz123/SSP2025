@@ -1,6 +1,39 @@
 {
   "version": 2,
+  "headers": [
+    {
+      "source": "/api/(.*)",
+      "headers": [
+        { "key": "Access-Control-Allow-Credentials", "value": "true" },
+        { "key": "Access-Control-Allow-Origin", "value": "*" },
+        { "key": "Access-Control-Allow-Methods", "value": "GET,OPTIONS,PATCH,DELETE,POST,PUT" },
+        { "key": "Access-Control-Allow-Headers", "value": "X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, Authorization" },
+        { "key": "X-Content-Type-Options", "value": "nosniff" },
+        { "key": "X-Frame-Options", "value": "DENY" },
+        { "key": "X-XSS-Protection", "value": "1; mode=block" }
+      ]
+    }
+  ],
   "routes": [
+    {
+      "src": "/api/(.*)",
+      "methods": ["OPTIONS"],
+      "dest": "/api/$1.js",
+      "headers": {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "GET,OPTIONS,PATCH,DELETE,POST,PUT",
+        "Access-Control-Allow-Headers": "X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, Authorization"
+      }
+    },
+    { "src": "/api/admin/(.*)", "dest": "/api/admin/$1.js" },
+    { "src": "/api/auth/(.*)", "dest": "/api/auth/$1.js" },
+    { "src": "/api/users/(.*)", "dest": "/api/users/$1.js" },
+    { "src": "/api/businesses/(.*)", "dest": "/api/businesses/$1.js" },
+    { "src": "/api/ai/(.*)", "dest": "/api/ai/$1.js" },
+    { "src": "/api/clustering/(.*)", "dest": "/api/clustering/$1.js" },
+    { "src": "/api/map/(.*)", "dest": "/api/map/$1.js" },
+    { "src": "/api/opportunities/(.*)", "dest": "/api/opportunities/$1.js" },
+    { "src": "/api/analytics/(.*)", "dest": "/api/analytics/$1.js" },
     { "src": "/api/(.*)", "dest": "/api/$1.js" }
   ]
 }

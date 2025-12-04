@@ -1,6 +1,8 @@
 import { supabase } from "../lib/supabase";
 import { useEffect } from "react";
 import { useLocation } from "react-router-dom";
+import { logger } from "./logger";
+import type { ActivityMetadata } from "../types";
 
 /* -----------------------------------------
    GLOBAL STATE FOR TIME TRACKING
@@ -10,7 +12,7 @@ let lastPageEnterTime: number | null = null;
 /* -----------------------------------------
    CLEAN ACTION NAME GENERATOR
 ----------------------------------------- */
-export function formatAction(raw: string) {
+export function formatAction(raw: string): string {
   const a = raw.toLowerCase();
 
   if (a.includes("dashboard")) return "Viewed Dashboard";
@@ -28,7 +30,10 @@ export function formatAction(raw: string) {
 /* -----------------------------------------
    MAIN ACTIVITY LOGGER
 ----------------------------------------- */
-export async function logActivity(action: string, metadata: any = {}) {
+export async function logActivity(
+  action: string,
+  metadata: ActivityMetadata = {}
+): Promise<void> {
   try {
     const { data: auth } = await supabase.auth.getUser();
     const user = auth?.user;
@@ -36,7 +41,7 @@ export async function logActivity(action: string, metadata: any = {}) {
 
     const now = Date.now();
 
-    let timeSpentSeconds = null;
+    let timeSpentSeconds: number | undefined = undefined;
     if (lastPageEnterTime !== null) {
       timeSpentSeconds = Math.round((now - lastPageEnterTime) / 1000);
     }
@@ -49,7 +54,7 @@ export async function logActivity(action: string, metadata: any = {}) {
       .replace(/\s+/g, "_")
       .replace(/\W+/g, "");
 
-    const finalMetadata = {
+    const finalMetadata: ActivityMetadata = {
       ...metadata,
       timeSpentSeconds,
       timestamp: new Date().toISOString(),
@@ -58,11 +63,11 @@ export async function logActivity(action: string, metadata: any = {}) {
     await supabase.from("activity_logs").insert({
       user_id: user.id,
       user_email: user.email,
-      action: cleanAction,                        // <-- RAW CODE
-      details: JSON.stringify(finalMetadata),     // <-- FIXED JSON
+      action: cleanAction,
+      details: JSON.stringify(finalMetadata),
     });
   } catch (err) {
-    console.error("🔥 Error logging activity:", err);
+    logger.error("Error logging activity", err);
   }
 }
 

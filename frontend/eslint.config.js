@@ -19,5 +19,21 @@ export default defineConfig([
       ecmaVersion: 2020,
       globals: globals.browser,
     },
+    rules: {
+      // Allow unused variables with underscore prefix
+      '@typescript-eslint/no-unused-vars': ['error', { 
+        argsIgnorePattern: '^_',
+        varsIgnorePattern: '^_',
+        caughtErrorsIgnorePattern: '^_'
+      }],
+      // Allow explicit any in some cases (reduce from error to warn)
+      '@typescript-eslint/no-explicit-any': 'warn',
+      // Disable react-refresh for component exports (common pattern)
+      'react-refresh/only-export-components': 'off',
+      // Disable triple slash reference (needed for type declarations)
+      '@typescript-eslint/triple-slash-reference': 'off',
+      // Warn instead of error for non-null assertions on optional chains
+      '@typescript-eslint/no-non-null-asserted-optional-chain': 'warn',
+    },
   },
 ])

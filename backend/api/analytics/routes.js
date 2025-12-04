@@ -2,7 +2,7 @@ import { createClient } from "@supabase/supabase-js";
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
-  process.env.SUPABASE_ANON_KEY
+  process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
 // Random stable colors for clusters
@@ -21,7 +21,7 @@ export async function GET() {
     // 1. Load ALL businesses (seed + user data)
     const { data: businesses, error } = await supabase
       .from("businesses")
-      .select("id, latitude, longitude, category, zone_type, cluster_id");
+      .select("id, latitude, longitude, general_category, zone_type, cluster_id");
 
     if (error) throw error;
 

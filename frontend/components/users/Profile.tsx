@@ -20,7 +20,20 @@ import {
   SelectItem,
 } from "../ui/select";
 
-import { Mail, Calendar, Pencil, Save, X, Loader2 } from "lucide-react";
+import { 
+  Mail, 
+  Calendar, 
+  Pencil, 
+  Save, 
+  X, 
+  Loader2, 
+  User, 
+  Phone, 
+  MapPin, 
+  Shield, 
+  CheckCircle,
+  Sparkles
+} from "lucide-react";
 
 interface ProfileData {
   id: string;
@@ -227,16 +240,22 @@ export function Profile() {
     return Math.round((filled / fields.length) * 100);
   })();
 
-  const editClass = editing ? "ring-2 ring-blue-300 shadow-md" : "bg-muted";
+  const editClass = editing ? "ring-2 ring-indigo-300 shadow-md bg-white border-indigo-200" : "bg-gray-50 border-gray-200";
 
   // ---------------------------
   // LOADING SCREEN
   // ---------------------------
   if (loading) {
     return (
-      <div className="flex flex-col items-center justify-center h-[60vh]">
-        <Loader2 className="w-6 h-6 animate-spin mb-2" />
-        Loading profile...
+      <div className="flex flex-col items-center justify-center h-[60vh] animate-fadeIn">
+        <div className="relative">
+          <div className="w-16 h-16 rounded-2xl bg-linear-to-br from-indigo-500 to-purple-600 animate-pulse flex items-center justify-center">
+            <Loader2 className="w-8 h-8 text-white animate-spin" />
+          </div>
+          <div className="absolute -inset-4 bg-linear-to-br from-indigo-500/20 to-purple-600/20 rounded-3xl blur-xl animate-pulse" />
+        </div>
+        <p className="mt-6 text-gray-600 font-medium">Loading profile...</p>
+        <p className="text-sm text-gray-400 mt-1">Getting your information</p>
       </div>
     );
   }
@@ -245,34 +264,47 @@ export function Profile() {
   // MAIN UI
   // ----------------------------------------------------
   return (
-    <div className="w-full max-w-6xl mx-auto p-6 space-y-8">
-      {/* HEADER */}
-      <Card>
-        <CardContent className="pt-6 flex flex-col md:flex-row gap-6 items-center">
-          <Avatar className="w-24 h-24">
-            <AvatarFallback className="text-2xl">
-              {profile?.firstName?.[0]}
-              {profile?.lastName?.[0]}
-            </AvatarFallback>
-          </Avatar>
+    <div className="page-wrapper w-full max-w-5xl mx-auto p-6 space-y-8">
+      {/* HEADER CARD */}
+      <div className="page-content relative overflow-hidden rounded-3xl bg-linear-to-br from-indigo-500 via-purple-500 to-pink-500 p-8">
+        {/* Decorative elements */}
+        <div className="absolute top-0 right-0 w-80 h-80 bg-white/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/4" />
+        <div className="absolute bottom-0 left-0 w-64 h-64 bg-white/10 rounded-full blur-3xl translate-y-1/2 -translate-x-1/4" />
+        
+        <div className="relative z-10 flex flex-col md:flex-row gap-6 items-center">
+          {/* Avatar with gradient ring */}
+          <div className="relative">
+            <div className="absolute -inset-1 bg-linear-to-br from-white/40 to-white/10 rounded-full blur" />
+            <Avatar className="relative w-28 h-28 border-4 border-white/30 shadow-xl">
+              <AvatarFallback className="text-3xl font-bold bg-linear-to-br from-indigo-600 to-purple-600 text-white">
+                {profile?.firstName?.[0]}
+                {profile?.lastName?.[0]}
+              </AvatarFallback>
+            </Avatar>
+            {completionPercentage === 100 && (
+              <div className="absolute -bottom-1 -right-1 w-8 h-8 bg-emerald-400 rounded-full flex items-center justify-center border-2 border-white shadow-lg">
+                <CheckCircle className="w-5 h-5 text-white" />
+              </div>
+            )}
+          </div>
 
-          <div className="flex-1 text-center md:text-left">
-            <h1 className="text-3xl font-semibold">
+          <div className="flex-1 text-center md:text-left text-white">
+            <h1 className="text-3xl font-bold">
               {profile?.firstName} {profile?.lastName}
             </h1>
 
-            <div className="flex justify-center md:justify-start gap-2 text-muted-foreground mt-1">
-              <Mail size={16} />
-              <span>{profile?.email}</span>
+            <div className="flex justify-center md:justify-start items-center gap-2 text-white/80 mt-2">
+              <Mail className="w-4 h-4" />
+              <span className="text-sm">{profile?.email}</span>
             </div>
 
-            <div className="flex justify-center md:justify-start gap-2 text-muted-foreground mt-1">
-              <Calendar size={16} />
-              <span>Joined {formatDate(profile!.createdAt)}</span>
+            <div className="flex justify-center md:justify-start items-center gap-2 text-white/80 mt-1">
+              <Calendar className="w-4 h-4" />
+              <span className="text-sm">Joined {formatDate(profile!.createdAt)}</span>
             </div>
 
             {profile?.lastUpdated && (
-              <p className="text-xs text-muted-foreground mt-1">
+              <p className="text-xs text-white/60 mt-2">
                 Last updated: {formatDate(profile.lastUpdated)}
               </p>
             )}
@@ -285,78 +317,129 @@ export function Profile() {
                 toast.info("You are now editing your profile.");
                 logActivity("Opened Profile Edit Mode");
               }}
+              className="bg-white/20 hover:bg-white/30 text-white border border-white/30 backdrop-blur-sm transition-all hover:scale-105"
             >
-              <Pencil className="mr-2" size={16} /> Edit
+              <Pencil className="mr-2 w-4 h-4" /> Edit Profile
             </Button>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
       {/* PROFILE COMPLETION */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Profile Completion</CardTitle>
-          <CardDescription>
-            {completionPercentage}% complete — Fill in missing fields to complete your profile.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Progress value={completionPercentage} className="h-3" />
+      <Card className="border-0 shadow-card overflow-hidden animate-fadeInUp">
+        <CardContent className="p-6">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-3">
+              <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${
+                completionPercentage === 100 
+                  ? "bg-emerald-100 text-emerald-600" 
+                  : "bg-indigo-100 text-indigo-600"
+              }`}>
+                {completionPercentage === 100 ? (
+                  <CheckCircle className="w-6 h-6" />
+                ) : (
+                  <Sparkles className="w-6 h-6" />
+                )}
+              </div>
+              <div>
+                <h3 className="font-semibold text-gray-900">Profile Completion</h3>
+                <p className="text-sm text-gray-500">
+                  {completionPercentage === 100 
+                    ? "Your profile is complete!" 
+                    : "Fill in missing fields to complete your profile"
+                  }
+                </p>
+              </div>
+            </div>
+            <div className="text-right">
+              <span className={`text-2xl font-bold ${
+                completionPercentage === 100 ? "text-emerald-600" : "text-indigo-600"
+              }`}>
+                {completionPercentage}%
+              </span>
+            </div>
+          </div>
+          <div className="relative">
+            <Progress value={completionPercentage} className="h-3 bg-gray-100" />
+            <div 
+              className={`absolute top-0 left-0 h-3 rounded-full transition-all duration-500 ${
+                completionPercentage === 100 
+                  ? "bg-linear-to-r from-emerald-400 to-teal-400" 
+                  : "bg-linear-to-r from-indigo-500 to-purple-500"
+              }`}
+              style={{ width: `${completionPercentage}%` }}
+            />
+          </div>
         </CardContent>
       </Card>
 
-      {/* DETAILS */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Profile Details</CardTitle>
-          <CardDescription>
-            {editing ? "Update your profile information" : "Your personal information"}
-          </CardDescription>
+      {/* DETAILS CARD */}
+      <Card className="border-0 shadow-card overflow-hidden animate-fadeInUp delay-100">
+        <CardHeader className="bg-linear-to-r from-gray-50 to-white border-b border-gray-100 px-8 py-6">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-linear-to-br from-indigo-500 to-purple-500 flex items-center justify-center">
+              <User className="w-5 h-5 text-white" />
+            </div>
+            <div>
+              <CardTitle className="text-lg">Profile Details</CardTitle>
+              <CardDescription>
+                {editing ? "Update your profile information" : "Your personal information"}
+              </CardDescription>
+            </div>
+          </div>
         </CardHeader>
 
-        <CardContent className="space-y-10">
+        <CardContent className="p-8 space-y-10">
           {/* PERSONAL INFO */}
-          <div>
-            <h3 className="font-medium text-lg mb-3">Personal Info</h3>
+          <div className="form-section p-0 border-0 shadow-none">
+            <h3 className="form-section-title text-gray-800">
+              <User className="w-5 h-5 text-indigo-500" />
+              Personal Information
+            </h3>
 
             <div className="grid md:grid-cols-2 gap-6">
               <div className="space-y-2">
-                <Label className="font-medium">First Name</Label>
+                <Label className="font-medium text-gray-700">First Name</Label>
                 <Input
-                  className={editing ? editClass : "bg-muted"}
+                  className={`${editClass} transition-all duration-200`}
                   disabled={!editing}
                   value={formData.firstName}
                   onChange={(e) =>
                     setFormData({ ...formData, firstName: capitalize(e.target.value) })
                   }
                 />
+                {errors.firstName && <p className="text-red-500 text-sm">{errors.firstName}</p>}
               </div>
 
               <div className="space-y-2">
-                <Label className="font-medium">Last Name</Label>
+                <Label className="font-medium text-gray-700">Last Name</Label>
                 <Input
-                  className={editing ? editClass : "bg-muted"}
+                  className={`${editClass} transition-all duration-200`}
                   disabled={!editing}
                   value={formData.lastName}
                   onChange={(e) =>
                     setFormData({ ...formData, lastName: capitalize(e.target.value) })
                   }
                 />
+                {errors.lastName && <p className="text-red-500 text-sm">{errors.lastName}</p>}
               </div>
             </div>
           </div>
 
-          <Separator />
+          <Separator className="bg-gray-100" />
 
           {/* OTHER DETAILS */}
-          <div>
-            <h3 className="font-medium text-lg mb-3">Other Details</h3>
+          <div className="form-section p-0 border-0 shadow-none">
+            <h3 className="form-section-title text-gray-800">
+              <Shield className="w-5 h-5 text-purple-500" />
+              Additional Details
+            </h3>
 
             <div className="grid md:grid-cols-2 gap-6">
               <div className="space-y-2">
-                <Label className="font-medium">Age</Label>
+                <Label className="font-medium text-gray-700">Age</Label>
                 <Input
-                  className={editing ? editClass : "bg-muted"}
+                  className={`${editClass} transition-all duration-200`}
                   type="number"
                   disabled={!editing}
                   value={formData.age}
@@ -364,11 +447,11 @@ export function Profile() {
                   min="1"
                   max="120"
                 />
-                {errors.age && <p className="text-red-600 text-sm">{errors.age}</p>}
+                {errors.age && <p className="text-red-500 text-sm">{errors.age}</p>}
               </div>
 
               <div className="space-y-2">
-                <Label className="font-medium">Gender</Label>
+                <Label className="font-medium text-gray-700">Gender</Label>
                 {editing ? (
                   <Select
                     value={formData.gender}
@@ -376,7 +459,7 @@ export function Profile() {
                       setFormData({ ...formData, gender: value })
                     }
                   >
-                    <SelectTrigger className={editClass}>
+                    <SelectTrigger className={`${editClass} transition-all duration-200`}>
                       <SelectValue placeholder="Select gender" />
                     </SelectTrigger>
                     <SelectContent>
@@ -386,50 +469,63 @@ export function Profile() {
                     </SelectContent>
                   </Select>
                 ) : (
-                  <Input disabled className="bg-muted" value={formatGender(formData.gender)} />
+                  <Input disabled className="bg-gray-50 border-gray-200" value={formatGender(formData.gender)} />
                 )}
               </div>
             </div>
           </div>
 
-          <Separator />
+          <Separator className="bg-gray-100" />
 
           {/* CONTACT INFO */}
-          <div>
-            <h3 className="font-medium text-lg mb-3">Contact Info</h3>
+          <div className="form-section p-0 border-0 shadow-none">
+            <h3 className="form-section-title text-gray-800">
+              <Phone className="w-5 h-5 text-blue-500" />
+              Contact Information
+            </h3>
 
-            <div className="space-y-2">
-              <Label className="font-medium">Contact Number</Label>
-              <Input
-                className={editing ? editClass : "bg-muted"}
-                disabled={!editing}
-                value={formData.contactNumber}
-                onChange={(e) =>
-                  setFormData({ ...formData, contactNumber: cleanPhone(e.target.value) })
-                }
-              />
-            </div>
-
-            <div className="space-y-2 mt-6">
-              <Label className="font-medium">Address</Label>
-              {editing ? (
-                <Textarea
-                  className={editClass}
-                  rows={3}
-                  value={formData.address}
+            <div className="space-y-6">
+              <div className="space-y-2">
+                <Label className="font-medium text-gray-700">Contact Number</Label>
+                <Input
+                  className={`${editClass} transition-all duration-200`}
+                  disabled={!editing}
+                  value={formData.contactNumber}
+                  placeholder="+63 XXX XXX XXXX"
                   onChange={(e) =>
-                    setFormData({ ...formData, address: e.target.value })
+                    setFormData({ ...formData, contactNumber: cleanPhone(e.target.value) })
                   }
                 />
-              ) : (
-                <Input disabled className="bg-muted" value={formData.address} />
-              )}
+                {errors.contactNumber && <p className="text-red-500 text-sm">{errors.contactNumber}</p>}
+              </div>
+
+              <div className="space-y-2">
+                <Label className="font-medium text-gray-700 flex items-center gap-2">
+                  <MapPin className="w-4 h-4 text-emerald-500" />
+                  Address
+                </Label>
+                {editing ? (
+                  <Textarea
+                    className={`${editClass} transition-all duration-200 min-h-[100px]`}
+                    rows={3}
+                    placeholder="Enter your full address"
+                    value={formData.address}
+                    onChange={(e) =>
+                      setFormData({ ...formData, address: e.target.value })
+                    }
+                  />
+                ) : (
+                  <div className="p-4 bg-gray-50 rounded-xl border border-gray-200 text-gray-700">
+                    {formData.address || <span className="text-gray-400 italic">No address provided</span>}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 
           {/* ACTIONS */}
           {editing && (
-            <div className="flex justify-end gap-4 mt-10">
+            <div className="flex justify-end gap-4 pt-6 border-t border-gray-100">
               <Button
                 variant="outline"
                 onClick={() => {
@@ -437,13 +533,27 @@ export function Profile() {
                   toast.warning("Edit cancelled.");
                   logActivity("Cancelled Profile Edit");
                 }}
+                className="px-6 hover:bg-gray-50"
               >
-                <X className="mr-2" size={16} /> Cancel
+                <X className="mr-2 w-4 h-4" /> Cancel
               </Button>
 
-              <Button onClick={handleSave} disabled={saving}>
-                <Save className="mr-2" size={16} />
-                {saving ? "Saving…" : "Save Changes"}
+              <Button 
+                onClick={handleSave} 
+                disabled={saving}
+                className="px-8 bg-linear-to-r from-indigo-500 to-purple-500 hover:from-indigo-600 hover:to-purple-600 shadow-lg shadow-indigo-500/25 hover:shadow-xl hover:shadow-indigo-500/30 transition-all"
+              >
+                {saving ? (
+                  <>
+                    <Loader2 className="mr-2 w-4 h-4 animate-spin" />
+                    Saving...
+                  </>
+                ) : (
+                  <>
+                    <Save className="mr-2 w-4 h-4" />
+                    Save Changes
+                  </>
+                )}
               </Button>
             </div>
           )}

@@ -1,6 +1,6 @@
-const { verifyToken } = require('../../lib/jwt');
+import { verifyToken } from '../../lib/jwt.js';
 
-module.exports = async function handler(req, res) {
+export default async function handler(req, res) {
   try {
     const token = req.headers.authorization?.split(' ')[1];
 
@@ -20,4 +20,4 @@ module.exports = async function handler(req, res) {
   } catch (err) {
     return res.status(401).json({ error: 'Invalid token' });
   }
-};
+}

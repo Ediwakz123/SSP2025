@@ -1,11 +1,15 @@
-import supabase from "../../lib/supabaseClient.js";
+import { supabase } from "../../lib/supabaseClient.js";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import * as dotenv from "dotenv";
 
 dotenv.config();
 
-const JWT_SECRET = process.env.JWT_SECRET || "super-secret-key";
+const JWT_SECRET = process.env.JWT_SECRET;
+
+if (!JWT_SECRET) {
+  throw new Error("JWT_SECRET environment variable is required");
+}
 
 export default async function handler(req, res) {
   if (req.method !== "POST")
@@ -35,10 +39,10 @@ export default async function handler(req, res) {
   if (!validPassword)
     return res.status(401).json({ error: "Incorrect password." });
 
-  // Generate token
+  // Generate token with uid (the actual primary key)
   const token = jwt.sign(
     {
-      id: user.id,
+      id: user.uid,
       email: user.email,
       role: "admin",
     },
@@ -51,9 +55,10 @@ export default async function handler(req, res) {
     message: "Admin logged in",
     token,
     admin: {
-      id: user.id,
+      id: user.uid,
       email: user.email,
       username: user.username,
+      role: "admin"
     },
   });
 }

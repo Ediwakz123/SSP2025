@@ -1,10 +1,11 @@
 import { createContext, useContext, useEffect, useState } from "react";
 import { supabase } from "../../lib/supabase";
 import { logActivity } from "../../utils/activity";
+import type { Session, User } from "@supabase/supabase-js";
 
 interface AuthContextType {
-  user: any | null;
-  session: any | null;
+  user: User | null;
+  session: Session | null;
   loading: boolean; // TRUE until Supabase finishes restoring the session
 }
 
@@ -15,8 +16,8 @@ const AuthContext = createContext<AuthContextType>({
 });
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [session, setSession] = useState<any | null>(null);
-  const [user, setUser] = useState<any | null>(null);
+  const [session, setSession] = useState<Session | null>(null);
+  const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {

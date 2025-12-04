@@ -6,16 +6,28 @@
     "@google/generative-ai": "latest",
     "@supabase/supabase-js": "2.39.0",
     "bcryptjs": "^2.4.3",
+    "cors": "^2.8.5",
     "dotenv": "^17.2.3",
+    "express": "^5.2.1",
+    "express-rate-limit": "^8.2.1",
     "jsonwebtoken": "^9.0.2",
-    "openai": "^6.9.1"
+    "openai": "^6.9.1",
+    "winston": "^3.18.3"
   },
   "devDependencies": {
+    "@types/jest": "^30.0.0",
     "@types/node": "^24.10.1",
-    "supabase": "^2.65.3"
+    "@types/supertest": "^6.0.3",
+    "jest": "^30.2.0",
+    "supabase": "^2.65.3",
+    "supertest": "^7.1.4"
   },
   "scripts": {
-    "dev": "vite",
-    "dev:api": "node dev/server.js"
+    "start": "node server.js",
+    "_dev": "node --watch server.js",
+    "dev": "echo 'Please run npm run dev from the project root (SSPTHESIS folder)' && exit 1",
+    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js",
+    "test:watch": "node --experimental-vm-modules node_modules/jest/bin/jest.js --watch",
+    "test:coverage": "node --experimental-vm-modules node_modules/jest/bin/jest.js --coverage"
   }
 }

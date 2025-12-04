@@ -37,9 +37,9 @@ export async function GET(req) {
     const { data, error } = await supabase
       .from("users")
       .select(
-        "id, first_name, last_name, age, gender, phone, address, email, created_at"
+        "uid, first_name, last_name, age, gender, phone_number, address, email, created_at"
       )
-      .eq("id", user.id)
+      .eq("uid", user.id)
       .single();
 
     if (error) throw error;
@@ -71,7 +71,7 @@ export async function PUT(req) {
     }
 
     const body = await req.json();
-    const { first_name, last_name, age, gender, phone, address } = body;
+    const { first_name, last_name, age, gender, phone_number, address } = body;
 
     const { data, error } = await supabase
       .from("users")
@@ -80,11 +80,11 @@ export async function PUT(req) {
         last_name,
         age,
         gender,
-        phone,
+        phone_number,
         address,
         updated_at: new Date(),
       })
-      .eq("id", user.id)
+      .eq("uid", user.id)
       .select()
       .single();
 

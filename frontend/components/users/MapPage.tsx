@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import {
   Card,
   CardContent,
@@ -7,7 +7,6 @@ import {
   CardDescription,
 
 } from "../ui/card";
-import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import {
   Select,
@@ -17,13 +16,16 @@ import {
   SelectValue,
 } from "../ui/select";
 import { Label } from "../ui/label";
-import { MapPin, Filter, RefreshCcw ,Loader2 } from "lucide-react";
+import { MapPin, Filter, RefreshCcw, Loader2, Globe, Layers, Compass } from "lucide-react";
 import { useLocation } from "react-router-dom";
 import { supabase } from "../../lib/supabase";
 import { LOCATION_INFO } from "../../data/businesses";
 import { useActivity, logActivity } from "../../utils/activity";
 import { toast } from "sonner";
+import type L from "leaflet";
 
+// Minimal cluster group typing to avoid depending on plugin type defs
+type ClusterGroup = L.LayerGroup;
 
 // ---------------------------------------------------------
 // TYPES
@@ -87,6 +89,13 @@ const BRGY_BOUNDS = {
   maxLng: 120.9608,
 };
 
+// Type for Leaflet on window object
+interface LeafletWindow extends Window {
+  L: typeof L & {
+    markerClusterGroup?: (options?: L.MarkerClusterGroupOptions) => ClusterGroup;
+  };
+}
+
 function clampToStaCruz(lat: number, lng: number) {
   return {
     latitude: Math.min(Math.max(lat, BRGY_BOUNDS.minLat), BRGY_BOUNDS.maxLat),
@@ -103,9 +112,9 @@ function clampToStaCruz(lat: number, lng: number) {
 export function MapPage() {
   useActivity();
   const mapRef = useRef<HTMLDivElement>(null);
-  const leafletMap = useRef<any>(null);
-  const clusterLayer = useRef<any>(null);
-const { state } = useLocation();
+  const leafletMap = useRef<L.Map | null>(null);
+  const clusterLayer = useRef<ClusterGroup | null>(null);
+const { state: _state } = useLocation();
   const [businesses, setBusinesses] = useState<Business[]>([]);
   const [categories, setCategories] = useState<string[]>([]);
   const [selectedCategory, setSelectedCategory] = useState("all");
@@ -157,8 +166,8 @@ const { state } = useLocation();
   // ---------------------------------------------------------
   useEffect(() => {
     const loadLeaflet = async () => {
-      const w = window as any;
-      if (w.L && w.L.markerClusterGroup) {
+      const w = window as unknown as LeafletWindow;
+      if (w.L && typeof w.L.markerClusterGroup === "function") {
         setIsLeafletReady(true);
         return;
       }
@@ -209,14 +218,15 @@ const { state } = useLocation();
   }, [isLeafletReady, businesses]);
 
   const initMap = () => {
-    const L = (window as any).L;
+    const w = window as unknown as LeafletWindow;
+    const Leaflet = w.L;
 
-    const map = L.map(mapRef.current!).setView(
+    const map = Leaflet.map(mapRef.current!).setView(
       [LOCATION_INFO.center_latitude, LOCATION_INFO.center_longitude],
       15
     );
 
-    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png").addTo(
+    Leaflet.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png").addTo(
       map
     );
 
@@ -231,20 +241,21 @@ const { state } = useLocation();
   // ---------------------------------------------------------
   // RENDER BUSINESS MARKERS
   // ---------------------------------------------------------
-  const renderClusters = (data: Business[]) => {
-    const L = (window as any).L;
+  const renderClusters = useCallback((data: Business[]) => {
+    const w = window as unknown as LeafletWindow;
+    const Leaflet = w.L;
 
     if (!leafletMap.current) return;
 
     if (clusterLayer.current)
       leafletMap.current.removeLayer(clusterLayer.current);
 
-    const clusters = L.markerClusterGroup({
+    const clusters = Leaflet.markerClusterGroup({
       maxClusterRadius: 60,
       disableClusteringAtZoom: 17,
     });
 
-    const bounds = L.latLngBounds([]);
+    const bounds = Leaflet.latLngBounds([]);
 
     data.forEach((b) => {
       const cleanCategory = normalizeCategory(b.general_category);
@@ -252,7 +263,7 @@ const { state } = useLocation();
 
       const safe = clampToStaCruz(b.latitude, b.longitude);
 
-      const marker = L.circleMarker([safe.latitude, safe.longitude], {
+      const marker = Leaflet.circleMarker([safe.latitude, safe.longitude], {
   radius: 8,
   fillColor: color,
   color: "#fff",
@@ -292,7 +303,7 @@ const { state } = useLocation();
     }
 
     setTotalMarkers(data.length);
-  };
+  }, []);
 
   // ---------------------------------------------------------
   // FILTERS
@@ -314,7 +325,7 @@ const { state } = useLocation();
     }
 
     renderClusters(filtered);
-  }, [selectedCategory, selectedZone]);
+  }, [selectedCategory, selectedZone, businesses, renderClusters]);
 
   // ---------------------------------------------------------
   // RESET
@@ -336,9 +347,15 @@ const { state } = useLocation();
 // ---------------------------
 if (!isLeafletReady || businesses.length === 0) {
   return (
-    <div className="flex flex-col items-center justify-center h-[60vh]">
-      <Loader2 className="w-6 h-6 animate-spin mb-2" />
-      Loading map...
+    <div className="flex flex-col items-center justify-center h-[60vh] animate-fadeIn">
+      <div className="relative">
+        <div className="w-16 h-16 rounded-2xl bg-linear-to-br from-cyan-500 to-blue-600 animate-pulse flex items-center justify-center">
+          <Loader2 className="w-8 h-8 text-white animate-spin" />
+        </div>
+        <div className="absolute -inset-4 bg-linear-to-br from-cyan-500/20 to-blue-600/20 rounded-3xl blur-xl animate-pulse" />
+      </div>
+      <p className="mt-6 text-gray-600 font-medium">Loading map...</p>
+      <p className="text-sm text-gray-400 mt-1">Preparing visualization</p>
     </div>
   );
 }
@@ -348,24 +365,46 @@ if (!isLeafletReady || businesses.length === 0) {
   // ---------------------------------------------------------
   return (
     
-    <div className="space-y-6">
+    <div className="page-wrapper space-y-6">
+      {/* Hero Header */}
+      <div className="page-content relative overflow-hidden rounded-2xl bg-linear-to-br from-cyan-500 via-blue-500 to-indigo-500 p-6 text-white">
+        <div className="absolute top-0 right-0 w-48 h-48 bg-white/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/4" />
+        <div className="absolute bottom-0 left-0 w-32 h-32 bg-white/10 rounded-full blur-3xl translate-y-1/2 -translate-x-1/4" />
+        
+        <div className="relative z-10 flex items-center gap-4">
+          <div className="w-14 h-14 rounded-2xl bg-white/20 backdrop-blur-sm flex items-center justify-center">
+            <Globe className="w-7 h-7 text-white" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold">Interactive Business Map</h1>
+            <p className="text-white/80 text-sm mt-1">
+              Explore {businesses.length} businesses across {LOCATION_INFO.barangay}
+            </p>
+          </div>
+        </div>
+      </div>
+
       {/* Filters */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-lg">
-            <Filter className="w-5 h-5" />
-            Map Filters
-          </CardTitle>
-          <CardDescription>
-            Filter businesses by category and zone type
-          </CardDescription>
+      <Card className="border-0 shadow-card overflow-hidden animate-fadeInUp">
+        <CardHeader className="bg-linear-to-r from-gray-50 to-white border-b border-gray-100">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-linear-to-br from-indigo-500 to-purple-500 flex items-center justify-center">
+              <Filter className="w-5 h-5 text-white" />
+            </div>
+            <div>
+              <CardTitle className="text-lg">Map Filters</CardTitle>
+              <CardDescription>
+                Filter businesses by category and zone type
+              </CardDescription>
+            </div>
+          </div>
         </CardHeader>
 
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <CardContent className="p-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {/* Category */}
             <div className="space-y-2">
-              <Label>Business Category</Label>
+              <Label className="font-medium text-gray-700">Business Category</Label>
               <Select
   value={selectedCategory}
   onValueChange={(value) => {
@@ -379,14 +418,20 @@ if (!isLeafletReady || businesses.length === 0) {
   }}
 >
 
-                <SelectTrigger>
+                <SelectTrigger className="bg-white border-gray-200 hover:border-indigo-300 transition-colors">
                   <SelectValue placeholder="All Categories" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Categories</SelectItem>
                   {categories.map((c) => (
                     <SelectItem key={c} value={c}>
-                      {c}
+                      <div className="flex items-center gap-2">
+                        <div 
+                          className="w-3 h-3 rounded-full" 
+                          style={{ backgroundColor: CATEGORY_COLORS[c] || "#6b7280" }}
+                        />
+                        {c}
+                      </div>
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -395,9 +440,9 @@ if (!isLeafletReady || businesses.length === 0) {
 
             {/* Zone */}
             <div className="space-y-2">
-              <Label>Zone Type</Label>
+              <Label className="font-medium text-gray-700">Zone Type</Label>
               <Select value={selectedZone} onValueChange={setSelectedZone}>
-                <SelectTrigger>
+                <SelectTrigger className="bg-white border-gray-200 hover:border-indigo-300 transition-colors">
                   <SelectValue placeholder="All Zones" />
                 </SelectTrigger>
                 <SelectContent>
@@ -410,56 +455,87 @@ if (!isLeafletReady || businesses.length === 0) {
           </div>
 
           <div className="mt-6 flex flex-wrap items-center gap-3">
-            <Button onClick={resetView} variant="outline">
-              <RefreshCcw className="w-4 h-4" /> Reset Map View
+            <Button 
+              onClick={resetView} 
+              variant="outline"
+              className="gap-2 hover:bg-gray-50 border-gray-200"
+            >
+              <RefreshCcw className="w-4 h-4" /> Reset View
             </Button>
 
-            <Badge variant="secondary" className="flex items-center gap-2">
-              <MapPin className="w-3 h-3" />
-              Showing {totalMarkers} of {businesses.length} businesses
-            </Badge>
+            <div className="badge-modern badge-info">
+              <MapPin className="w-3.5 h-3.5" />
+              Showing {totalMarkers} of {businesses.length}
+            </div>
           </div>
         </CardContent>
       </Card>
 
-      {/* Map */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Interactive Business Map</CardTitle>
-          <CardDescription>
-            Click markers to view business details. Red marker indicates
-            barangay center.
-          </CardDescription>
+      {/* Map Container */}
+      <Card className="border-0 shadow-card overflow-hidden animate-fadeInUp delay-100">
+        <CardHeader className="bg-linear-to-r from-gray-50 to-white border-b border-gray-100">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-linear-to-br from-cyan-500 to-blue-500 flex items-center justify-center">
+              <Compass className="w-5 h-5 text-white" />
+            </div>
+            <div>
+              <CardTitle className="text-lg">Business Locations</CardTitle>
+              <CardDescription>
+                Click markers to view business details
+              </CardDescription>
+            </div>
+          </div>
         </CardHeader>
-        <CardContent>
+        <CardContent className="p-0">
           <div
             ref={mapRef}
-            className="w-full h-[600px] rounded-lg border border-border"
+            className="w-full h-[550px]"
+            style={{ borderBottomLeftRadius: '16px', borderBottomRightRadius: '16px' }}
           />
         </CardContent>
       </Card>
 
       {/* Legend */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Map Legend</CardTitle>
+      <Card className="border-0 shadow-card overflow-hidden animate-fadeInUp delay-200">
+        <CardHeader className="bg-linear-to-r from-gray-50 to-white border-b border-gray-100">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-linear-to-br from-purple-500 to-pink-500 flex items-center justify-center">
+              <Layers className="w-5 h-5 text-white" />
+            </div>
+            <CardTitle className="text-lg">Map Legend</CardTitle>
+          </div>
         </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-    {categories.map((category) => {
-  const color = CATEGORY_COLORS[category] || "#6b7280"; // fallback gray
+        <CardContent className="p-6">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+            {categories.map((category) => {
+              const color = CATEGORY_COLORS[category] || "#6b7280";
+              const isSelected = selectedCategory === category;
 
-  return (
-    <div key={category} className="flex items-center gap-2">
-      <div
-        className="w-4 h-4 rounded-full border-2 border-white shadow"
-        style={{ backgroundColor: color }}
-      />
-      <span className="text-sm">{category}</span>
-    </div>
-  );
-})}
-
+              return (
+                <button
+                  key={category}
+                  onClick={() => {
+                    setSelectedCategory(category);
+                    toast.info(`Filtered by: ${category}`);
+                    logActivity("Clicked Legend Category", { category });
+                  }}
+                  className={`flex items-center gap-3 p-3 rounded-xl transition-all duration-200 ${
+                    isSelected 
+                      ? "bg-indigo-50 border-2 border-indigo-300 shadow-sm" 
+                      : "bg-gray-50 border-2 border-transparent hover:bg-gray-100"
+                  }`}
+                >
+                  <div
+                    className="w-4 h-4 rounded-full shadow-sm shrink-0"
+                    style={{ 
+                      backgroundColor: color,
+                      boxShadow: `0 0 8px ${color}40`
+                    }}
+                  />
+                  <span className="text-sm font-medium text-gray-700 truncate">{category}</span>
+                </button>
+              );
+            })}
           </div>
         </CardContent>
       </Card>

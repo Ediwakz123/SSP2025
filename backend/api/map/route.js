@@ -17,11 +17,11 @@ export async function GET(req) {
 
     let query = supabase
       .from("businesses")
-      .select("id, name, category, zone_type, street, latitude, longitude");
+      .select("id, business_name, general_category, zone_type, street, latitude, longitude");
 
     // Apply optional filters
     if (category && category !== "All Categories") {
-      query = query.eq("category", category);
+      query = query.eq("general_category", category);
     }
 
     if (zone && zone !== "All Zones") {
@@ -35,8 +35,8 @@ export async function GET(req) {
     // Convert to map-ready objects
     const mapped = businesses.map((b) => ({
       id: b.id,
-      name: b.name,
-      category: b.category,
+      name: b.business_name,
+      category: b.general_category,
       zone: b.zone_type,
       street: b.street,
       lat: b.latitude,

@@ -1,6 +1,6 @@
 // 🟩 ResetPasswordPage.tsx (FINAL PASSWORD SET)
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
@@ -12,9 +12,31 @@ import {
   CardHeader,
   CardTitle,
 } from "../ui/card";
-import { Lock, ArrowLeft, CheckCircle2 } from "lucide-react";
+import { Lock, ArrowLeft, CheckCircle2, AlertCircle, Check } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "../../lib/supabase";
+import { validatePassword, validatePasswordMatch } from "../../utils/validation";
+
+// Field error display component
+function FieldError({ error }: { error?: string }) {
+  if (!error) return null;
+  return (
+    <p className="text-xs text-red-500 mt-1 flex items-center gap-1 animate-fadeIn">
+      <AlertCircle className="w-3 h-3" />
+      {error}
+    </p>
+  );
+}
+
+// Field success display component
+function FieldSuccess({ message }: { message: string }) {
+  return (
+    <p className="text-xs text-green-500 mt-1 flex items-center gap-1 animate-fadeIn">
+      <Check className="w-3 h-3" />
+      {message}
+    </p>
+  );
+}
 
 export function ResetPasswordPage() {
   const navigate = useNavigate();
@@ -23,6 +45,10 @@ export function ResetPasswordPage() {
   const [confirm, setConfirm] = useState("");
   const [loading, setLoading] = useState(false);
   const [isReset, setIsReset] = useState(false);
+  
+  // Field-level validation
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [touched, setTouched] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
@@ -31,18 +57,44 @@ export function ResetPasswordPage() {
         navigate("/forgot-password");
       }
     });
-  }, []);
+  }, [navigate]);
+
+  const handleBlur = useCallback((field: string) => {
+    setTouched(prev => ({ ...prev, [field]: true }));
+    
+    if (field === "newPassword") {
+      const result = validatePassword(newPassword);
+      setFieldErrors(prev => ({ ...prev, newPassword: result.error || "" }));
+    } else if (field === "confirm") {
+      const result = validatePasswordMatch(newPassword, confirm);
+      setFieldErrors(prev => ({ ...prev, confirm: result.error || "" }));
+    }
+  }, [newPassword, confirm]);
+
+  // Check if field is valid for success indicator
+  const isFieldValid = (field: string): boolean => {
+    if (!touched[field]) return false;
+    if (field === "newPassword") return validatePassword(newPassword).isValid;
+    if (field === "confirm") return validatePasswordMatch(newPassword, confirm).isValid && confirm.length > 0;
+    return false;
+  };
 
   const handleReset = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!/^(?=.*[A-Z])(?=.*\d).{8,}$/.test(newPassword)) {
-      toast.error("Password must be 8+ characters, include 1 uppercase and 1 number.");
-      return;
-    }
-
-    if (newPassword !== confirm) {
-      toast.error("Passwords do not match.");
+    // Validate all fields
+    const passwordResult = validatePassword(newPassword);
+    const matchResult = validatePasswordMatch(newPassword, confirm);
+    
+    const errors: Record<string, string> = {};
+    if (!passwordResult.isValid) errors.newPassword = passwordResult.error || "";
+    if (!matchResult.isValid) errors.confirm = matchResult.error || "";
+    
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors);
+      setTouched({ newPassword: true, confirm: true });
+      const firstError = Object.values(errors)[0];
+      toast.error(firstError);
       return;
     }
 
@@ -115,10 +167,19 @@ export function ResetPasswordPage() {
               <Input
                 type="password"
                 value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
-                className="bg-[#DCDCDC] text-black"
+                onChange={(e) => {
+                  setNewPassword(e.target.value);
+                  if (fieldErrors.newPassword) setFieldErrors(prev => ({ ...prev, newPassword: "" }));
+                }}
+                onBlur={() => handleBlur("newPassword")}
+                className={`bg-[#DCDCDC] text-black ${touched.newPassword && fieldErrors.newPassword ? "border-red-500" : ""}`}
                 required
               />
+              {touched.newPassword && fieldErrors.newPassword && <FieldError error={fieldErrors.newPassword} />}
+              {isFieldValid("newPassword") && <FieldSuccess message="Password meets requirements" />}
+              <p className="text-xs text-gray-500 mt-1">
+                Must be 8+ characters with uppercase and number
+              </p>
             </div>
 
             <div>
@@ -126,10 +187,16 @@ export function ResetPasswordPage() {
               <Input
                 type="password"
                 value={confirm}
-                onChange={(e) => setConfirm(e.target.value)}
-                className="bg-[#DCDCDC] text-black"
+                onChange={(e) => {
+                  setConfirm(e.target.value);
+                  if (fieldErrors.confirm) setFieldErrors(prev => ({ ...prev, confirm: "" }));
+                }}
+                onBlur={() => handleBlur("confirm")}
+                className={`bg-[#DCDCDC] text-black ${touched.confirm && fieldErrors.confirm ? "border-red-500" : ""}`}
                 required
               />
+              {touched.confirm && fieldErrors.confirm && <FieldError error={fieldErrors.confirm} />}
+              {isFieldValid("confirm") && <FieldSuccess message="Passwords match" />}
             </div>
 
             <Button type="submit" className="w-full bg-black text-white" disabled={loading}>

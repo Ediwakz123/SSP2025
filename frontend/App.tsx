@@ -5,6 +5,9 @@ import { AuthProvider } from "./components/auth/AuthContext";
 import { ProtectedRoute } from "./components/auth/ProtectedRoute";
 import { RoleProtectedRoute } from "./components/auth/RoleProtectedRoute";
 
+// SHARED COMPONENTS
+import { ErrorBoundary } from "./components/shared/ErrorBoundary";
+
 // PUBLIC PAGES
 import { LandingPage } from "./components/landing/LandingPage";
 import { UserLogin } from "./components/auth/UserLogin";
@@ -38,10 +41,11 @@ import { NotFound } from "./components/NotFound";
 
 export function App() {
   return (
-    <AuthProvider>
-      <Toaster position="bottom-right" />
+    <ErrorBoundary>
+      <AuthProvider>
+        <Toaster position="bottom-right" />
 
-      <Routes>
+        <Routes>
 
         {/* PUBLIC ROUTES */}
         <Route path="/" element={<LandingPage />} />
@@ -92,5 +96,6 @@ export function App() {
 
       </Routes>
     </AuthProvider>
+    </ErrorBoundary>
   );
 }

@@ -1,7 +1,13 @@
 // api/users/[id].js
-const { supabase } = require('../../lib/supabaseClient');
+import { supabase } from '../../lib/supabaseClient.js';
 
-module.exports = async function handler(req, res) {
+// Helper to remove sensitive fields from user objects
+const sanitizeUser = (user) => {
+  const { hashed_password, ...safeUser } = user;
+  return safeUser;
+};
+
+export default async function handler(req, res) {
   const { id } = req.query; // /api/users/123
 
   if (!id) return res.status(400).json({ error: 'User ID required' });
@@ -14,12 +20,12 @@ module.exports = async function handler(req, res) {
       const { data, error } = await supabase
         .from('users')
         .select('*')
-        .eq('id', id)
+        .eq('uid', id)
         .single();
 
       if (error) return res.status(404).json({ error: 'User not found' });
 
-      return res.status(200).json({ user: data });
+      return res.status(200).json({ user: sanitizeUser(data) });
     }
 
     /* -----------------------------------------------------
@@ -27,11 +33,14 @@ module.exports = async function handler(req, res) {
      * --------------------------------------------------- */
     if (req.method === 'PUT') {
       const updateData = req.body;
+      
+      // Prevent direct password updates through this endpoint
+      delete updateData.hashed_password;
 
       const { data, error } = await supabase
         .from('users')
         .update(updateData)
-        .eq('id', id)
+        .eq('uid', id)
         .select('*')
         .single();
 
@@ -40,7 +49,7 @@ module.exports = async function handler(req, res) {
         return res.status(500).json({ error: 'Failed to update user' });
       }
 
-      return res.status(200).json({ message: 'User updated', user: data });
+      return res.status(200).json({ message: 'User updated', user: sanitizeUser(data) });
     }
 
     /* -----------------------------------------------------
@@ -50,7 +59,7 @@ module.exports = async function handler(req, res) {
       const { error } = await supabase
         .from('users')
         .delete()
-        .eq('id', id);
+        .eq('uid', id);
 
       if (error) {
         console.error('Delete Error:', error);
@@ -65,4 +74,4 @@ module.exports = async function handler(req, res) {
     console.error('Users API Error:', err);
     return res.status(500).json({ error: 'Server Error' });
   }
-};
+}

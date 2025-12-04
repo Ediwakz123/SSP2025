@@ -1,10 +1,10 @@
-const supabase = require("../config/supabase");
+import { supabase } from "../lib/supabaseClient.js";
 
 /**
  * Backend ONLY: fetch raw business data.
  * FRONTEND handles all clustering, scoring, analysis.
  */
-async function getBusinessesByCategory(category) {
+export async function getBusinessesByCategory(category) {
   const { data, error } = await supabase
     .from("businesses")
     .select("*")
@@ -17,5 +17,3 @@ async function getBusinessesByCategory(category) {
 
   return data || [];
 }
-
-module.exports = { getBusinessesByCategory };

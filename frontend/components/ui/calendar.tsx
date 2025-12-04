@@ -59,14 +59,18 @@ function Calendar({
                 day_hidden: "invisible",
                 ...classNames,
             }}
-            components={{
+            components={
+                /* eslint-disable @typescript-eslint/no-explicit-any */
+                {
                 IconLeft: (props: React.SVGProps<SVGSVGElement>) => (
                     <ChevronLeft {...props} className={cn("h-4 w-4", props.className)} />
                 ),
                 IconRight: (props: React.SVGProps<SVGSVGElement>) => (
                     <ChevronRight {...props} className={cn("h-4 w-4", props.className)} />
                 ),
-            } as any} // 👈 this silences the “unknown property” error safely
+            } as Record<string, React.ComponentType<React.SVGProps<SVGSVGElement>>>
+                /* eslint-enable @typescript-eslint/no-explicit-any */
+            }
 
         />
     );

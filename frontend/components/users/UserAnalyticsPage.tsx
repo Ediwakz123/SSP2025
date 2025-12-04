@@ -35,7 +35,6 @@ import {
   FileDown,
   FileSpreadsheet,
   FileText,
-  Loader2,
 } from "lucide-react";
 import { supabase } from "../../lib/supabase";
 import * as XLSX from "xlsx";
@@ -193,9 +192,19 @@ export function UserAnalyticsPage() {
 
  if (loading || !stats) {
   return (
-    <div className="flex flex-col items-center justify-center h-[60vh]">
-      <Loader2 className="w-6 h-6 animate-spin mb-2" />
-      Loading analytics...
+    <div className="min-h-[60vh] flex items-center justify-center">
+      <div className="text-center space-y-4">
+        <div className="relative">
+          <div className="w-16 h-16 rounded-full bg-linear-to-br from-blue-500 to-indigo-600 flex items-center justify-center mx-auto animate-pulse">
+            <Activity className="w-8 h-8 text-white" />
+          </div>
+          <div className="absolute inset-0 w-16 h-16 mx-auto rounded-full border-4 border-blue-200 border-t-blue-500 animate-spin" />
+        </div>
+        <div>
+          <p className="text-lg font-semibold text-gray-900">Loading Analytics</p>
+          <p className="text-sm text-gray-500">Crunching the numbers...</p>
+        </div>
+      </div>
     </div>
   );
 }
@@ -262,217 +271,267 @@ export function UserAnalyticsPage() {
   // ========================
 
   return (
-    <div className="space-y-6">
-      {/* HEADER */}
-      <div>
-        <h1 className="text-3xl">Analytics</h1>
-        <p className="text-muted-foreground">
-          Business distribution and insights
-        </p>
-      </div>
-
-      {/* ⭐ DATE RANGE FILTER + QUICK FILTERS */}
-      <div className="border p-4 rounded-lg bg-white shadow-sm space-y-4">
-        <h2 className="text-lg font-medium">Filter by Date</h2>
-
-        {/* Date Selectors */}
-        <div className="flex flex-col md:flex-row gap-4">
-          <div className="flex flex-col flex-1">
-            <label className="text-sm text-muted-foreground">Start Date</label>
-            <input
-              type="date"
-              value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
-              className="border rounded-md px-3 py-2"
-            />
+    <div className="page-wrapper space-y-8">
+      {/* Hero Header */}
+      <div className="relative overflow-hidden rounded-2xl bg-linear-to-br from-blue-600 via-indigo-600 to-violet-700 p-8 text-white shadow-xl">
+        <div className="absolute inset-0 bg-white/5 mask-[radial-gradient(ellipse_at_center,black_50%,transparent_100%)]" />
+        <div className="relative z-10">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="p-3 bg-white/20 rounded-xl backdrop-blur-sm">
+              <Activity className="w-8 h-8" />
+            </div>
+            <div>
+              <h1 className="text-3xl font-bold tracking-tight">Business Analytics</h1>
+              <p className="text-blue-100">Comprehensive distribution insights and data visualization</p>
+            </div>
           </div>
-
-          <div className="flex flex-col flex-1">
-            <label className="text-sm text-muted-foreground">End Date</label>
-            <input
-              type="date"
-              value={endDate}
-              onChange={(e) => setEndDate(e.target.value)}
-              className="border rounded-md px-3 py-2"
-            />
+          <div className="flex flex-wrap gap-3 mt-6">
+            <div className="flex items-center gap-2 px-4 py-2 bg-white/10 rounded-lg backdrop-blur-sm">
+              <Building2 className="w-4 h-4" />
+              <span className="text-sm font-medium">{stats.total_businesses} Total Businesses</span>
+            </div>
+            <div className="flex items-center gap-2 px-4 py-2 bg-white/10 rounded-lg backdrop-blur-sm">
+              <Target className="w-4 h-4" />
+              <span className="text-sm font-medium">{categoryData.length} Categories</span>
+            </div>
+            <div className="flex items-center gap-2 px-4 py-2 bg-white/10 rounded-lg backdrop-blur-sm">
+              <MapPin className="w-4 h-4" />
+              <span className="text-sm font-medium">{zones.length} Zone Types</span>
+            </div>
           </div>
         </div>
-
-        {/* QUICK FILTERS */}
-        <div className="flex flex-wrap gap-2 mt-2">
-          <button
-            onClick={() => applyQuickFilter(0)}
-            className="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300 transition"
-          >
-            Today
-          </button>
-
-          <button
-            onClick={() => applyQuickFilter(7)}
-            className="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300 transition"
-          >
-            Last 7 Days
-          </button>
-
-          <button
-            onClick={() => applyQuickFilter(30)}
-            className="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300 transition"
-          >
-            Last 30 Days
-          </button>
-
-          <button
-            onClick={() => applyQuickFilter("year")}
-            className="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300 transition"
-          >
-            This Year
-          </button>
-
-          <button
-  onClick={() => {
-    setStartDate("");
-    setEndDate("");
-    toast.message("Analytics date filter reset");
-    logActivity("Reset Analytics Date Filter");
-    loadAnalytics();
-  }}
-            className="px-3 py-1 bg-red-200 text-red-700 rounded hover:bg-red-300 transition"
-          >
-            Reset
-          </button>
-        </div>
-
-        {startDate && endDate && (
-          <p className="text-sm text-muted-foreground mt-2">
-            Showing results from <b>{startDate}</b> to <b>{endDate}</b>.
-          </p>
-        )}
+        {/* Decorative elements */}
+        <div className="absolute -top-24 -right-24 w-64 h-64 bg-white/5 rounded-full blur-3xl" />
+        <div className="absolute -bottom-32 -left-32 w-96 h-96 bg-white/5 rounded-full blur-3xl" />
       </div>
+
+      {/* Date Range Filter Card */}
+      <Card className="border-0 shadow-xl bg-white/80 backdrop-blur-sm overflow-hidden">
+        <CardHeader className="bg-linear-to-r from-slate-50 to-gray-50 border-b">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 bg-linear-to-br from-slate-600 to-gray-700 rounded-xl text-white shadow-lg">
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+            </div>
+            <div>
+              <CardTitle className="text-lg">Filter by Date Range</CardTitle>
+              <CardDescription>Select a time period to analyze</CardDescription>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="p-6 space-y-5">
+          {/* Date Selectors */}
+          <div className="flex flex-col md:flex-row gap-4">
+            <div className="flex flex-col flex-1">
+              <label className="text-sm font-medium text-gray-700 mb-2">Start Date</label>
+              <input
+                type="date"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                className="h-12 border-2 rounded-xl px-4 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all"
+              />
+            </div>
+
+            <div className="flex flex-col flex-1">
+              <label className="text-sm font-medium text-gray-700 mb-2">End Date</label>
+              <input
+                type="date"
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+                className="h-12 border-2 rounded-xl px-4 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all"
+              />
+            </div>
+          </div>
+
+          {/* Quick Filters */}
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={() => applyQuickFilter(0)}
+              className="px-4 py-2.5 bg-linear-to-r from-gray-100 to-gray-200 rounded-xl font-medium hover:from-gray-200 hover:to-gray-300 transition-all hover:scale-[1.02] active:scale-[0.98]"
+            >
+              Today
+            </button>
+
+            <button
+              onClick={() => applyQuickFilter(7)}
+              className="px-4 py-2.5 bg-linear-to-r from-blue-100 to-indigo-100 text-blue-700 rounded-xl font-medium hover:from-blue-200 hover:to-indigo-200 transition-all hover:scale-[1.02] active:scale-[0.98]"
+            >
+              Last 7 Days
+            </button>
+
+            <button
+              onClick={() => applyQuickFilter(30)}
+              className="px-4 py-2.5 bg-linear-to-r from-purple-100 to-violet-100 text-purple-700 rounded-xl font-medium hover:from-purple-200 hover:to-violet-200 transition-all hover:scale-[1.02] active:scale-[0.98]"
+            >
+              Last 30 Days
+            </button>
+
+            <button
+              onClick={() => applyQuickFilter("year")}
+              className="px-4 py-2.5 bg-linear-to-r from-emerald-100 to-green-100 text-emerald-700 rounded-xl font-medium hover:from-emerald-200 hover:to-green-200 transition-all hover:scale-[1.02] active:scale-[0.98]"
+            >
+              This Year
+            </button>
+
+            <button
+              onClick={() => {
+                setStartDate("");
+                setEndDate("");
+                toast.message("Analytics date filter reset");
+                logActivity("Reset Analytics Date Filter");
+                loadAnalytics();
+              }}
+              className="px-4 py-2.5 bg-linear-to-r from-red-100 to-rose-100 text-red-700 rounded-xl font-medium hover:from-red-200 hover:to-rose-200 transition-all hover:scale-[1.02] active:scale-[0.98]"
+            >
+              Reset Filter
+            </button>
+          </div>
+
+          {startDate && endDate && (
+            <div className="flex items-center gap-2 p-3 bg-blue-50 rounded-xl border border-blue-100">
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-blue-500"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+              <p className="text-sm text-blue-700">
+                Showing results from <span className="font-semibold">{startDate}</span> to <span className="font-semibold">{endDate}</span>
+              </p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* TOP CARDS */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card>
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-5">
+        <Card className="border-0 shadow-lg bg-white/80 backdrop-blur-sm overflow-hidden group hover:shadow-xl transition-all hover:scale-[1.02]">
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm flex items-center gap-2">
-              <Building2 className="size-4" />
-              Total Businesses
-            </CardTitle>
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-sm font-medium text-gray-500">Total Businesses</CardTitle>
+              <div className="p-2 bg-linear-to-br from-blue-500 to-indigo-600 rounded-lg text-white shadow-lg shadow-blue-200">
+                <Building2 className="w-4 h-4" />
+              </div>
+            </div>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl">{stats.total_businesses}</div>
-            <p className="text-xs text-muted-foreground">Active locations</p>
+            <div className="text-4xl font-bold bg-linear-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">{stats.total_businesses}</div>
+            <p className="text-xs text-gray-500 mt-1">Active locations</p>
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="border-0 shadow-lg bg-white/80 backdrop-blur-sm overflow-hidden group hover:shadow-xl transition-all hover:scale-[1.02]">
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm flex items-center gap-2">
-              <Users className="size-4" />
-              Avg. Businesses per Street
-            </CardTitle>
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-sm font-medium text-gray-500">Avg. per Street</CardTitle>
+              <div className="p-2 bg-linear-to-br from-emerald-500 to-green-600 rounded-lg text-white shadow-lg shadow-emerald-200">
+                <Users className="w-4 h-4" />
+              </div>
+            </div>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl">
+            <div className="text-4xl font-bold bg-linear-to-r from-emerald-600 to-green-600 bg-clip-text text-transparent">
               {streets.length
                 ? (businesses.length / streets.length).toFixed(1)
                 : 0}
             </div>
-            <p className="text-xs text-muted-foreground">Per area</p>
+            <p className="text-xs text-gray-500 mt-1">Per area</p>
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="border-0 shadow-lg bg-white/80 backdrop-blur-sm overflow-hidden group hover:shadow-xl transition-all hover:scale-[1.02]">
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm flex items-center gap-2">
-              <Activity className="size-4" />
-              Avg. Businesses per Zone
-            </CardTitle>
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-sm font-medium text-gray-500">Avg. per Zone</CardTitle>
+              <div className="p-2 bg-linear-to-br from-amber-500 to-orange-600 rounded-lg text-white shadow-lg shadow-amber-200">
+                <Activity className="w-4 h-4" />
+              </div>
+            </div>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl">
+            <div className="text-4xl font-bold bg-linear-to-r from-amber-600 to-orange-600 bg-clip-text text-transparent">
               {zones.length
                 ? (businesses.length / zones.length).toFixed(1)
                 : 0}
             </div>
-            <p className="text-xs text-muted-foreground">
-              Based on zone distribution
-            </p>
+            <p className="text-xs text-gray-500 mt-1">Based on zone distribution</p>
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="border-0 shadow-lg bg-white/80 backdrop-blur-sm overflow-hidden group hover:shadow-xl transition-all hover:scale-[1.02]">
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm flex items-center gap-2">
-              <Target className="size-4" />
-              Categories
-            </CardTitle>
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-sm font-medium text-gray-500">Categories</CardTitle>
+              <div className="p-2 bg-linear-to-br from-purple-500 to-violet-600 rounded-lg text-white shadow-lg shadow-purple-200">
+                <Target className="w-4 h-4" />
+              </div>
+            </div>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl">{categoryData.length}</div>
-            <p className="text-xs text-muted-foreground">Business types</p>
+            <div className="text-4xl font-bold bg-linear-to-r from-purple-600 to-violet-600 bg-clip-text text-transparent">{categoryData.length}</div>
+            <p className="text-xs text-gray-500 mt-1">Business types</p>
           </CardContent>
         </Card>
       </div>
 
       {/* EXPORT MODAL */}
       {showExportModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg w-full max-w-md p-6 shadow-xl space-y-5 animate-fadeIn">
-            <h2 className="text-xl font-semibold flex items-center gap-2">
-              <FileDown className="w-5 h-5 text-blue-600" />
-              Export Report
-            </h2>
-
-            <p className="text-sm text-muted-foreground">
-              Choose a file format. PDF is best for sharing. Excel and CSV are
-              best for editing.
-            </p>
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
+          <div className="bg-white rounded-2xl w-full max-w-md p-8 shadow-2xl space-y-6 animate-fadeIn">
+            <div className="flex items-center gap-3">
+              <div className="p-3 bg-linear-to-br from-blue-500 to-indigo-600 rounded-xl text-white shadow-lg">
+                <FileDown className="w-6 h-6" />
+              </div>
+              <div>
+                <h2 className="text-xl font-bold text-gray-900">Export Report</h2>
+                <p className="text-sm text-gray-500">Choose your preferred format</p>
+              </div>
+            </div>
 
             <div className="space-y-3">
               <button
                 onClick={() => {
                  exportCSV();
-toast.success("Exported analytics as CSV");
-logActivity("Exported Analytics Report", { format: "CSV" });
-
-                  setShowExportModal(false);
+                 toast.success("Exported analytics as CSV");
+                 logActivity("Exported Analytics Report", { format: "CSV" });
+                 setShowExportModal(false);
                 }}
-                className="w-full flex items-center gap-2 bg-gray-100 py-2 px-3 rounded-md hover:bg-gray-200 transition"
+                className="w-full h-14 flex items-center gap-3 bg-gray-50 hover:bg-gray-100 px-4 rounded-xl transition-all hover:scale-[1.02] border-2 border-transparent hover:border-gray-200"
               >
-                <FileText className="w-4 h-4 text-gray-600" />
-                Export as CSV
+                <div className="p-2 bg-gray-200 rounded-lg">
+                  <FileText className="w-5 h-5 text-gray-600" />
+                </div>
+                <span className="font-medium">Export as CSV</span>
               </button>
 
               <button
                 onClick={() => {
                  exportExcel();
-toast.success("Exported analytics as Excel");
-logActivity("Exported Analytics Report", { format: "Excel" });
-
+                 toast.success("Exported analytics as Excel");
+                 logActivity("Exported Analytics Report", { format: "Excel" });
+                 setShowExportModal(false);
                 }}
-                className="w-full flex items-center gap-2 bg-gray-100 py-2 px-3 rounded-md hover:bg-gray-200 transition"
+                className="w-full h-14 flex items-center gap-3 bg-green-50 hover:bg-green-100 px-4 rounded-xl transition-all hover:scale-[1.02] border-2 border-transparent hover:border-green-200"
               >
-                <FileSpreadsheet className="w-4 h-4 text-green-600" />
-                Export as Excel (.xlsx)
+                <div className="p-2 bg-green-200 rounded-lg">
+                  <FileSpreadsheet className="w-5 h-5 text-green-600" />
+                </div>
+                <span className="font-medium text-green-700">Export as Excel (.xlsx)</span>
               </button>
 
               <button
                 onClick={() => {
-                exportPDF();
-toast.success("Exported analytics as PDF");
-logActivity("Exported Analytics Report", { format: "PDF" });
-
+                 exportPDF();
+                 toast.success("Exported analytics as PDF");
+                 logActivity("Exported Analytics Report", { format: "PDF" });
+                 setShowExportModal(false);
                 }}
-                className="w-full flex items-center gap-2 bg-gray-100 py-2 px-3 rounded-md hover:bg-gray-200 transition"
+                className="w-full h-14 flex items-center gap-3 bg-red-50 hover:bg-red-100 px-4 rounded-xl transition-all hover:scale-[1.02] border-2 border-transparent hover:border-red-200"
               >
-                <FileDown className="w-4 h-4 text-red-600" />
-                Export as PDF
+                <div className="p-2 bg-red-200 rounded-lg">
+                  <FileDown className="w-5 h-5 text-red-600" />
+                </div>
+                <span className="font-medium text-red-700">Export as PDF</span>
               </button>
             </div>
 
             <button
               onClick={() => setShowExportModal(false)}
-              className="w-full py-2 rounded-md bg-black text-white hover:bg-gray-500 transition"
+              className="w-full h-12 rounded-xl bg-linear-to-r from-gray-800 to-gray-900 hover:from-gray-900 hover:to-black text-white font-medium transition-all"
             >
               Close
             </button>
@@ -482,73 +541,102 @@ logActivity("Exported Analytics Report", { format: "PDF" });
 
       {/* TABS */}
       <Tabs
-  defaultValue="category"
-  className="space-y-4"
-  onValueChange={(value) => {
-    if (value === "category") {
-      toast.message("Viewing analytics by category");
-      logActivity("Viewed Analytics - By Category");
-    }
-    if (value === "zone") {
-      toast.message("Viewing analytics by zone");
-      logActivity("Viewed Analytics - By Zone");
-    }
-    if (value === "distribution") {
-      toast.message("Viewing business distribution insights");
-      logActivity("Viewed Analytics - Distribution");
-    }
-  }}
->
-  <TabsList>
-    <TabsTrigger value="category">By Category</TabsTrigger>
-    <TabsTrigger value="zone">By Zone</TabsTrigger>
-    <TabsTrigger value="distribution">Distribution</TabsTrigger>
-  </TabsList>
+        defaultValue="category"
+        className="space-y-6"
+        onValueChange={(value) => {
+          if (value === "category") {
+            toast.message("Viewing analytics by category");
+            logActivity("Viewed Analytics - By Category");
+          }
+          if (value === "zone") {
+            toast.message("Viewing analytics by zone");
+            logActivity("Viewed Analytics - By Zone");
+          }
+          if (value === "distribution") {
+            toast.message("Viewing business distribution insights");
+            logActivity("Viewed Analytics - Distribution");
+          }
+        }}
+      >
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <TabsList className="h-14 bg-white/80 backdrop-blur-sm shadow-lg rounded-xl p-1.5">
+            <TabsTrigger value="category" className="rounded-lg px-6 data-[state=active]:bg-linear-to-r data-[state=active]:from-blue-500 data-[state=active]:to-indigo-600 data-[state=active]:text-white data-[state=active]:shadow-lg font-medium transition-all">
+              By Category
+            </TabsTrigger>
+            <TabsTrigger value="zone" className="rounded-lg px-6 data-[state=active]:bg-linear-to-r data-[state=active]:from-blue-500 data-[state=active]:to-indigo-600 data-[state=active]:text-white data-[state=active]:shadow-lg font-medium transition-all">
+              By Zone
+            </TabsTrigger>
+            <TabsTrigger value="distribution" className="rounded-lg px-6 data-[state=active]:bg-linear-to-r data-[state=active]:from-blue-500 data-[state=active]:to-indigo-600 data-[state=active]:text-white data-[state=active]:shadow-lg font-medium transition-all">
+              Distribution
+            </TabsTrigger>
+          </TabsList>
 
-
-
-      {/* EXPORT BUTTON BELOW TABS */}
-      <div className="flex justify-end mt-4">
-        <button
-          onClick={() => setShowExportModal(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
-        >
-          <FileDown className="w-4 h-4" />
-          Export Report
-        </button>
-      </div>
+          {/* Export Button */}
+          <button
+            onClick={() => setShowExportModal(true)}
+            className="flex items-center gap-2 px-6 py-3 bg-linear-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white rounded-xl shadow-lg shadow-blue-200 transition-all hover:scale-[1.02]"
+          >
+            <FileDown className="w-5 h-5" />
+            Export Report
+          </button>
+        </div>
 
         {/* CATEGORY TAB */}
-        <TabsContent value="category" className="space-y-4">
+        <TabsContent value="category" className="space-y-6">
           <div className="grid md:grid-cols-2 gap-6">
             {/* BAR CHART */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Business Count by Category</CardTitle>
-                <CardDescription>
-                  Distribution of business types
-                </CardDescription>
+            <Card className="border-0 shadow-xl bg-white/80 backdrop-blur-sm overflow-hidden">
+              <CardHeader className="bg-linear-to-r from-blue-50 to-indigo-50 border-b">
+                <div className="flex items-center gap-3">
+                  <div className="p-2.5 bg-linear-to-br from-blue-500 to-indigo-600 rounded-xl text-white shadow-lg shadow-blue-200">
+                    <Activity className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <CardTitle className="text-lg">Business Count by Category</CardTitle>
+                    <CardDescription>Distribution of business types</CardDescription>
+                  </div>
+                </div>
               </CardHeader>
-              <CardContent>
+              <CardContent className="p-6">
                 <ResponsiveContainer width="100%" height={300}>
                   <BarChart data={categoryData}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="name" />
-                    <YAxis />
-                    <Tooltip />
-                    <Bar dataKey="value" fill="#3b82f6" />
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                    <XAxis dataKey="name" tick={{ fontSize: 12 }} />
+                    <YAxis tick={{ fontSize: 12 }} />
+                    <Tooltip 
+                      contentStyle={{ 
+                        backgroundColor: 'white', 
+                        borderRadius: '12px', 
+                        border: 'none',
+                        boxShadow: '0 10px 40px rgba(0,0,0,0.1)'
+                      }} 
+                    />
+                    <Bar dataKey="value" fill="url(#colorGradient)" radius={[8, 8, 0, 0]} />
+                    <defs>
+                      <linearGradient id="colorGradient" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="#6366f1" />
+                        <stop offset="100%" stopColor="#3b82f6" />
+                      </linearGradient>
+                    </defs>
                   </BarChart>
                 </ResponsiveContainer>
               </CardContent>
             </Card>
 
             {/* PIE CHART */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Category Percentage</CardTitle>
-                <CardDescription>Proportional distribution</CardDescription>
+            <Card className="border-0 shadow-xl bg-white/80 backdrop-blur-sm overflow-hidden">
+              <CardHeader className="bg-linear-to-r from-purple-50 to-violet-50 border-b">
+                <div className="flex items-center gap-3">
+                  <div className="p-2.5 bg-linear-to-br from-purple-500 to-violet-600 rounded-xl text-white shadow-lg shadow-purple-200">
+                    <Target className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <CardTitle className="text-lg">Category Percentage</CardTitle>
+                    <CardDescription>Proportional distribution</CardDescription>
+                  </div>
+                </div>
               </CardHeader>
-              <CardContent>
+              <CardContent className="p-6">
                 <ResponsiveContainer width="100%" height={300}>
                   <PieChart>
                     <Pie
@@ -569,7 +657,14 @@ logActivity("Exported Analytics Report", { format: "PDF" });
                         />
                       ))}
                     </Pie>
-                    <Tooltip />
+                    <Tooltip 
+                      contentStyle={{ 
+                        backgroundColor: 'white', 
+                        borderRadius: '12px', 
+                        border: 'none',
+                        boxShadow: '0 10px 40px rgba(0,0,0,0.1)'
+                      }} 
+                    />
                   </PieChart>
                 </ResponsiveContainer>
               </CardContent>
@@ -577,28 +672,33 @@ logActivity("Exported Analytics Report", { format: "PDF" });
           </div>
 
           {/* SUMMARY */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Category Summary</CardTitle>
+          <Card className="border-0 shadow-xl bg-white/80 backdrop-blur-sm overflow-hidden">
+            <CardHeader className="bg-linear-to-r from-emerald-50 to-teal-50 border-b">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 bg-linear-to-br from-emerald-500 to-teal-600 rounded-xl text-white shadow-lg shadow-emerald-200">
+                  <Building2 className="w-5 h-5" />
+                </div>
+                <CardTitle className="text-lg">Category Summary</CardTitle>
+              </div>
             </CardHeader>
-            <CardContent>
+            <CardContent className="p-6">
               <div className="grid md:grid-cols-3 gap-4">
                 {categoryData.map((cat, index) => (
                   <div
                     key={cat.name}
-                    className="flex items-center justify-between p-3 border rounded-lg"
+                    className="flex items-center justify-between p-4 bg-linear-to-r from-gray-50 to-slate-50 border rounded-xl hover:shadow-md transition-all hover:scale-[1.02] group"
                   >
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-3">
                       <div
-                        className="w-3 h-3 rounded-full"
+                        className="w-4 h-4 rounded-full shadow-sm"
                         style={{
                           backgroundColor:
                             COLORS[index % COLORS.length],
                         }}
                       />
-                      <span className="text-sm">{cat.name}</span>
+                      <span className="text-sm font-medium text-gray-700 group-hover:text-gray-900 transition-colors">{cat.name}</span>
                     </div>
-                    <Badge variant="secondary">{cat.value}</Badge>
+                    <Badge className="bg-linear-to-r from-blue-500 to-indigo-600 text-white border-0 shadow-md">{cat.value}</Badge>
                   </div>
                 ))}
               </div>
@@ -607,15 +707,20 @@ logActivity("Exported Analytics Report", { format: "PDF" });
         </TabsContent>
 
         {/* ZONE TAB */}
-        <TabsContent value="zone" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Zone Distribution</CardTitle>
-              <CardDescription>
-                Commercial vs Residential areas
-              </CardDescription>
+        <TabsContent value="zone" className="space-y-6">
+          <Card className="border-0 shadow-xl bg-white/80 backdrop-blur-sm overflow-hidden">
+            <CardHeader className="bg-linear-to-r from-amber-50 to-orange-50 border-b">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 bg-linear-to-br from-amber-500 to-orange-600 rounded-xl text-white shadow-lg shadow-amber-200">
+                  <MapPin className="w-5 h-5" />
+                </div>
+                <div>
+                  <CardTitle className="text-lg">Zone Distribution</CardTitle>
+                  <CardDescription>Commercial vs Residential areas</CardDescription>
+                </div>
+              </div>
             </CardHeader>
-            <CardContent>
+            <CardContent className="p-6">
               <ResponsiveContainer width="100%" height={400}>
                 <PieChart>
                   <Pie
@@ -636,7 +741,14 @@ logActivity("Exported Analytics Report", { format: "PDF" });
                       />
                     ))}
                   </Pie>
-                  <Tooltip />
+                  <Tooltip 
+                    contentStyle={{ 
+                      backgroundColor: 'white', 
+                      borderRadius: '12px', 
+                      border: 'none',
+                      boxShadow: '0 10px 40px rgba(0,0,0,0.1)'
+                    }} 
+                  />
                   <Legend />
                 </PieChart>
               </ResponsiveContainer>
@@ -644,26 +756,29 @@ logActivity("Exported Analytics Report", { format: "PDF" });
           </Card>
 
           {/* ZONE SUMMARY */}
-          <div className="grid md:grid-cols-2 gap-4">
+          <div className="grid md:grid-cols-2 gap-5">
             {zoneData.map((zone, index) => (
-              <Card key={zone.name}>
-                <CardHeader>
-                  <CardTitle className="text-lg">
+              <Card key={zone.name} className="border-0 shadow-xl bg-white/80 backdrop-blur-sm overflow-hidden hover:shadow-2xl transition-all hover:scale-[1.02]">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    <div 
+                      className="w-3 h-3 rounded-full"
+                      style={{ backgroundColor: COLORS[index % COLORS.length] }}
+                    />
                     {zone.name} Zone
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-3xl mb-2">{zone.value}</div>
-                  <p className="text-sm text-muted-foreground">
+                  <div className="text-4xl font-bold bg-linear-to-r from-amber-600 to-orange-600 bg-clip-text text-transparent mb-2">{zone.value}</div>
+                  <p className="text-sm text-gray-500">
                     {(
                       (zone.value / stats.total_businesses) *
                       100
-                    ).toFixed(1)}
-                    % of total businesses
+                    ).toFixed(1)}% of total businesses
                   </p>
-                  <div className="h-2 bg-muted rounded-full mt-4 overflow-hidden">
+                  <div className="h-3 bg-gray-100 rounded-full mt-4 overflow-hidden">
                     <div
-                      className="h-full"
+                      className="h-full rounded-full transition-all"
                       style={{
                         width: `${
                           (zone.value / stats.total_businesses) *
@@ -681,86 +796,96 @@ logActivity("Exported Analytics Report", { format: "PDF" });
         </TabsContent>
 
         {/* DISTRIBUTION TAB */}
-        <TabsContent value="distribution" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Business Distribution Overview</CardTitle>
-              <CardDescription>
-                Comprehensive analysis of all business data
-              </CardDescription>
+        <TabsContent value="distribution" className="space-y-6">
+          <Card className="border-0 shadow-xl bg-white/80 backdrop-blur-sm overflow-hidden">
+            <CardHeader className="bg-linear-to-r from-rose-50 to-pink-50 border-b">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 bg-linear-to-br from-rose-500 to-pink-600 rounded-xl text-white shadow-lg shadow-rose-200">
+                  <TrendingUp className="w-5 h-5" />
+                </div>
+                <div>
+                  <CardTitle className="text-lg">Business Distribution Overview</CardTitle>
+                  <CardDescription>Comprehensive analysis of all business data</CardDescription>
+                </div>
+              </div>
             </CardHeader>
 
-            <CardContent className="space-y-6">
+            <CardContent className="p-6 space-y-6">
               <div className="grid md:grid-cols-2 gap-6">
                 {/* TOP CATEGORIES */}
-                <div className="space-y-2">
-                  <h4 className="text-sm">Top Business Categories</h4>
-                  {categoryData
-                    .sort((a, b) => b.value - a.value)
-                    .slice(0, 5)
-                    .map((cat, index) => (
-                      <div
-                        key={cat.name}
-                        className="flex items-center gap-3"
-                      >
-                        <Badge variant="outline">{index + 1}</Badge>
-                        <span className="flex-1 text-sm">
-                          {cat.name}
-                        </span>
-                        <span className="text-sm">{cat.value}</span>
-                      </div>
-                    ))}
+                <div className="space-y-4">
+                  <h4 className="font-semibold text-gray-800 flex items-center gap-2">
+                    <Target className="w-5 h-5 text-purple-500" />
+                    Top Business Categories
+                  </h4>
+                  <div className="space-y-3">
+                    {categoryData
+                      .sort((a, b) => b.value - a.value)
+                      .slice(0, 5)
+                      .map((cat, index) => (
+                        <div
+                          key={cat.name}
+                          className="flex items-center gap-3 p-3 bg-linear-to-r from-gray-50 to-slate-50 rounded-xl border hover:shadow-md transition-all"
+                        >
+                          <Badge className="bg-linear-to-r from-purple-500 to-violet-600 text-white border-0 w-8 h-8 flex items-center justify-center rounded-lg">{index + 1}</Badge>
+                          <span className="flex-1 text-sm font-medium text-gray-700">{cat.name}</span>
+                          <span className="text-lg font-bold text-purple-600">{cat.value}</span>
+                        </div>
+                      ))}
+                  </div>
                 </div>
 
                 {/* INSIGHTS */}
-                <div className="space-y-2">
-                  <h4 className="text-sm">Key Insights</h4>
-                  <div className="space-y-3">
-                    <div className="flex items-start gap-2">
-                      <TrendingUp className="size-4 text-green-600 mt-0.5" />
+                <div className="space-y-4">
+                  <h4 className="font-semibold text-gray-800 flex items-center gap-2">
+                    <Activity className="w-5 h-5 text-blue-500" />
+                    Key Insights
+                  </h4>
+                  <div className="space-y-4">
+                    <div className="flex items-start gap-3 p-4 bg-linear-to-r from-green-50 to-emerald-50 rounded-xl border border-green-100">
+                      <div className="p-2 bg-green-500 rounded-lg text-white">
+                        <TrendingUp className="w-4 h-4" />
+                      </div>
                       <div>
-                        <p className="text-sm">
+                        <p className="text-sm font-semibold text-green-900">
                           Most popular: {categoryData[0]?.name}
                         </p>
-                        <p className="text-xs text-muted-foreground">
+                        <p className="text-xs text-gray-600 mt-1">
                           {categoryData[0]?.value} businesses
                         </p>
                       </div>
                     </div>
 
-                    <div className="flex items-start gap-2">
-                      <MapPin className="size-4 text-blue-600 mt-0.5" />
+                    <div className="flex items-start gap-3 p-4 bg-linear-to-r from-blue-50 to-indigo-50 rounded-xl border border-blue-100">
+                      <div className="p-2 bg-blue-500 rounded-lg text-white">
+                        <MapPin className="w-4 h-4" />
+                      </div>
                       <div>
-                        <p className="text-sm">
+                        <p className="text-sm font-semibold text-blue-900">
                           {(
                             ((zoneData.find(
                               (z) => z.name === "Commercial"
                             )?.value || 0) /
                               stats.total_businesses) *
                             100
-                          ).toFixed(1)}
-                          % in commercial zones
+                          ).toFixed(1)}% in commercial zones
                         </p>
-                        <p className="text-xs text-muted-foreground">
+                        <p className="text-xs text-gray-600 mt-1">
                           High business concentration
                         </p>
                       </div>
                     </div>
 
-                    <div className="flex items-start gap-2">
-                      <Activity className="size-4 text-purple-600 mt-0.5" />
+                    <div className="flex items-start gap-3 p-4 bg-linear-to-r from-purple-50 to-violet-50 rounded-xl border border-purple-100">
+                      <div className="p-2 bg-purple-500 rounded-lg text-white">
+                        <Activity className="w-4 h-4" />
+                      </div>
                       <div>
-                        <p className="text-sm">
-                          Avg. per Street:{" "}
-                          {streets.length
-                            ? (
-                                businesses.length /
-                                streets.length
-                              ).toFixed(1)
-                            : 0}
+                        <p className="text-sm font-semibold text-purple-900">
+                          Avg. per Street: {streets.length ? (businesses.length / streets.length).toFixed(1) : 0}
                         </p>
-                        <p className="text-xs text-muted-foreground">
-                          Population per area
+                        <p className="text-xs text-gray-600 mt-1">
+                          Business density per area
                         </p>
                       </div>
                     </div>

@@ -1,6 +1,6 @@
-const { supabase } = require('../../lib/supabaseClient');
+import { supabase } from '../../lib/supabaseClient.js';
 
-module.exports = async function handler(req, res) {
+export default async function handler(req, res) {
   try {
     /* -----------------------------------------------------
      * GET ALL BUSINESSES
@@ -28,7 +28,7 @@ module.exports = async function handler(req, res) {
       // Validate required fields
       const requiredFields = [
         'business_name',
-        'category',
+        'general_category',
         'latitude',
         'longitude',
         'street',
@@ -66,4 +66,4 @@ module.exports = async function handler(req, res) {
     console.error("Businesses API Error:", err);
     return res.status(500).json({ error: "Server Error" });
   }
-};
+}

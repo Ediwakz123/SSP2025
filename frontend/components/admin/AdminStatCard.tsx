@@ -1,23 +1,76 @@
+/**
+ * @deprecated Use StatCard from '@/components/ui/stat-card' instead
+ * This component is kept for backwards compatibility
+ */
 import { ReactNode } from "react";
+import { TrendingUp, TrendingDown, Minus } from "lucide-react";
 
+interface AdminStatCardProps {
+  icon: ReactNode;
+  title: string;
+  value: number | string;
+  change?: number;
+  changeLabel?: string;
+  color?: "purple" | "blue" | "green" | "orange" | "red";
+}
+
+/**
+ * @deprecated Use StatCard from '@/components/ui/stat-card' instead
+ */
 export default function AdminStatCard({
   icon,
   title,
   value,
-}: {
-  icon: ReactNode;
-  title: string;
-  value: number | string;
-}) {
+  change,
+  changeLabel,
+  color = "purple",
+}: AdminStatCardProps) {
+  // Since we need to extract the icon type, we wrap the legacy usage
+  // For new code, use StatCard directly with LucideIcon prop
   return (
-    <div className="rounded-2xl bg-white p-6 shadow-sm border flex items-center gap-4">
-      <div className="p-3 bg-purple-100 text-purple-700 rounded-xl">
-        {icon}
-      </div>
+    <div className="group relative overflow-hidden rounded-2xl bg-white p-6 shadow-lg shadow-gray-900/5 border border-gray-100 transition-all duration-300 hover:shadow-xl hover:-translate-y-0.5">
+      {/* Background Decoration */}
+      <div className={`absolute -top-6 -right-6 w-24 h-24 rounded-full bg-linear-to-br ${
+        color === "purple" ? "from-purple-500/10 to-fuchsia-500/10" :
+        color === "blue" ? "from-blue-500/10 to-cyan-500/10" :
+        color === "green" ? "from-emerald-500/10 to-teal-500/10" :
+        color === "orange" ? "from-orange-500/10 to-amber-500/10" :
+        "from-red-500/10 to-rose-500/10"
+      } opacity-50 blur-2xl group-hover:opacity-75 transition-opacity`} />
+      
+      <div className="relative flex items-start justify-between">
+        <div className="flex items-center gap-4">
+          {/* Icon */}
+          <div className={`p-3.5 rounded-xl shadow-md ${
+            color === "purple" ? "bg-linear-to-br from-purple-500/10 to-fuchsia-500/10 text-purple-600 shadow-purple-500/10" :
+            color === "blue" ? "bg-linear-to-br from-blue-500/10 to-cyan-500/10 text-blue-600 shadow-blue-500/10" :
+            color === "green" ? "bg-linear-to-br from-emerald-500/10 to-teal-500/10 text-emerald-600 shadow-emerald-500/10" :
+            color === "orange" ? "bg-linear-to-br from-orange-500/10 to-amber-500/10 text-orange-600 shadow-orange-500/10" :
+            "bg-linear-to-br from-red-500/10 to-rose-500/10 text-red-600 shadow-red-500/10"
+          }`}>
+            {icon}
+          </div>
 
-      <div>
-        <p className="text-gray-500 text-sm">{title}</p>
-        <p className="text-2xl font-bold">{value}</p>
+          {/* Content */}
+          <div>
+            <p className="text-sm font-medium text-gray-500">{title}</p>
+            <p className="text-3xl font-bold text-gray-900 mt-1">{value}</p>
+          </div>
+        </div>
+
+        {/* Change Indicator */}
+        {(change !== undefined || changeLabel) && (
+          <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold ${
+            !change ? "text-gray-500 bg-gray-100" :
+            change > 0 ? "text-emerald-600 bg-emerald-50" : "text-red-600 bg-red-50"
+          }`}>
+            {!change ? <Minus className="w-3 h-3" /> :
+             change > 0 ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
+            <span>
+              {change !== undefined ? `${change > 0 ? '+' : ''}${change}%` : changeLabel}
+            </span>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -14,10 +14,16 @@ export default async function handler(req, res) {
       return res.status(400).json({ detail: "Email is required" });
     }
 
-    // Initialize Supabase
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return res.status(400).json({ detail: 'Invalid email format' });
+    }
+
+    // Initialize Supabase with SERVICE_ROLE_KEY for database modifications
     const supabase = createClient(
       process.env.SUPABASE_URL,
-      process.env.SUPABASE_ANON_KEY
+      process.env.SUPABASE_SERVICE_ROLE_KEY
     );
 
     // Check if user exists
@@ -27,8 +33,12 @@ export default async function handler(req, res) {
       .eq("email", email)
       .single();
 
+    // Return generic success message to prevent user enumeration
+    // Even if user doesn't exist, we show the same response
     if (userErr || !user) {
-      return res.status(404).json({ detail: "No account found with this email." });
+      return res.status(200).json({ 
+        detail: "If an account with that email exists, a password reset link has been sent." 
+      });
     }
 
     // Generate reset token
@@ -41,7 +51,7 @@ export default async function handler(req, res) {
       .from("password_reset_tokens")
       .insert([
         {
-          user_id: user.id,
+          user_id: user.uid,
           token_hash: crypto.createHash("sha256").update(token).digest("hex"),
           expires_at: expiresAt
         }
@@ -84,7 +94,7 @@ export default async function handler(req, res) {
 
     await supabase.from("activity_logs").insert([
   {
-    user_id: user.id,
+    user_id: user.uid,
     action: "User requested password reset",
     timestamp: new Date().toISOString()
   }

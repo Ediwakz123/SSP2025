@@ -379,7 +379,7 @@ export function findOptimalLocation(
   );
 
   const majorRoads = Object.entries(streetStats)
-    .filter(([_, count]) => count >= threshold)
+    .filter(([, count]) => count >= threshold)
     .map(([street]) => street.toLowerCase());
 
   const centroid = best.centroid;

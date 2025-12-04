@@ -1,80 +1,189 @@
 /* ============================================================
+   API CLIENT - Type-safe API calls with error handling
+============================================================ */
+
+import { getApiUrl, getEdgeFunctionUrl } from "./env";
+import { ApiError, NetworkError } from "../utils/errorHandler";
+import { logger } from "../utils/logger";
+import type { 
+  Business, 
+  ActivityLog, 
+  AdminStats, 
+  ApiResponse 
+} from "../types";
+
+/* ============================================================
    BASE URLS
 ============================================================ */
-const API_URL = import.meta.env.VITE_API_URL || "";
-const EDGE_URL =
-  import.meta.env.VITE_SUPABASE_FUNCTION_URL + "/make-server-c9aabe87";
+const getApiBaseUrl = (): string => getApiUrl() || "";
+const getEdgeBaseUrl = (): string => {
+  const url = getEdgeFunctionUrl();
+  return url ? `${url}/make-server-c9aabe87` : "";
+};
+
+/* ============================================================
+   HTTP METHODS TYPE
+============================================================ */
+type HttpMethod = "GET" | "POST" | "PUT" | "DELETE" | "PATCH";
+
+/* ============================================================
+   REQUEST OPTIONS
+============================================================ */
+interface RequestOptions<TBody = unknown> {
+  timeout?: number;
+  body?: TBody;
+}
 
 /* ============================================================
    UNIVERSAL REQUEST HELPER
 ============================================================ */
-async function request(method: string, url: string, token?: string, body?: any) {
+async function request<TResponse, TBody = unknown>(
+  method: HttpMethod,
+  url: string,
+  token?: string,
+  options: RequestOptions<TBody> = {}
+): Promise<TResponse> {
+  const { timeout = 30000, body } = options;
+
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
   };
 
-  if (token) headers["Authorization"] = `Bearer ${token}`;
-
-  const res = await fetch(url, {
-    method,
-    headers,
-    body: body ? JSON.stringify(body) : undefined,
-  });
-
-  let data = null;
-  try {
-    data = await res.json();
-  } catch {}
-
-  if (!res.ok) {
-    throw new Error(data?.error || `API error: ${res.status}`);
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
   }
 
-  return data;
+  // Create abort controller for timeout
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeout);
+
+  try {
+    logger.debug(`${method} ${url}`);
+
+    const res = await fetch(url, {
+      method,
+      headers,
+      body: body ? JSON.stringify(body) : undefined,
+      signal: controller.signal,
+    });
+
+    clearTimeout(timeoutId);
+
+    let data: TResponse | null = null;
+    
+    try {
+      data = await res.json();
+    } catch {
+      // Response body is not valid JSON
+    }
+
+    if (!res.ok) {
+      const errorData = data as unknown as Record<string, unknown>;
+      const errorMessage = (errorData?.error as string) || `API error: ${res.status}`;
+      logger.error(`API Error: ${method} ${url}`, { status: res.status, error: errorMessage });
+      throw new ApiError(errorMessage, res.status);
+    }
+
+    return data as TResponse;
+  } catch (error) {
+    clearTimeout(timeoutId);
+
+    if (error instanceof Error && error.name === "AbortError") {
+      throw new ApiError("Request timed out", 408);
+    }
+
+    if (error instanceof TypeError && error.message.includes("fetch")) {
+      throw new NetworkError();
+    }
+
+    throw error;
+  }
 }
 
 /* ============================================================
-   LEGACY BACKEND ROUTES (your original)
+   TYPED API FUNCTIONS - ACTIVITY LOGS
 ============================================================ */
 
-export function getActivityLogs(token: string) {
-  return request("GET", `${API_URL}/api/logs`, token);
+export function getActivityLogs(token: string): Promise<ActivityLog[]> {
+  return request<ActivityLog[]>("GET", `${getApiBaseUrl()}/api/logs`, token);
 }
 
-export function getAdminStats(token: string) {
-  return request("GET", `${API_URL}/api/admin/stats`, token);
+/* ============================================================
+   TYPED API FUNCTIONS - ADMIN
+============================================================ */
+
+export function getAdminStats(token: string): Promise<ApiResponse<AdminStats>> {
+  return request<ApiResponse<AdminStats>>("GET", `${getApiBaseUrl()}/api/admin/stats`, token);
 }
 
-export function getAllUsers(token: string) {
-  return request("GET", `${API_URL}/api/admin/users`, token);
+export function getAllUsers(token: string): Promise<unknown[]> {
+  return request<unknown[]>("GET", `${getApiBaseUrl()}/api/admin/users`, token);
 }
 
-export function getAllAnalyses(token: string) {
-  return request("GET", `${API_URL}/api/analyses`, token);
+export function getAllAnalyses(token: string): Promise<unknown[]> {
+  return request<unknown[]>("GET", `${getApiBaseUrl()}/api/analyses`, token);
 }
 
-export function getSeedDataStats() {
-  return request("GET", `${API_URL}/api/seed/stats`);
+/* ============================================================
+   TYPED API FUNCTIONS - SEED DATA
+============================================================ */
+
+interface SeedDataStats {
+  count: number;
+  categories: string[];
+  zones: string[];
 }
 
-export function getSeedData(token: string) {
-  return request("GET", `${API_URL}/api/seed`, token);
+export function getSeedDataStats(): Promise<SeedDataStats> {
+  return request<SeedDataStats>("GET", `${getApiBaseUrl()}/api/seed/stats`);
 }
 
-export function createSeedBusiness(body: any, token: string) {
-  return request("POST", `${API_URL}/api/seed`, token, body);
+export function getSeedData(token: string): Promise<Business[]> {
+  return request<Business[]>("GET", `${getApiBaseUrl()}/api/seed`, token);
 }
 
-export function updateSeedBusiness(id: number, body: any, token: string) {
-  return request("PUT", `${API_URL}/api/seed/${id}`, token, body);
+export function createSeedBusiness(
+  body: Partial<Business>,
+  token: string
+): Promise<Business> {
+  return request<Business, Partial<Business>>(
+    "POST",
+    `${getApiBaseUrl()}/api/seed`,
+    token,
+    { body }
+  );
 }
 
-export function deleteSeedBusiness(id: number, token: string) {
-  return request("DELETE", `${API_URL}/api/seed/${id}`, token);
+export function updateSeedBusiness(
+  id: number,
+  body: Partial<Business>,
+  token: string
+): Promise<Business> {
+  return request<Business, Partial<Business>>(
+    "PUT",
+    `${getApiBaseUrl()}/api/seed/${id}`,
+    token,
+    { body }
+  );
 }
 
-export function resetSeedData(token: string) {
-  return request("POST", `${API_URL}/api/seed/reset`, token);
+export function deleteSeedBusiness(
+  id: number,
+  token: string
+): Promise<{ success: boolean }> {
+  return request<{ success: boolean }>(
+    "DELETE",
+    `${getApiBaseUrl()}/api/seed/${id}`,
+    token
+  );
+}
+
+export function resetSeedData(token: string): Promise<{ success: boolean }> {
+  return request<{ success: boolean }>(
+    "POST",
+    `${getApiBaseUrl()}/api/seed/reset`,
+    token
+  );
 }
 
 /* ============================================================
@@ -82,31 +191,57 @@ export function resetSeedData(token: string) {
 ============================================================ */
 
 // GET all raw businesses
-export function getRawBusinesses(token: string) {
-  return request("GET", `${EDGE_URL}/raw`, token);
+export function getRawBusinesses(token: string): Promise<Business[]> {
+  return request<Business[]>("GET", `${getEdgeBaseUrl()}/raw`, token);
 }
 
 // INSERT new raw business
-export function createRawBusiness(body: any, token: string) {
-  return request("POST", `${EDGE_URL}/raw`, token, body);
+export function createRawBusiness(
+  body: Partial<Business>,
+  token: string
+): Promise<Business> {
+  return request<Business, Partial<Business>>(
+    "POST",
+    `${getEdgeBaseUrl()}/raw`,
+    token,
+    { body }
+  );
 }
 
 // UPDATE single raw business
-export function updateRawBusiness(id: string, body: any, token: string) {
-  return request("PUT", `${EDGE_URL}/raw/${id}`, token, body);
+export function updateRawBusiness(
+  id: string,
+  body: Partial<Business>,
+  token: string
+): Promise<Business> {
+  return request<Business, Partial<Business>>(
+    "PUT",
+    `${getEdgeBaseUrl()}/raw/${id}`,
+    token,
+    { body }
+  );
 }
 
 // DELETE single raw business
-export function deleteRawBusiness(id: string, token: string) {
-  return request("DELETE", `${EDGE_URL}/raw/${id}`, token);
+export function deleteRawBusiness(
+  id: string,
+  token: string
+): Promise<{ success: boolean }> {
+  return request<{ success: boolean }>(
+    "DELETE",
+    `${getEdgeBaseUrl()}/raw/${id}`,
+    token
+  );
 }
 
 // DELETE all businesses (truncate)
-export function resetRawBusinesses(token: string) {
-  return request("DELETE", `${EDGE_URL}/raw`, token);
+export function resetRawBusinesses(
+  token: string
+): Promise<{ success: boolean }> {
+  return request<{ success: boolean }>("DELETE", `${getEdgeBaseUrl()}/raw`, token);
 }
 
 // Trigger ML TRAIN
-export function trainModel(token: string) {
-  return request("POST", `${EDGE_URL}/train`, token);
+export function trainModel(token: string): Promise<{ success: boolean }> {
+  return request<{ success: boolean }>("POST", `${getEdgeBaseUrl()}/train`, token);
 }

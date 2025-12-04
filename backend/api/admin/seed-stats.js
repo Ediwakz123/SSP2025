@@ -1,6 +1,11 @@
-import supabase from "../../lib/supabaseClient";
+import { supabase } from "../../lib/supabaseClient.js";
+import { verifyAdmin } from "./auth.js";
 
 export default async function handler(req, res) {
+  // Verify admin authentication
+  const admin = verifyAdmin(req, res);
+  if (!admin) return;
+
   try {
     const { data: businesses } = await supabase.from("businesses").select("*");
 
@@ -10,7 +15,7 @@ export default async function handler(req, res) {
     let totalTraffic = 0;
 
     businesses.forEach(b => {
-      categories[b.category] = (categories[b.category] || 0) + 1;
+      categories[b.general_category] = (categories[b.general_category] || 0) + 1;
       zones[b.zone_type] = (zones[b.zone_type] || 0) + 1;
       totalDensity += b.population_density || 0;
       totalTraffic += b.foot_traffic || 0;

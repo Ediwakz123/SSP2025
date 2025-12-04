@@ -23,7 +23,7 @@ export async function GET() {
     // 1️⃣ Fetch all businesses (seed + user CSV)
     const { data: businesses, error } = await supabase
       .from("businesses")
-      .select("id, name, category, latitude, longitude, zone_type, street");
+      .select("id, business_name, general_category, latitude, longitude, zone_type, street");
 
     if (error) throw error;
 
@@ -35,15 +35,15 @@ export async function GET() {
     const categoryMap = {};
 
     businesses.forEach((b) => {
-      if (!categoryMap[b.category]) {
-        categoryMap[b.category] = {
-          category: b.category,
+      if (!categoryMap[b.general_category]) {
+        categoryMap[b.general_category] = {
+          category: b.general_category,
           count: 0,
           marketShare: 0,
           opportunityScore: 0,
         };
       }
-      categoryMap[b.category].count += 1;
+      categoryMap[b.general_category].count += 1;
     });
 
     const totalBusinesses = businesses.length;

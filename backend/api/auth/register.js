@@ -1,7 +1,7 @@
-const { supabase } = require('../../lib/supabaseClient');
-const { hashPassword } = require('../../lib/bcrypt');
+import { supabase } from '../../lib/supabaseClient.js';
+import { hashPassword } from '../../lib/bcrypt.js';
 
-module.exports = async function handler(req, res) {
+export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
@@ -25,6 +25,17 @@ module.exports = async function handler(req, res) {
       return res.status(400).json({
         error: 'Missing required fields: email, password, username'
       });
+    }
+
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return res.status(400).json({ error: 'Invalid email format' });
+    }
+
+    // Validate password strength
+    if (password.length < 8) {
+      return res.status(400).json({ error: 'Password must be at least 8 characters long' });
     }
 
     // Check if email already exists
@@ -66,9 +77,12 @@ module.exports = async function handler(req, res) {
       return res.status(500).json({ error: 'Failed to register' });
     }
 
+    // Remove sensitive data before returning
+    const { hashed_password: _, ...safeUser } = data;
+
     return res.status(201).json({
       message: 'User registered successfully',
-      user: data
+      user: safeUser
     });
 
   } catch (error) {

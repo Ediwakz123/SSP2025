@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
@@ -11,9 +11,21 @@ import {
   CardTitle,
 } from "../ui/card";
 import { Alert, AlertDescription } from "../ui/alert";
-import { Shield, ArrowLeft, Eye, EyeOff } from "lucide-react";
+import { Shield, ArrowLeft, Eye, EyeOff, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "../../lib/supabase";
+import { validateEmail } from "../../utils/validation";
+
+// Field error display component
+function FieldError({ error }: { error?: string }) {
+  if (!error) return null;
+  return (
+    <p className="text-xs text-red-500 mt-1 flex items-center gap-1 animate-fadeIn">
+      <AlertCircle className="w-3 h-3" />
+      {error}
+    </p>
+  );
+}
 
 const MAX_FAILED_ATTEMPTS = 5;
 const LOCKOUT_MINUTES = 3;
@@ -35,28 +47,50 @@ export function AdminLoginPage() {
   // Lockout states
   const [isLocked, setIsLocked] = useState(false);
   const [lockCountdown, setLockCountdown] = useState(0);
-  const lockIntervalRef = useRef<any>(null);
+  const lockIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  
+  // Field-level validation
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [touched, setTouched] = useState<Record<string, boolean>>({});
 
-  // -------------------------------
-  // Load Remember Me Credential on Mount
-  // -------------------------------
-  useEffect(() => {
-    const savedEmail = localStorage.getItem("admin_email");
-    const savedPassword = localStorage.getItem("admin_password");
-
-    if (savedEmail) {
-      setEmail(savedEmail);
-      setRememberMe(true);
+  const handleBlur = useCallback((field: string) => {
+    setTouched(prev => ({ ...prev, [field]: true }));
+    
+    if (field === "email") {
+      const result = validateEmail(email);
+      setFieldErrors(prev => ({ ...prev, email: result.error || "" }));
+    } else if (field === "password") {
+      if (!password) {
+        setFieldErrors(prev => ({ ...prev, password: "Password is required" }));
+      } else {
+        setFieldErrors(prev => ({ ...prev, password: "" }));
+      }
     }
-    if (savedPassword) setPassword(savedPassword);
+  }, [email, password]);
 
-    checkLockout();
+  // -------------------------------
+  // Countdown helper (defined first to be available to checkLockout)
+  // -------------------------------
+  const startCountdown = useCallback((unlockTime: number) => {
+    if (lockIntervalRef.current) clearInterval(lockIntervalRef.current);
+
+    lockIntervalRef.current = setInterval(() => {
+      const now = Date.now();
+      if (now >= unlockTime) {
+        if (lockIntervalRef.current) clearInterval(lockIntervalRef.current);
+        setIsLocked(false);
+        setLockCountdown(0);
+        return;
+      }
+
+      setLockCountdown(Math.ceil((unlockTime - now) / 1000));
+    }, 1000);
   }, []);
 
   // -------------------------------
   // Brute-Force Protection: Check Lockout
   // -------------------------------
-  const checkLockout = () => {
+  const checkLockout = useCallback(() => {
     const lockoutUntil = localStorage.getItem("admin_lockout_until");
     if (!lockoutUntil) return;
 
@@ -72,23 +106,23 @@ export function AdminLoginPage() {
       localStorage.removeItem("admin_lockout_until");
       setIsLocked(false);
     }
-  };
+  }, [startCountdown]);
 
-  const startCountdown = (unlockTime: number) => {
-    if (lockIntervalRef.current) clearInterval(lockIntervalRef.current);
+  // -------------------------------
+  // Load Remember Me Credential on Mount
+  // -------------------------------
+  useEffect(() => {
+    const savedEmail = localStorage.getItem("admin_email");
+    const savedPassword = localStorage.getItem("admin_password");
 
-    lockIntervalRef.current = setInterval(() => {
-      const now = Date.now();
-      if (now >= unlockTime) {
-        clearInterval(lockIntervalRef.current);
-        setIsLocked(false);
-        setLockCountdown(0);
-        return;
-      }
+    if (savedEmail) {
+      setEmail(savedEmail);
+      setRememberMe(true);
+    }
+    if (savedPassword) setPassword(savedPassword);
 
-      setLockCountdown(Math.ceil((unlockTime - now) / 1000));
-    }, 1000);
-  };
+    checkLockout();
+  }, [checkLockout]);
 
   const recordFailedAttempt = () => {
     let fails = Number(localStorage.getItem("admin_failed_attempts") || 0);
@@ -163,6 +197,20 @@ const handleSubmit = async (e: React.FormEvent) => {
   e.preventDefault();
   if (isLocked) {
     toast.error("Login temporarily locked.");
+    return;
+  }
+
+  // Validate fields before submission
+  const errors: Record<string, string> = {};
+  const emailResult = validateEmail(email);
+  if (!emailResult.isValid) errors.email = emailResult.error || "";
+  if (!password) errors.password = "Password is required";
+  
+  if (Object.keys(errors).length > 0) {
+    setFieldErrors(errors);
+    setTouched({ email: true, password: true });
+    const firstError = Object.values(errors)[0];
+    toast.error(firstError);
     return;
   }
 
@@ -242,7 +290,7 @@ const handleSubmit = async (e: React.FormEvent) => {
 };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-white via-[#f7f8ff] to-[#ece8ff] p-4">
+    <div className="min-h-screen flex items-center justify-center bg-linear-to-br from-white via-[#f7f8ff] to-[#ece8ff] p-4">
       <Card className="w-full max-w-md bg-white text-black shadow-xl rounded-2xl">
         <CardHeader className="space-y-4">
           <Button
@@ -292,10 +340,16 @@ const handleSubmit = async (e: React.FormEvent) => {
                 type="email"
                 placeholder="admin@example.com"
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                onChange={(e) => {
+                  setEmail(e.target.value);
+                  if (fieldErrors.email) setFieldErrors(prev => ({ ...prev, email: "" }));
+                }}
+                onBlur={() => handleBlur("email")}
+                error={touched.email && !!fieldErrors.email}
                 disabled={loading || isLocked}
                 required
               />
+              {touched.email && <FieldError error={fieldErrors.email} />}
             </div>
 
             {/* PASSWORD WITH SHOW/HIDE */}
@@ -305,7 +359,12 @@ const handleSubmit = async (e: React.FormEvent) => {
                 type={showPassword ? "text" : "password"}
                 placeholder="Enter your password"
                 value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                onChange={(e) => {
+                  setPassword(e.target.value);
+                  if (fieldErrors.password) setFieldErrors(prev => ({ ...prev, password: "" }));
+                }}
+                onBlur={() => handleBlur("password")}
+                error={touched.password && !!fieldErrors.password}
                 disabled={loading || isLocked}
                 required
               />
@@ -317,6 +376,7 @@ const handleSubmit = async (e: React.FormEvent) => {
               >
                 {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
               </button>
+              {touched.password && <FieldError error={fieldErrors.password} />}
             </div>
 
             {/* REMEMBER ME */}

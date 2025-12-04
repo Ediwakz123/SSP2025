@@ -98,7 +98,7 @@ export function EnterCodePage() {
   };
 
  return (
-  <div className="min-h-screen w-full bg-gradient-to-br from-blue-50 via-white to-purple-50 flex items-center justify-center p-4">
+  <div className="min-h-screen w-full bg-linear-to-br from-blue-50 via-white to-purple-50 flex items-center justify-center p-4">
     <Card className="w-full max-w-md shadow-xl bg-white rounded-2xl">
       <CardHeader className="text-center space-y-4 pb-8">
 

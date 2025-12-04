@@ -17,7 +17,7 @@ export const adminApi = {
   // ---------------------------
   // UPDATE A SINGLE BUSINESS
   // ---------------------------
-  async updateBusiness(id: number, data: any, token: string) {
+  async updateBusiness(id: number, data: Record<string, unknown>, token: string) {
     return apiRequest(`${BASE}/businesses/raw/${id}`, {
       method: "PUT",
       body: JSON.stringify(data)
@@ -36,7 +36,7 @@ export const adminApi = {
   // ---------------------------
   // BULK OVERWRITE (Used for CSV upload)
   // ---------------------------
-  async replaceAllBusinesses(businesses: any[], token: string) {
+  async replaceAllBusinesses(businesses: Record<string, unknown>[], token: string) {
     return apiRequest(`${BASE}/businesses/raw`, {
       method: "POST",
       body: JSON.stringify({ businesses })

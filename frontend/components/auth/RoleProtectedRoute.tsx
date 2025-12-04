@@ -19,13 +19,15 @@ export function RoleProtectedRoute({ children, role }: Props) {
       return;
     }
 
+    const userId = user.id;
+
     async function loadRole() {
-      let table = role === "admin" ? "admin_profiles" : "profiles";
+      const table = role === "admin" ? "admin_profiles" : "profiles";
 
       const { data } = await supabase
         .from(table)
         .select("role")
-        .eq("id", user.id)
+        .eq("id", userId)
         .single();
 
       setUserRole(data?.role ?? null);

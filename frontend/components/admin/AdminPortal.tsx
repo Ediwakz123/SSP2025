@@ -87,7 +87,7 @@ interface UserAnalysis {
 export function AdminPortal() {
   const [businesses, setBusinesses] = useState<BusinessRow[]>([]);
   const [analyses, setAnalyses] = useState<UserAnalysis[]>([]);
-  const [activityLogs, setActivityLogs] = useState<any[]>([]);
+  const [_activityLogs, setActivityLogs] = useState<Record<string, unknown>[]>([]);
 
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
@@ -136,7 +136,7 @@ export function AdminPortal() {
       setAnalyses([]); // mappedAnalyses
       setActivityLogs(activityRes.data || []);
       setLastUpdated(new Date());
-    } catch (error: any) {
+    } catch (error) {
       console.error("AdminPortal Error:", error);
       toast.error("Failed to load admin data");
     } finally {
@@ -259,8 +259,15 @@ export function AdminPortal() {
   // UI LOADING SCREEN -----------------------------------------------------
   if (loading && !businesses.length)
     return (
-      <div className="flex items-center justify-center min-h-[600px]">
-        <RefreshCw className="size-8 animate-spin text-muted-foreground" />
+      <div className="flex flex-col items-center justify-center min-h-[600px] animate-fadeIn">
+        <div className="relative">
+          <div className="w-16 h-16 rounded-2xl bg-linear-to-br from-purple-500 to-fuchsia-600 animate-pulse flex items-center justify-center">
+            <RefreshCw className="w-8 h-8 text-white animate-spin" />
+          </div>
+          <div className="absolute -inset-4 bg-linear-to-br from-purple-500/20 to-fuchsia-600/20 rounded-3xl blur-xl animate-pulse" />
+        </div>
+        <p className="mt-6 text-gray-600 font-medium">Loading admin dashboard...</p>
+        <p className="text-sm text-gray-400 mt-1">Preparing system overview</p>
       </div>
     );
 
@@ -269,49 +276,54 @@ export function AdminPortal() {
   // ------------------------------------------------------------------------
 
   return (
-    <div className="space-y-6">
+    <div className="page-wrapper space-y-6">
       {/* HEADER ------------------------------------------------------------ */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-3xl">Admin Dashboard</h2>
-          <p className="text-muted-foreground">
-            System overview and monitoring
-          </p>
-        </div>
-
-        <div className="flex items-center gap-3">
-          <div className="text-right text-sm text-muted-foreground">
-            <p>Last updated</p>
-            <p>{lastUpdated.toLocaleTimeString()}</p>
+      <div className="page-content relative overflow-hidden rounded-2xl bg-linear-to-br from-purple-600 via-fuchsia-500 to-pink-500 p-6 text-white">
+        <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/4" />
+        <div className="absolute bottom-0 left-0 w-48 h-48 bg-white/10 rounded-full blur-3xl translate-y-1/2 -translate-x-1/4" />
+        
+        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="flex items-center gap-4">
+            <div className="w-14 h-14 rounded-2xl bg-white/20 backdrop-blur-sm flex items-center justify-center">
+              <Shield className="w-7 h-7 text-white" />
+            </div>
+            <div>
+              <h2 className="text-2xl font-bold">Admin Dashboard</h2>
+              <p className="text-white/80 text-sm mt-1">
+                System overview and monitoring • Last updated {lastUpdated.toLocaleTimeString()}
+              </p>
+            </div>
           </div>
 
-          <Button
-            variant={autoRefresh ? "default" : "outline"}
-            size="sm"
-            className="gap-2"
-            onClick={() => setAutoRefresh((v) => !v)}
-          >
-            <RefreshCw className="size-4" />
-            Auto {autoRefresh ? "On" : "Off"}
-          </Button>
+          <div className="flex items-center gap-3">
+            <Button
+              variant={autoRefresh ? "default" : "outline"}
+              size="sm"
+              className={`gap-2 ${autoRefresh ? 'bg-white/20 hover:bg-white/30 border-white/30' : 'bg-white/10 hover:bg-white/20 border-white/20'} text-white`}
+              onClick={() => setAutoRefresh((v) => !v)}
+            >
+              <RefreshCw className="size-4" />
+              Auto {autoRefresh ? "On" : "Off"}
+            </Button>
 
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleRefresh}
-            disabled={isRefreshing}
-            className="gap-2"
-          >
-            <RefreshCw
-              className={`size-4 ${isRefreshing ? "animate-spin" : ""}`}
-            />
-            Refresh
-          </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleRefresh}
+              disabled={isRefreshing}
+              className="gap-2 bg-white text-purple-600 hover:bg-white/90 border-0"
+            >
+              <RefreshCw
+                className={`size-4 ${isRefreshing ? "animate-spin" : ""}`}
+              />
+              Refresh
+            </Button>
+          </div>
         </div>
       </div>
 
       {/* TOP CARDS --------------------------------------------------------- */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="stagger-children grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
           title="Total Businesses"
           value={stats.totalBusinesses}
@@ -346,25 +358,32 @@ export function AdminPortal() {
       </div>
 
       {/* TABS -------------------------------------------------------------- */}
-      <Tabs value={selectedTab} onValueChange={setSelectedTab}>
-        <TabsList className="grid w-full grid-cols-3">
-          <TabsTrigger value="overview">Overview</TabsTrigger>
-          <TabsTrigger value="top-users">Top User Analyses</TabsTrigger>
-          <TabsTrigger value="system">System Info</TabsTrigger>
+      <Tabs value={selectedTab} onValueChange={setSelectedTab} className="animate-fadeInUp delay-100">
+        <TabsList className="grid w-full grid-cols-3 p-1 bg-gray-100 rounded-xl">
+          <TabsTrigger value="overview" className="rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm">Overview</TabsTrigger>
+          <TabsTrigger value="top-users" className="rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm">Top User Analyses</TabsTrigger>
+          <TabsTrigger value="system" className="rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm">System Info</TabsTrigger>
         </TabsList>
 
         {/* OVERVIEW TAB -------------------------------------------------- */}
         <TabsContent value="overview" className="space-y-6">
           <div className="grid md:grid-cols-2 gap-6">
             {/* Business Type */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Business Type Distribution</CardTitle>
-                <CardDescription>
-                  Current business categories in Brgy. Sta. Cruz
-                </CardDescription>
+            <Card className="border-0 shadow-card overflow-hidden">
+              <CardHeader className="bg-linear-to-r from-gray-50 to-white border-b border-gray-100">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-linear-to-br from-blue-500 to-indigo-500 flex items-center justify-center">
+                    <Target className="w-5 h-5 text-white" />
+                  </div>
+                  <div>
+                    <CardTitle className="text-lg">Business Type Distribution</CardTitle>
+                    <CardDescription>
+                      Current business categories in Brgy. Sta. Cruz
+                    </CardDescription>
+                  </div>
+                </div>
               </CardHeader>
-              <CardContent>
+              <CardContent className="pt-6">
                 <ResponsiveContainer width="100%" height={300}>
                   <PieChart>
                     <Pie
@@ -393,12 +412,19 @@ export function AdminPortal() {
             </Card>
 
             {/* Zone Distribution */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Zone Distribution</CardTitle>
-                <CardDescription>
-                  Commercial vs Residential zones
-                </CardDescription>
+            <Card className="border-0 shadow-card overflow-hidden">
+              <CardHeader className="bg-linear-to-r from-gray-50 to-white border-b border-gray-100">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-linear-to-br from-purple-500 to-fuchsia-500 flex items-center justify-center">
+                    <Building2 className="w-5 h-5 text-white" />
+                  </div>
+                  <div>
+                    <CardTitle className="text-lg">Zone Distribution</CardTitle>
+                    <CardDescription>
+                      Commercial vs Residential zones
+                    </CardDescription>
+                  </div>
+                </div>
               </CardHeader>
               <CardContent>
                 <ResponsiveContainer width="100%" height={300}>
@@ -442,7 +468,7 @@ export function AdminPortal() {
           </div>
 
           {/* Barangay Information */}
-          <Card className="bg-gradient-to-br from-blue-50 to-indigo-50 border-blue-200">
+          <Card className="bg-linear-to-br from-blue-50 to-indigo-50 border-blue-200">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <MapPin className="size-5 text-blue-600" />
@@ -505,7 +531,7 @@ export function AdminPortal() {
                       className="p-4 border rounded-lg hover:bg-muted/50 transition-colors"
                     >
                       <div className="flex items-start gap-4">
-                        <div className="size-12 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 text-white flex items-center justify-center text-lg">
+                        <div className="size-12 rounded-full bg-linear-to-br from-blue-500 to-purple-500 text-white flex items-center justify-center text-lg">
                           #{index + 1}
                         </div>
 
@@ -686,7 +712,7 @@ function StatCard({
   gradient: string;
 }) {
   return (
-    <Card className={`bg-gradient-to-br ${gradient} border`}>
+    <Card className={`bg-linear-to-br ${gradient} border`}>
       <CardHeader className="pb-2">
         <CardTitle className="text-sm flex items-center justify-between">
           {title}

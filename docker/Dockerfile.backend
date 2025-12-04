@@ -1,0 +1,52 @@
+# =============================================================================
+# SSPTHESIS Backend Dockerfile
+# Multi-stage build for production-optimized Node.js backend
+# =============================================================================
+
+# Stage 1: Dependencies
+FROM node:20-alpine AS deps
+WORKDIR /app
+
+# Copy package files
+COPY backend/package*.json ./
+
+# Install production dependencies only
+RUN npm ci --only=production && npm cache clean --force
+
+# Stage 2: Production
+FROM node:20-alpine AS runner
+WORKDIR /app
+
+# Set production environment
+ENV NODE_ENV=production
+ENV PORT=3000
+
+# Create non-root user for security
+RUN addgroup --system --gid 1001 nodejs && \
+    adduser --system --uid 1001 expressjs
+
+# Copy dependencies from deps stage
+COPY --from=deps /app/node_modules ./node_modules
+
+# Copy application code
+COPY backend/server.js ./
+COPY backend/api ./api
+COPY backend/lib ./lib
+COPY backend/services ./services
+COPY backend/vercel.json ./
+
+# Set correct permissions
+RUN chown -R expressjs:nodejs /app
+
+# Switch to non-root user
+USER expressjs
+
+# Expose port
+EXPOSE 3000
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD node -e "require('http').get('http://localhost:3000/api/health', (r) => process.exit(r.statusCode === 200 ? 0 : 1))"
+
+# Start the server
+CMD ["node", "server.js"]

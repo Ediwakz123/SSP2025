@@ -14,11 +14,33 @@ export default defineConfig({
     port: 5173,
     open: true,
     strictPort: false,
-    
+    proxy: {
+      "/api": {
+        target: "http://localhost:3000",
+        changeOrigin: true,
+        secure: false,
+      },
+    },
   },
   build: {
     outDir: "dist",
     sourcemap: false,
-    chunkSizeWarningLimit: 1500,
+    chunkSizeWarningLimit: 1200,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          react: ["react", "react-dom", "react-router-dom"],
+          recharts: ["recharts"],
+          supabase: ["@supabase/supabase-js"],
+          leaflet: [
+            "leaflet",
+            "react-leaflet",
+            "leaflet.markercluster",
+            "leaflet.heat",
+            "leaflet-draw",
+          ],
+        },
+      },
+    },
   },
 });

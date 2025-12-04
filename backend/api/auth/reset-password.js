@@ -14,12 +14,18 @@ export default async function handler(req, res) {
       return res.status(400).json({ detail: "Token and new password are required." });
     }
 
+    // Validate password strength
+    if (new_password.length < 8) {
+      return res.status(400).json({ detail: "Password must be at least 8 characters long." });
+    }
+
     // HASH token to match stored token_hash
     const token_hash = crypto.createHash("sha256").update(token).digest("hex");
 
+    // Use SERVICE_ROLE_KEY for database modifications
     const supabase = createClient(
       process.env.SUPABASE_URL,
-      process.env.SUPABASE_ANON_KEY
+      process.env.SUPABASE_SERVICE_ROLE_KEY
     );
 
     // Look up token
@@ -46,11 +52,11 @@ export default async function handler(req, res) {
     // Hash new password
     const hashedPassword = await bcrypt.hash(new_password, 10);
 
-    // Update user password
+    // Update user password (user_id in token references users.uid)
     const { error: updateErr } = await supabase
       .from("users")
-      .update({ password: hashedPassword })
-      .eq("id", resetToken.user_id);
+      .update({ hashed_password: hashedPassword })
+      .eq("uid", resetToken.user_id);
 
     if (updateErr) {
       console.error(updateErr);

@@ -12,7 +12,7 @@ export async function apiGet(endpoint: string) {
   return res.json();
 }
 
-export async function apiPost(endpoint: string, body: any) {
+export async function apiPost(endpoint: string, body: unknown) {
   const res = await fetch(endpoint, {
     method: "POST",
     headers: { "Content-Type": "application/json" },

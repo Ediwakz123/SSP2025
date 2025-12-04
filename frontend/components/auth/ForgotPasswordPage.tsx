@@ -1,5 +1,5 @@
 
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
@@ -12,28 +12,54 @@ import {
   CardTitle,
 } from "../ui/card";
 
-import { MapPin, Mail, ArrowLeft, CheckCircle2 } from "lucide-react";
+import { MapPin, Mail, ArrowLeft, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "../../lib/supabase";
+import { validateEmail as validateEmailUtil } from "../../utils/validation";
+
+// Field error display component
+function FieldError({ error }: { error?: string }) {
+  if (!error) return null;
+  return (
+    <p className="text-xs text-red-500 mt-1 flex items-center gap-1 animate-fadeIn">
+      <AlertCircle className="w-3 h-3" />
+      {error}
+    </p>
+  );
+}
 
 export function ForgotPasswordPage() {
   const navigate = useNavigate();
 
   const [email, setEmail] = useState("");
-  const [isSubmitted, setIsSubmitted] = useState(false);
+  const [_isSubmitted, _setIsSubmitted] = useState(false);
   const [loading, setLoading] = useState(false);
+  
+  // Field-level validation
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [touched, setTouched] = useState<Record<string, boolean>>({});
 
-  function validateEmail(email: string) {
+  const _validateEmail = (email: string) => {
     const pattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     return pattern.test(email);
-  }
+  };
+
+  const handleBlur = useCallback(() => {
+    setTouched({ email: true });
+    const result = validateEmailUtil(email);
+    setFieldErrors({ email: result.error || "" });
+  }, [email]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
 
-    if (!validateEmail(email)) {
-      toast.error("Please enter a valid email address.");
+    // Validate before submission
+    const result = validateEmailUtil(email);
+    if (!result.isValid) {
+      setFieldErrors({ email: result.error || "" });
+      setTouched({ email: true });
+      toast.error(result.error || "Please enter a valid email address.");
       setLoading(false);
       return;
     }
@@ -67,7 +93,7 @@ export function ForgotPasswordPage() {
   };
 
   return (
-    <div className="min-h-screen w-full bg-gradient-to-br from-blue-50 via-white to-purple-50 flex items-center justify-center p-4">
+    <div className="min-h-screen w-full bg-linear-to-br from-blue-50 via-white to-purple-50 flex items-center justify-center p-4">
       <Card className="w-full max-w-md shadow-xl bg-white">
         <CardHeader className="space-y-6 text-center pb-8">
           <div className="mx-auto w-16 h-16 bg-gray-200 rounded-2xl flex items-center justify-center">
@@ -98,11 +124,16 @@ export function ForgotPasswordPage() {
                   type="email"
                   placeholder="admin@example.com"
                   value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="pl-10 bg-gray-100 text-black"
+                  onChange={(e) => {
+                    setEmail(e.target.value);
+                    if (fieldErrors.email) setFieldErrors({ email: "" });
+                  }}
+                  onBlur={handleBlur}
+                  className={`pl-10 bg-gray-100 text-black ${touched.email && fieldErrors.email ? "border-red-500" : ""}`}
                   required
                 />
               </div>
+              {touched.email && <FieldError error={fieldErrors.email} />}
 
               <p className="text-xs text-gray-500">
                 We'll send you a 6-digit code to verify your identity

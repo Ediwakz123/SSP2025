@@ -1,6 +1,6 @@
-const { supabase } = require('../../lib/supabaseClient');
+import { supabase } from '../../lib/supabaseClient.js';
 
-module.exports = async function handler(req, res) {
+export default async function handler(req, res) {
   const { id } = req.query;
 
   if (!id) return res.status(400).json({ error: "Business ID required" });
@@ -71,4 +71,4 @@ module.exports = async function handler(req, res) {
     console.error("Businesses API Error:", err);
     return res.status(500).json({ error: "Server Error" });
   }
-};
+}

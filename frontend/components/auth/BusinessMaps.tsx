@@ -1,4 +1,4 @@
-import { MapContainer, TileLayer, Marker, Popup, Polygon } from "react-leaflet";
+import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
 import L from "leaflet";
 
 // Sta. Cruz Barangay Center
