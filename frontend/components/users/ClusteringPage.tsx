@@ -780,6 +780,30 @@ export function ClusteringPage() {
 
       logActivity("Ran Clustering", { page: "clustering" });
 
+      // ✅ Increment analyses_count in user's profile
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          // Get current count first
+          const { data: profile } = await supabase
+            .from("profiles")
+            .select("analyses_count")
+            .eq("id", user.id)
+            .single();
+
+          const currentCount = profile?.analyses_count || 0;
+
+          // Increment the count
+          await supabase
+            .from("profiles")
+            .update({ analyses_count: currentCount + 1 })
+            .eq("id", user.id);
+        }
+      } catch (err) {
+        console.error("Error updating analyses count:", err);
+        // Don't fail clustering if this fails
+      }
+
       // ========================================
       // 🤖 FETCH AI BUSINESS RECOMMENDATIONS
       // ========================================
