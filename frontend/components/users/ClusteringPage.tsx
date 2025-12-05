@@ -34,6 +34,8 @@ import {
   Shield,
   TrendingDown,
   Zap,
+  XCircle,
+  AlertOctagon,
 } from "lucide-react";
 import { Progress } from "../ui/progress";
 import { Badge } from "../ui/badge";
@@ -189,6 +191,14 @@ export function ClusteringPage() {
   const [isLoadingBusinesses, setIsLoadingBusinesses] =
     useState<boolean>(false);
 
+  // ===== NEW: BUSINESS VALIDATION STATE =====
+  const [businessValidation, setBusinessValidation] = useState<{
+    valid: boolean;
+    errorType: "none" | "prohibited" | "nonsense" | "unrecognized" | "empty";
+    message: string;
+  } | null>(null);
+  const [isValidating, setIsValidating] = useState<boolean>(false);
+
   // VALIDATION (for new general categories)
   const validateCategory = (value: string) => {
     const v = value.trim();
@@ -279,17 +289,72 @@ export function ClusteringPage() {
 
 
 
-
   // Auto-switch between local dev and production
   const API_BASE = "";
 
+  // ===== BUSINESS VALIDATION EFFECT =====
+  useEffect(() => {
+    if (!businessIdea.trim()) {
+      setBusinessValidation(null);
+      setIsValidating(false);
+      return;
+    }
 
+    setIsValidating(true);
+
+    const controller = new AbortController();
+
+    const timeoutId = setTimeout(async () => {
+      try {
+        const response = await fetch(`${API_BASE}/api/ai/validate-business`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ businessIdea: businessIdea.trim() }),
+          signal: controller.signal,
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          setBusinessValidation({
+            valid: data.valid,
+            errorType: data.errorType || "none",
+            message: data.message || "",
+          });
+        } else {
+          // On error, be lenient
+          setBusinessValidation({ valid: true, errorType: "none", message: "" });
+        }
+      } catch (err) {
+        if ((err as Error).name !== "AbortError") {
+          // On error, be lenient
+          setBusinessValidation({ valid: true, errorType: "none", message: "" });
+        }
+      } finally {
+        setIsValidating(false);
+      }
+    }, 400); // Slightly faster than category detection
+
+    return () => {
+      clearTimeout(timeoutId);
+      controller.abort();
+    };
+  }, [businessIdea]);
+
+  // ===== CATEGORY DETECTION EFFECT (only if validated) =====
   useEffect(() => {
     if (!businessIdea.trim()) {
       setAiCategory(null);
       setAiCategoryExplanation(null);
       setAiCategoryLoading(false);
       setCategoryLockedByUser(false);
+      return;
+    }
+
+    // Don't detect category if business is invalid
+    if (businessValidation && !businessValidation.valid) {
+      setAiCategory(null);
+      setAiCategoryExplanation(null);
+      setAiCategoryLoading(false);
       return;
     }
 
@@ -346,7 +411,7 @@ export function ClusteringPage() {
       clearTimeout(timeoutId);
       controller.abort();
     };
-  }, [businessIdea, categoryLockedByUser]);
+  }, [businessIdea, categoryLockedByUser, businessValidation]);
 
 
   // ---------------------------------------------------------------------------
@@ -1068,19 +1133,43 @@ ${result?.competitorAnalysis.recommendedStrategy}
                     setBusinessIdea(e.target.value);
                     setCategoryLockedByUser(false);
                   }}
-                  className="h-12 pl-4 pr-12 bg-white border-gray-200 focus-visible:ring-emerald-500 focus-visible:border-emerald-500 rounded-xl shadow-sm text-base"
+                  className={`h-12 pl-4 pr-12 bg-white border-gray-200 focus-visible:ring-emerald-500 focus-visible:border-emerald-500 rounded-xl shadow-sm text-base ${businessValidation && !businessValidation.valid
+                    ? 'border-red-400 focus-visible:ring-red-400 focus-visible:border-red-400'
+                    : ''
+                    }`}
                 />
-                {businessIdea && (
-                  <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                {/* Validation Status Icon */}
+                <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                  {isValidating ? (
+                    <Loader2 className="w-5 h-5 text-gray-400 animate-spin" />
+                  ) : businessIdea && businessValidation?.valid ? (
                     <CheckCircle2 className="w-5 h-5 text-emerald-500" />
-                  </div>
-                )}
+                  ) : businessIdea && businessValidation && !businessValidation.valid ? (
+                    <XCircle className="w-5 h-5 text-red-500" />
+                  ) : null}
+                </div>
               </div>
 
-              <p className="text-xs text-gray-500 flex items-center gap-1.5">
-                <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-400" />
-                AI will automatically determine the most suitable business category
-              </p>
+              {/* Validation Error Messages */}
+              {businessValidation && !businessValidation.valid && (
+                <div className={`flex items-start gap-2 p-3 rounded-lg border ${businessValidation.errorType === 'prohibited'
+                  ? 'bg-red-50 border-red-200 text-red-700'
+                  : businessValidation.errorType === 'nonsense'
+                    ? 'bg-amber-50 border-amber-200 text-amber-700'
+                    : 'bg-orange-50 border-orange-200 text-orange-700'
+                  }`}>
+                  <AlertOctagon className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                  <p className="text-sm font-medium">{businessValidation.message}</p>
+                </div>
+              )}
+
+              {/* Success hint */}
+              {(!businessValidation || businessValidation.valid) && (
+                <p className="text-xs text-gray-500 flex items-center gap-1.5">
+                  <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                  AI will automatically determine the most suitable business category
+                </p>
+              )}
             </div>
 
             {/* CATEGORY SELECT */}
@@ -1168,24 +1257,38 @@ ${result?.competitorAnalysis.recommendedStrategy}
           </div>
 
           {/* RUN BUTTON */}
-          <Button
-            onClick={handleRunClustering}
-            disabled={
-              isProcessing ||
-              (!selectedCategory || selectedCategory.trim() === "")
-            }
-            className="w-full h-14 text-lg font-semibold bg-linear-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 shadow-lg shadow-emerald-200 rounded-xl transition-all duration-300 hover:shadow-xl hover:scale-[1.02] active:scale-[0.98]"
-          >
-            {isProcessing ? (
-              <>
-                <Loader2 className="w-5 h-5 mr-2 animate-spin" /> Processing Analysis...
-              </>
-            ) : (
-              <>
-                <Target className="w-5 h-5 mr-2" /> Run K-Means Clustering Analysis
-              </>
-            )}
-          </Button>
+          {(() => {
+            const isInvalid = !!(businessValidation && !businessValidation.valid);
+            const isDisabled = isProcessing || isValidating || !selectedCategory || selectedCategory.trim() === "" || isInvalid;
+            return (
+              <Button
+                onClick={handleRunClustering}
+                disabled={isDisabled}
+                className={`w-full h-14 text-lg font-semibold rounded-xl transition-all duration-300 ${isInvalid
+                  ? 'bg-gray-400 cursor-not-allowed opacity-60'
+                  : 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 shadow-lg shadow-emerald-200 hover:shadow-xl hover:scale-[1.02] active:scale-[0.98]'
+                  }`}
+              >
+                {isProcessing ? (
+                  <>
+                    <Loader2 className="w-5 h-5 mr-2 animate-spin" /> Processing Analysis...
+                  </>
+                ) : isValidating ? (
+                  <>
+                    <Loader2 className="w-5 h-5 mr-2 animate-spin" /> Validating Business Idea...
+                  </>
+                ) : isInvalid ? (
+                  <>
+                    <XCircle className="w-5 h-5 mr-2" /> Invalid Business Idea
+                  </>
+                ) : (
+                  <>
+                    <Target className="w-5 h-5 mr-2" /> Run K-Means Clustering Analysis
+                  </>
+                )}
+              </Button>
+            );
+          })()}
 
           {/* PROGRESS BAR */}
           {isProcessing && (
@@ -1787,12 +1890,12 @@ ${result?.competitorAnalysis.recommendedStrategy}
 
                   {/* Final Verdict Banner */}
                   <div className={`relative overflow-hidden rounded-2xl p-6 ${aiBusinessRecommendations.final_verdict.suitability.includes("Highly")
-                      ? "bg-gradient-to-r from-emerald-500 to-green-600"
-                      : aiBusinessRecommendations.final_verdict.suitability.includes("Suitable")
-                        ? "bg-gradient-to-r from-blue-500 to-indigo-600"
-                        : aiBusinessRecommendations.final_verdict.suitability.includes("Moderate")
-                          ? "bg-gradient-to-r from-amber-500 to-orange-600"
-                          : "bg-gradient-to-r from-red-500 to-rose-600"
+                    ? "bg-gradient-to-r from-emerald-500 to-green-600"
+                    : aiBusinessRecommendations.final_verdict.suitability.includes("Suitable")
+                      ? "bg-gradient-to-r from-blue-500 to-indigo-600"
+                      : aiBusinessRecommendations.final_verdict.suitability.includes("Moderate")
+                        ? "bg-gradient-to-r from-amber-500 to-orange-600"
+                        : "bg-gradient-to-r from-red-500 to-rose-600"
                     } text-white shadow-lg`}>
                     <div className="flex items-start gap-4">
                       <div className="p-3 bg-white/20 rounded-xl backdrop-blur-sm">
@@ -1897,10 +2000,10 @@ ${result?.competitorAnalysis.recommendedStrategy}
                         <div className="bg-white/80 p-3 rounded-lg flex items-center justify-between">
                           <span className="text-sm text-gray-600">Competition Level</span>
                           <Badge className={`border-0 ${aiBusinessRecommendations.competitor_analysis.competition_level === "Low"
-                              ? "bg-green-500 text-white"
-                              : aiBusinessRecommendations.competitor_analysis.competition_level === "Medium"
-                                ? "bg-amber-500 text-white"
-                                : "bg-red-500 text-white"
+                            ? "bg-green-500 text-white"
+                            : aiBusinessRecommendations.competitor_analysis.competition_level === "Medium"
+                              ? "bg-amber-500 text-white"
+                              : "bg-red-500 text-white"
                             }`}>
                             {aiBusinessRecommendations.competitor_analysis.competition_level}
                           </Badge>
@@ -1993,10 +2096,10 @@ ${result?.competitorAnalysis.recommendedStrategy}
                               </div>
                             </div>
                             <Badge className={`border-0 ${rec.competition_risk === "Low"
-                                ? "bg-green-500 text-white"
-                                : rec.competition_risk === "Medium"
-                                  ? "bg-amber-500 text-white"
-                                  : "bg-red-500 text-white"
+                              ? "bg-green-500 text-white"
+                              : rec.competition_risk === "Medium"
+                                ? "bg-amber-500 text-white"
+                                : "bg-red-500 text-white"
                               }`}>
                               {rec.competition_risk === "Low" && <TrendingUp className="w-3 h-3 mr-1" />}
                               {rec.competition_risk === "High" && <TrendingDown className="w-3 h-3 mr-1" />}
