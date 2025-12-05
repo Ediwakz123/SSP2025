@@ -2,8 +2,7 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 
 /**
  * AI Business Recommendation Endpoint
- * Analyzes location data, clustering results, and nearby businesses
- * to generate smart, data-driven business recommendations
+ * Analyzes location data with structured output format
  */
 export default async function handler(req, res) {
   if (req.method !== "POST") {
@@ -25,132 +24,129 @@ export default async function handler(req, res) {
       opportunity
     } = req.body;
 
-    // Validate required fields
     if (!coordinates || !zoneType) {
       return res.status(400).json({ error: "Missing required location data" });
     }
 
-    // Check if API key is configured
     if (!process.env.GEMINI_API_KEY) {
       console.error("GEMINI_API_KEY is not configured");
       return res.status(500).json({ error: "AI service not configured" });
     }
 
-    console.log("🤖 AI Recommendations: Starting with key:", process.env.GEMINI_API_KEY.slice(0, 10) + "...");
+    console.log("🤖 AI Recommendations: Starting analysis...");
 
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-    // Use gemini-1.5-flash (stable) instead of gemini-2.0-flash
     const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
-    // Build the comprehensive prompt based on the specification
-    const prompt = `
-You are an AI expert specializing in Business Location Analysis and Market Suitability.
-Your job is to analyze the provided location, clustering data, and nearby business ecosystem,
-then generate smart business recommendations with data-backed reasoning.
+    // Process businesses - convert Miscellaneous to Restaurant, remove Pet Store
+    const processedBusinesses = (nearbyBusinesses || []).map(b => {
+      let category = b.business?.general_category || b.category || "Unknown";
+      if (category.toLowerCase() === "miscellaneous") category = "Restaurant";
+      if (category.toLowerCase() === "pet store") return null;
+      return { ...b, processedCategory: category };
+    }).filter(Boolean);
 
-Use ONLY the data provided. Do NOT assume population density, foot traffic, or city-wide demographics.
+    // Build the structured prompt
+    const prompt = `
+You are an AI system that evaluates the commercial potential of a location using business density, competitor pressure, demand pockets, and cluster centroids.
+
+=== CATEGORY RULES (APPLY FIRST) ===
+- Convert any "Miscellaneous" category → "Restaurant"
+- Remove "Pet Store" entirely
+- Allowed categories ONLY: Retail, Services, Restaurant, Food & Beverages, Merchandise / Trading, Entertainment / Leisure
 
 === INPUT DATA ===
 
 📍 Location:
 - Coordinates: ${coordinates.latitude}, ${coordinates.longitude}
 - Zone Type: ${zoneType}
-- General Category Being Analyzed: ${generalCategory || "Not specified"}
-- User Business Idea: ${businessIdea || "Not specified"}
-
-📊 Business Density Metrics:
-- Within 50m: ${businessDensity?.density_50m ?? 0} businesses
-- Within 100m: ${businessDensity?.density_100m ?? 0} businesses  
-- Within 200m: ${businessDensity?.density_200m ?? 0} businesses
-
-🎯 Competitor Density:
-- Within 50m: ${competitorDensity?.competitor_50m ?? 0} competitors
-- Within 100m: ${competitorDensity?.competitor_100m ?? 0} competitors
-- Within 200m: ${competitorDensity?.competitor_200m ?? 0} competitors
-
-📈 Cluster Analytics:
-- Cluster Profile: ${clusterAnalytics?.clusterProfile || "Mixed commercial area"}
-- Dominant Category: ${clusterAnalytics?.dominantCategory || generalCategory || "Varied"}
-- Confidence Score: ${(confidence * 100).toFixed(0)}%
+- Category Analyzed: ${generalCategory || "Not specified"}
+- Business Idea: ${businessIdea || "Not specified"}
+- Confidence: ${(confidence * 100).toFixed(0)}%
 - Opportunity Level: ${opportunity || "Moderate"}
 
-🏪 Nearby Businesses (${nearbyBusinesses?.length || 0} total):
-${nearbyBusinesses?.slice(0, 15).map((b, i) =>
-      `${i + 1}. ${b.business?.business_name || b.name} - ${b.business?.general_category || b.category} (${(b.distance * 1000).toFixed(0)}m away)`
-    ).join('\n') || "No nearby businesses data"}
+📊 Business Density:
+- 50m: ${businessDensity?.density_50m ?? 0} businesses
+- 100m: ${businessDensity?.density_100m ?? 0} businesses
+- 200m: ${businessDensity?.density_200m ?? 0} businesses
 
-🏢 Nearby Competitors (${nearbyCompetitors?.length || 0} in same category):
-${nearbyCompetitors?.slice(0, 10).map((c, i) =>
-      `${i + 1}. ${c.business?.business_name || c.name} (${(c.distance * 1000).toFixed(0)}m away)`
-    ).join('\n') || "No direct competitors nearby"}
+🎯 Competitor Density:
+- 50m: ${competitorDensity?.competitor_50m ?? 0} competitors
+- 100m: ${competitorDensity?.competitor_100m ?? 0} competitors
+- 200m: ${competitorDensity?.competitor_200m ?? 0} competitors
 
-=== YOUR TASK ===
+🏪 Nearby Businesses (${processedBusinesses.length} total):
+${processedBusinesses.slice(0, 30).map((b, i) =>
+      `${i + 1}. ${b.business?.business_name || b.name || "Unknown"} — ${b.processedCategory} — ${b.business?.street || "Unknown St."} — ${b.business?.zone_type || zoneType}`
+    ).join('\n') || "No nearby businesses"}
 
-Analyze this data and provide recommendations in the following JSON format.
-Return ONLY valid JSON, no markdown or additional text.
+=== REQUIRED OUTPUT FORMAT ===
+
+Return ONLY valid JSON matching this structure:
 
 {
-  "category_validation": {
-    "user_input": "${businessIdea || 'Not specified'}",
-    "mapped_category": "One of: Retail, Food & Beverages, Restaurant, Merchandise / Trading, Entertainment / Leisure, Services, Pet Store",
-    "reason": "Brief explanation of why this category fits"
+  "location_summary": "2-3 sentence description of the business environment",
+  
+  "business_presence": {
+    "radius_50m": { "count": <number>, "categories": "list or none" },
+    "radius_100m": { "count": <number>, "categories": "list or none" },
+    "radius_200m": { "count": <number>, "categories": "list or none" }
   },
-
-  "nearby_business_summary": {
-    "total_businesses": ${nearbyBusinesses?.length || 0},
-    "total_competitors": ${nearbyCompetitors?.length || 0},
-    "top_categories": ["Top 3 categories found nearby based on the data"],
-    "area_behavior": "Describe what the area is known for based ONLY on the provided data"
+  
+  "competitor_pressure": {
+    "radius_50m": { "count": <number>, "names": "competitor names or none" },
+    "radius_100m": { "count": <number>, "names": "competitor names or none" },
+    "radius_200m": { "count": <number>, "names": "competitor names or none" }
   },
-
-  "competitor_analysis": {
-    "competition_level": "Low, Medium, or High based on competitor density data",
-    "dominant_competitors": ["List of dominant competitor types"],
-    "saturation_notes": "Analysis of market saturation",
-    "opportunity_gaps": ["Categories with opportunity gaps based on the data"]
-  },
-
-  "location_analysis": {
-    "zone_type": "${zoneType}",
-    "strengths": ["2-4 strengths based on the data"],
-    "weaknesses": ["1-3 weaknesses based on the data"],
-    "opportunity_level": "${opportunity || 'Moderate'}",
-    "suitability_score": "1-10 score with brief justification"
-  },
-
-  "recommendations": [
+  
+  "ai_interpretation": [
+    "Insight about commercial activity",
+    "Insight about competitor density",
+    "Insight about business suitability",
+    "Insight about zone type advantage"
+  ],
+  
+  "map_description": "This interactive map visualizes all businesses in the area using centroid clusters. Click on any cluster or marker to reveal the businesses contained inside, along with their category and zone type. Use this map to explore commercial density, identify hotspots, and understand nearby opportunities.",
+  
+  "highlighted_businesses": [
     {
-      "business_name": "Specific business concept name",
-      "general_category": "Mapped category",
-      "fit_reason": "Why this business fits this location",
-      "ecosystem_synergy": "How it benefits from nearby businesses",
-      "competition_risk": "Low, Medium, or High",
-      "data_points_supporting": ["Specific data points from the input that support this recommendation"]
+      "batch": "1-10",
+      "businesses": [
+        {
+          "number": 1,
+          "name": "Business Name",
+          "category": "Category",
+          "street": "Street Name",
+          "zone": "Zone Type",
+          "insight": "Short explanation of relevance"
+        }
+      ]
+    },
+    {
+      "batch": "11-20",
+      "businesses": []
     }
   ],
-
+  
   "final_verdict": {
-    "suitability": "Highly Suitable, Suitable, Moderately Suitable, or Not Recommended",
-    "best_recommendation": "The single best business recommendation",
+    "suitability": "Highly Suitable / Suitable / Moderately Suitable / Not Recommended",
+    "best_recommendation": "Single best business type for this location",
     "actionable_advice": "1-2 sentences of practical advice"
   }
 }
 
-IMPORTANT RULES:
-- NO generic statements
-- NO assumptions about city traffic, population, or "busy areas"
-- ONLY use data given
-- Provide 3-5 diverse recommendations
-- Be specific and analytical
+RULES:
+- Generate highlighted businesses in batches of 10 (1-10, 11-20, 21-30, etc.)
+- Each business needs a short insight explaining relevance
+- Use ONLY the provided data
+- NO generic assumptions about traffic or demographics
 - Return ONLY valid JSON
 `;
 
     const aiResult = await model.generateContent(prompt);
     const text = aiResult.response.text();
 
-    // Parse the JSON response
     try {
-      // Clean the response (remove markdown code blocks if present)
       let cleanedText = text.trim();
       if (cleanedText.startsWith("```json")) {
         cleanedText = cleanedText.replace(/^```json\n?/, "").replace(/\n?```$/, "");
@@ -170,16 +166,32 @@ IMPORTANT RULES:
       console.error("Failed to parse AI response:", parseErr);
       console.error("Raw response:", text);
 
-      // Return a fallback structured response
       return res.status(200).json({
         success: false,
         error: "Failed to parse AI response",
         raw_response: text,
         fallback: {
+          location_summary: `${zoneType} zone with ${processedBusinesses.length} nearby businesses.`,
+          business_presence: {
+            radius_50m: { count: businessDensity?.density_50m ?? 0, categories: "See map" },
+            radius_100m: { count: businessDensity?.density_100m ?? 0, categories: "See map" },
+            radius_200m: { count: businessDensity?.density_200m ?? 0, categories: "See map" }
+          },
+          competitor_pressure: {
+            radius_50m: { count: competitorDensity?.competitor_50m ?? 0, names: "See map" },
+            radius_100m: { count: competitorDensity?.competitor_100m ?? 0, names: "See map" },
+            radius_200m: { count: competitorDensity?.competitor_200m ?? 0, names: "See map" }
+          },
+          ai_interpretation: [
+            "Analysis based on clustering data",
+            `${opportunity || "Moderate"} opportunity level detected`,
+            `${zoneType} zone characteristics apply`
+          ],
+          map_description: "This interactive map visualizes all businesses in the area using centroid clusters. Click on any cluster or marker to reveal the businesses contained inside, along with their category and zone type. Use this map to explore commercial density, identify hotspots, and understand nearby opportunities.",
           final_verdict: {
             suitability: "Analysis Incomplete",
             best_recommendation: generalCategory || "General Business",
-            actionable_advice: "Please try again or consult with a business advisor for detailed analysis."
+            actionable_advice: "Please try again or consult with a business advisor."
           }
         }
       });
