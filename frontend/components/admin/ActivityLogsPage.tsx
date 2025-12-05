@@ -27,6 +27,12 @@ import {
   Search,
   RefreshCcw,
   Eye,
+  Calendar,
+  Download,
+  Filter,
+  Inbox,
+  User,
+  Shield,
 } from "lucide-react";
 
 import { supabase } from "../../lib/supabase";
@@ -59,6 +65,12 @@ const parseContext = (value: unknown): Record<string, unknown> | null => {
   return { value };
 };
 
+// Get today's date in YYYY-MM-DD format
+const getTodayDate = () => {
+  const today = new Date();
+  return today.toISOString().split('T')[0];
+};
+
 export function ActivityLogsPage() {
   const [logs, setLogs] = useState<ActivityLog[]>([]);
   const [loading, setLoading] = useState(true);
@@ -66,6 +78,7 @@ export function ActivityLogsPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedLog, setSelectedLog] = useState<ActivityLog | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
+  const [dateFilter, setDateFilter] = useState<"today" | "all" | "week">("today"); // Default to today
 
   // ---------------- FETCH LOGS ----------------
   const fetchLogs = async () => {
@@ -124,10 +137,25 @@ export function ActivityLogsPage() {
 
   // ---------------- FILTERING & SEARCH ----------------
   const filteredLogs = useMemo(() => {
+    const today = getTodayDate();
+    const weekAgo = new Date();
+    weekAgo.setDate(weekAgo.getDate() - 7);
+    const weekAgoStr = weekAgo.toISOString().split('T')[0];
+
     return logs
+      // Date filter
+      .filter((log) => {
+        if (dateFilter === "all") return true;
+        const logDate = log.created_at.split('T')[0];
+        if (dateFilter === "today") return logDate === today;
+        if (dateFilter === "week") return logDate >= weekAgoStr;
+        return true;
+      })
+      // Action filter
       .filter((log) =>
         actionFilter === "all" ? true : log.action === actionFilter
       )
+      // Search filter
       .filter((log) => {
         const q = searchQuery.toLowerCase();
         return (
@@ -140,7 +168,7 @@ export function ActivityLogsPage() {
             .includes(q)
         );
       });
-  }, [logs, actionFilter, searchQuery]);
+  }, [logs, actionFilter, searchQuery, dateFilter]);
 
   // ---------------- STATS ----------------
   const totalActivities = logs.length;
@@ -305,8 +333,8 @@ export function ActivityLogsPage() {
         </CardHeader>
 
         {/* Search & Filter Row */}
-        <div className="flex items-center gap-4 p-5 bg-gray-50/50 border-b">
-          <div className="relative flex-1">
+        <div className="flex flex-wrap items-center gap-4 p-5 bg-gray-50/50 border-b">
+          <div className="relative flex-1 min-w-[200px]">
             <Search className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
             <Input
               className="pl-10 bg-white border-gray-200 focus:border-purple-400 focus:ring-purple-400/20 rounded-xl transition-all duration-300"
@@ -316,8 +344,23 @@ export function ActivityLogsPage() {
             />
           </div>
 
+          {/* Date Filter */}
+          <Select value={dateFilter} onValueChange={(v) => setDateFilter(v as "today" | "all" | "week")}>
+            <SelectTrigger className="w-[140px] bg-white border-gray-200 rounded-xl hover:border-purple-400 transition-colors duration-300">
+              <Calendar className="w-4 h-4 mr-2 text-gray-400" />
+              <SelectValue placeholder="Today" />
+            </SelectTrigger>
+            <SelectContent className="rounded-xl">
+              <SelectItem value="today">Today</SelectItem>
+              <SelectItem value="week">This Week</SelectItem>
+              <SelectItem value="all">All Time</SelectItem>
+            </SelectContent>
+          </Select>
+
+          {/* Action Filter */}
           <Select value={actionFilter} onValueChange={setActionFilter}>
-            <SelectTrigger className="w-[200px] bg-white border-gray-200 rounded-xl hover:border-purple-400 transition-colors duration-300">
+            <SelectTrigger className="w-[180px] bg-white border-gray-200 rounded-xl hover:border-purple-400 transition-colors duration-300">
+              <Filter className="w-4 h-4 mr-2 text-gray-400" />
               <SelectValue placeholder="All Actions" />
             </SelectTrigger>
             <SelectContent className="rounded-xl">
@@ -329,11 +372,53 @@ export function ActivityLogsPage() {
               ))}
             </SelectContent>
           </Select>
+
+          {/* Refresh Button */}
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={fetchLogs}
+            className="rounded-xl hover:bg-purple-50 hover:border-purple-300 hover:text-purple-600 transition-all"
+          >
+            <RefreshCcw className="w-4 h-4" />
+          </Button>
         </div>
 
         {/* LOG LIST */}
         <ScrollArea className="h-[600px]">
           <div className="p-5 space-y-4">
+            {/* Empty State */}
+            {filteredLogs.length === 0 && (
+              <div className="flex flex-col items-center justify-center py-16 text-center">
+                <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-purple-100 to-violet-100 flex items-center justify-center mb-6">
+                  <Inbox className="w-10 h-10 text-purple-400" />
+                </div>
+                <h3 className="text-xl font-semibold text-gray-800 mb-2">
+                  {dateFilter === "today" ? "No Logs Yet Today" :
+                    dateFilter === "week" ? "No Logs This Week" :
+                      searchQuery ? "No Matching Logs" : "No Logs Found"}
+                </h3>
+                <p className="text-gray-500 max-w-sm mb-6">
+                  {dateFilter === "today"
+                    ? "Activity logs will appear here as users interact with the system."
+                    : dateFilter === "week"
+                      ? "No activity has been recorded in the past 7 days."
+                      : searchQuery
+                        ? "Try adjusting your search query or filters."
+                        : "No activity has been logged yet."}
+                </p>
+                {dateFilter !== "all" && (
+                  <Button
+                    variant="outline"
+                    onClick={() => setDateFilter("all")}
+                    className="rounded-xl hover:bg-purple-50 hover:border-purple-300 hover:text-purple-600"
+                  >
+                    View All Time Logs
+                  </Button>
+                )}
+              </div>
+            )}
+
             {filteredLogs.map((log, index) => (
               <div
                 key={log.id}
