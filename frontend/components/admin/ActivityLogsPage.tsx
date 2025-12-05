@@ -26,9 +26,11 @@ import {
   Clock,
   Search,
   RefreshCcw,
+  Eye,
 } from "lucide-react";
 
 import { supabase } from "../../lib/supabase";
+import { ActivityLogDetailsModal } from "./ActivityLogDetailsModal";
 
 // ---------------- TYPES ----------------
 interface ActivityLog {
@@ -39,6 +41,7 @@ interface ActivityLog {
   user_email?: string | null;
   details?: string | null;
   context?: Record<string, unknown> | null;
+  metadata?: Record<string, unknown> | null;
   created_at: string;
 }
 
@@ -61,6 +64,8 @@ export function ActivityLogsPage() {
   const [loading, setLoading] = useState(true);
   const [actionFilter, setActionFilter] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
+  const [selectedLog, setSelectedLog] = useState<ActivityLog | null>(null);
+  const [modalOpen, setModalOpen] = useState(false);
 
   // ---------------- FETCH LOGS ----------------
   const fetchLogs = async () => {
@@ -78,11 +83,17 @@ export function ActivityLogsPage() {
       const normalized: ActivityLog[] = (data || []).map((row) => ({
         ...row,
         context: parseContext(row.context),
+        metadata: parseContext(row.metadata),
       }));
       setLogs(normalized);
     }
 
     setLoading(false);
+  };
+
+  const handleViewDetails = (log: ActivityLog) => {
+    setSelectedLog(log);
+    setModalOpen(true);
   };
 
   useEffect(() => {
@@ -188,7 +199,7 @@ export function ActivityLogsPage() {
       <div className="relative overflow-hidden rounded-2xl bg-linear-to-br from-purple-600 via-violet-600 to-indigo-700 p-8 text-white shadow-xl">
         <div className="absolute top-0 right-0 h-64 w-64 rounded-full bg-white/10 blur-3xl -translate-y-1/2 translate-x-1/2"></div>
         <div className="absolute bottom-0 left-0 h-48 w-48 rounded-full bg-purple-400/20 blur-2xl translate-y-1/2 -translate-x-1/2"></div>
-        
+
         <div className="relative z-10 flex items-center justify-between">
           <div className="flex items-center gap-4">
             <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-white/20 backdrop-blur-sm">
@@ -330,7 +341,7 @@ export function ActivityLogsPage() {
                 style={{ animationDelay: `${index * 50}ms` }}
               >
                 <div className="absolute top-0 left-0 h-full w-1 rounded-l-xl bg-linear-to-b from-purple-500 via-violet-500 to-indigo-500 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-                
+
                 <div className="flex items-center gap-4">
                   <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-linear-to-br from-gray-100 to-gray-50 border shadow-sm group-hover:scale-105 transition-transform duration-300">
                     {getIcon(log.action)}
@@ -366,6 +377,17 @@ export function ActivityLogsPage() {
                       </p>
                     )}
                   </div>
+
+                  {/* View Details Button */}
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="opacity-0 group-hover:opacity-100 transition-opacity bg-white hover:bg-purple-50 hover:text-purple-600 hover:border-purple-200"
+                    onClick={() => handleViewDetails(log)}
+                  >
+                    <Eye className="w-4 h-4 mr-1" />
+                    View Details
+                  </Button>
                 </div>
 
                 {/* Simple details text */}
@@ -405,6 +427,16 @@ export function ActivityLogsPage() {
           </div>
         </ScrollArea>
       </Card>
+
+      {/* Activity Log Details Modal */}
+      <ActivityLogDetailsModal
+        log={selectedLog}
+        open={modalOpen}
+        onClose={() => {
+          setModalOpen(false);
+          setSelectedLog(null);
+        }}
+      />
     </div>
   );
 }

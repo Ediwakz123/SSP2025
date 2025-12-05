@@ -13,7 +13,7 @@ import {
   validatePassword,
   validatePasswordMatch,
   validateText,
-  validateAge,
+  validateAddress,
 } from "../../utils/validation";
 
 // Field error display component
@@ -46,23 +46,25 @@ export function Register() {
     confirmPassword: "",
     contactNumber: "",
     address: "",
-    age: "",
     gender: "",
     date_of_birth: "",
   });
 
+  // Track if address is flagged (outside target location)
+  const [addressFlagged, setAddressFlagged] = useState(false);
+
   const [isLoading, setIsLoading] = useState(false);
-  
+
   // Track touched fields for inline validation
   const [touched, setTouched] = useState<Record<string, boolean>>({});
-  
+
   // Field-level errors
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     setFormData({ ...formData, [name]: value });
-    
+
     // Clear error when user starts typing
     if (fieldErrors[name]) {
       setFieldErrors(prev => ({ ...prev, [name]: "" }));
@@ -71,7 +73,7 @@ export function Register() {
 
   const handleBlur = useCallback((field: string) => {
     setTouched(prev => ({ ...prev, [field]: true }));
-    
+
     // Validate on blur
     let error = "";
     switch (field) {
@@ -100,13 +102,14 @@ export function Register() {
         error = cpResult.error || "";
         break;
       }
-      case "age": {
-        const ageResult = validateAge(formData.age, 18);
-        error = ageResult.error || "";
+      case "address": {
+        const addrResult = validateAddress(formData.address);
+        error = addrResult.error || "";
+        setAddressFlagged(addrResult.isFlagged || false);
         break;
       }
     }
-    
+
     setFieldErrors(prev => ({ ...prev, [field]: error }));
   }, [formData]);
 
@@ -123,7 +126,7 @@ export function Register() {
   };
 
   const validateForm = () => {
-    const { firstName, lastName, email, password, confirmPassword, age, gender } = formData;
+    const { firstName, lastName, email, password, confirmPassword, address, gender } = formData;
     const errors: Record<string, string> = {};
 
     // Validate all fields
@@ -142,14 +145,15 @@ export function Register() {
     const cpResult = validatePasswordMatch(password, confirmPassword);
     if (!cpResult.isValid) errors.confirmPassword = cpResult.error || "";
 
-    const ageResult = validateAge(age, 18);
-    if (!ageResult.isValid) errors.age = ageResult.error || "";
+    const addrResult = validateAddress(address);
+    if (!addrResult.isValid) errors.address = addrResult.error || "";
+    setAddressFlagged(addrResult.isFlagged || false);
 
     if (!gender) errors.gender = "Please select your gender";
 
     // Update field errors
     setFieldErrors(errors);
-    
+
     // Mark all fields as touched
     setTouched({
       firstName: true,
@@ -157,7 +161,7 @@ export function Register() {
       email: true,
       password: true,
       confirmPassword: true,
-      age: true,
+      address: true,
       gender: true,
     });
 
@@ -167,7 +171,7 @@ export function Register() {
       toast.error(firstError);
       return false;
     }
-    
+
     return true;
   };
 
@@ -188,10 +192,10 @@ export function Register() {
             full_name: `${formData.firstName.trim()} ${formData.lastName.trim()}`,
             contact_number: formData.contactNumber.trim(),
             address: formData.address.trim(),
-            age: parseInt(formData.age),
             gender: formData.gender,
             date_of_birth: formData.date_of_birth,
             role: "user",
+            address_flagged: addressFlagged,
           },
         },
       });
@@ -208,7 +212,11 @@ export function Register() {
         return;
       }
 
-      toast.success("Registration successful! You may now log in.");
+      if (addressFlagged) {
+        toast.warning("Registration submitted. Your account is temporarily blocked. We are running additional checks.");
+      } else {
+        toast.success("Registration successful! Your account is pending approval.");
+      }
       navigate("/user/login");
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Registration failed.";
@@ -373,15 +381,27 @@ export function Register() {
               </div>
 
               <div className="space-y-2">
-                <label className="text-sm font-medium text-gray-700">Address</label>
-                <Input
-                  name="address"
-                  icon={<MapPinned className="w-5 h-5" />}
-                  placeholder="Your complete address"
-                  value={formData.address}
-                  onChange={handleChange}
-                  disabled={isLoading}
-                />
+                <label className="text-sm font-medium text-gray-700">Address *</label>
+                <div className="relative">
+                  <Input
+                    name="address"
+                    icon={<MapPinned className="w-5 h-5" />}
+                    placeholder="e.g. Sta. Cruz, Santa Maria, Bulacan"
+                    value={formData.address}
+                    onChange={handleChange}
+                    onBlur={() => handleBlur("address")}
+                    error={!!fieldErrors.address}
+                    disabled={isLoading}
+                  />
+                  <FieldSuccess show={isFieldValid("address") && !addressFlagged} />
+                </div>
+                <FieldError error={fieldErrors.address} />
+                {addressFlagged && touched.address && !fieldErrors.address && (
+                  <p className="text-xs text-amber-600 mt-1 flex items-center gap-1">
+                    <AlertCircle className="w-3 h-3" />
+                    This address is outside Sta. Cruz, Santa Maria, Bulacan. Additional verification required.
+                  </p>
+                )}
               </div>
 
               {/* DOB */}
@@ -397,45 +417,23 @@ export function Register() {
                 />
               </div>
 
-              {/* Age & Gender Row */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-gray-700">Age *</label>
-                  <div className="relative">
-                    <Input
-                      type="text"
-                      inputMode="numeric"
-                      pattern="[0-9]*"
-                      name="age"
-                      placeholder="18"
-                      value={formData.age}
-                      onChange={handleChange}
-                      onBlur={() => handleBlur("age")}
-                      error={!!fieldErrors.age}
-                      disabled={isLoading}
-                    />
-                    <FieldSuccess show={isFieldValid("age")} />
-                  </div>
-                  <FieldError error={fieldErrors.age} />
-                </div>
-
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-gray-700">Gender *</label>
-                  <Select onValueChange={handleGenderChange} disabled={isLoading}>
-                    <SelectTrigger className={`w-full h-11 rounded-xl border-input bg-white/80 hover:border-gray-300 focus:border-primary focus:ring-2 focus:ring-primary/20 ${fieldErrors.gender ? 'border-red-500' : ''}`}>
-                      <div className="flex items-center gap-3">
-                        <Users className="w-5 h-5 text-muted-foreground" />
-                        <SelectValue placeholder="Select Gender" />
-                      </div>
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Male">Male</SelectItem>
-                      <SelectItem value="Female">Female</SelectItem>
-                      <SelectItem value="Other">Other</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <FieldError error={fieldErrors.gender} />
-                </div>
+              {/* Gender Field */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-gray-700">Gender *</label>
+                <Select onValueChange={handleGenderChange} disabled={isLoading}>
+                  <SelectTrigger className={`w-full h-11 rounded-xl border-input bg-white/80 hover:border-gray-300 focus:border-primary focus:ring-2 focus:ring-primary/20 ${fieldErrors.gender ? 'border-red-500' : ''}`}>
+                    <div className="flex items-center gap-3">
+                      <Users className="w-5 h-5 text-muted-foreground" />
+                      <SelectValue placeholder="Select Gender" />
+                    </div>
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Male">Male</SelectItem>
+                    <SelectItem value="Female">Female</SelectItem>
+                    <SelectItem value="Other">Other</SelectItem>
+                  </SelectContent>
+                </Select>
+                <FieldError error={fieldErrors.gender} />
               </div>
 
               {/* Submit Button */}

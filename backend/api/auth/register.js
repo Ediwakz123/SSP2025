@@ -16,8 +16,7 @@ export default async function handler(req, res) {
       date_of_birth,
       first_name,
       last_name,
-      address,
-      age
+      address
     } = req.body;
 
     // Check required fields
@@ -52,7 +51,7 @@ export default async function handler(req, res) {
     // Hash password
     const hashed_password = await hashPassword(password);
 
-    // Insert user
+    // Insert user (without age)
     const { data, error } = await supabase
       .from('users')
       .insert({
@@ -65,7 +64,6 @@ export default async function handler(req, res) {
         first_name,
         last_name,
         address,
-        age,
         is_active: true,
         is_superuser: false
       })

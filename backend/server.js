@@ -10,6 +10,7 @@ import { fileURLToPath } from "url";
 import { dirname, join } from "path";
 import logger from "./lib/logger.js";
 import { apiLimiter, authLimiter, aiLimiter, strictLimiter } from "./lib/rateLimit.js";
+import { startLogPruner } from "./lib/logPruner.js";
 
 // Get the directory of this file
 const __filename = fileURLToPath(import.meta.url);
@@ -150,6 +151,9 @@ app.use((err, req, res, _next) => {
     message: process.env.NODE_ENV === 'development' ? err.message : 'Something went wrong'
   });
 });
+
+// Schedule daily cleanup of old activity logs (keeps last 24 hours)
+startLogPruner();
 
 app.listen(PORT, () => {
   logger.info(`Backend server started`, { port: PORT, env: process.env.NODE_ENV || 'development' });

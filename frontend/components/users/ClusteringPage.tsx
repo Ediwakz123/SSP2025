@@ -300,7 +300,7 @@ export function ClusteringPage() {
     const timeoutId = setTimeout(async () => {
       try {
         console.log("🤖 Fetching AI category for:", businessIdea);
-        
+
         const response = await fetch(
           `${API_BASE}/api/ai/categories`,   // ✅ Auto-switching endpoint
           {
@@ -720,7 +720,7 @@ export function ClusteringPage() {
       // ========================================
       setAiRecommendationsLoading(true);
       setAiBusinessRecommendations(null);
-      
+
       try {
         // Get competitors from nearby businesses
         const nearbyCompetitors = enhancedResult.nearbyBusinesses.filter(
@@ -1277,16 +1277,16 @@ ${result?.competitorAnalysis.recommendedStrategy}
 
                   <Button
                     variant="outline"
-                    className="w-full h-12 rounded-xl hover:bg-blue-50 hover:border-blue-300 hover:text-blue-700 transition-all"
+                    className="w-full h-12 rounded-xl bg-gradient-to-r from-blue-50 to-indigo-50 hover:from-blue-100 hover:to-indigo-100 border-blue-200 hover:border-blue-300 text-blue-700 transition-all"
                     onClick={() =>
                       window.open(
-                        `https://www.google.com/maps?q=${result.recommendedLocation.latitude},${result.recommendedLocation.longitude}`,
+                        `https://www.google.com/maps/@${result.recommendedLocation.latitude},${result.recommendedLocation.longitude},20z/data=!3m1!1e3`,
                         "_blank"
                       )
                     }
                   >
                     <MapPin className="w-4 h-4 mr-2" />
-                    Open in Google Maps
+                    Open in Google Maps (Satellite View)
                   </Button>
 
                   <Button
@@ -1408,7 +1408,7 @@ ${result?.competitorAnalysis.recommendedStrategy}
             <CardHeader className="bg-linear-to-r from-amber-50 to-orange-50 border-b">
               <div className="flex items-center gap-3">
                 <div className="p-2.5 bg-linear-to-br from-amber-500 to-orange-600 rounded-xl text-white shadow-lg shadow-amber-200">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg>
+                  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" /><path d="M12 17h.01" /></svg>
                 </div>
                 <div>
                   <CardTitle className="text-xl">Why This Location?</CardTitle>
@@ -1426,7 +1426,7 @@ ${result?.competitorAnalysis.recommendedStrategy}
                   return (
                     <div className="flex items-center gap-3 p-4 bg-gray-50 rounded-xl">
                       <div className="p-2 bg-gray-200 rounded-lg">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" /></svg>
                       </div>
                       <p className="text-gray-600">Unable to compute explanation — no anchor business found.</p>
                     </div>
@@ -1481,7 +1481,7 @@ ${result?.competitorAnalysis.recommendedStrategy}
                       <div className="bg-linear-to-br from-rose-50 to-red-50 border border-rose-200 p-5 rounded-xl shadow-sm hover:shadow-md transition-shadow">
                         <div className="flex items-center gap-2 mb-3">
                           <div className="p-2 bg-rose-500 rounded-lg text-white">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m3 11 18-5v12L3 14v-3z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/></svg>
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m3 11 18-5v12L3 14v-3z" /><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6" /></svg>
                           </div>
                           <p className="text-rose-900 font-semibold">Competitor Pressure</p>
                         </div>
@@ -1505,7 +1505,7 @@ ${result?.competitorAnalysis.recommendedStrategy}
                       <div className="bg-linear-to-br from-sky-50 to-blue-50 border border-sky-200 p-5 rounded-xl shadow-sm hover:shadow-md transition-shadow">
                         <div className="flex items-center gap-2 mb-3">
                           <div className="p-2 bg-sky-500 rounded-lg text-white">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20a8 8 0 1 0 0-16 8 8 0 0 0 0 16Z"/><path d="M12 14a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z"/><path d="M12 2v2"/><path d="M12 22v-2"/><path d="m17 20.66-1-1.73"/><path d="M11 10.27 7 3.34"/><path d="m20.66 17-1.73-1"/><path d="m3.34 7 1.73 1"/><path d="M14 12h8"/><path d="M2 12h2"/><path d="m20.66 7-1.73 1"/><path d="m3.34 17 1.73-1"/><path d="m17 3.34-1 1.73"/><path d="m11 13.73-4 6.93"/></svg>
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20a8 8 0 1 0 0-16 8 8 0 0 0 0 16Z" /><path d="M12 14a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z" /><path d="M12 2v2" /><path d="M12 22v-2" /><path d="m17 20.66-1-1.73" /><path d="M11 10.27 7 3.34" /><path d="m20.66 17-1.73-1" /><path d="m3.34 7 1.73 1" /><path d="M14 12h8" /><path d="M2 12h2" /><path d="m20.66 7-1.73 1" /><path d="m3.34 17 1.73-1" /><path d="m17 3.34-1 1.73" /><path d="m11 13.73-4 6.93" /></svg>
                           </div>
                           <p className="text-sky-900 font-semibold">AI Interpretation</p>
                         </div>
@@ -1538,7 +1538,7 @@ ${result?.competitorAnalysis.recommendedStrategy}
             <CardHeader className="bg-linear-to-r from-indigo-50 to-purple-50 border-b">
               <div className="flex items-center gap-3">
                 <div className="p-2.5 bg-linear-to-br from-indigo-500 to-purple-600 rounded-xl text-white shadow-lg shadow-indigo-200">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M22 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></svg>
                 </div>
                 <div>
                   <CardTitle className="text-xl">Competitor Analysis</CardTitle>
@@ -1552,7 +1552,7 @@ ${result?.competitorAnalysis.recommendedStrategy}
               {/* Competitor Summary */}
               <div className="bg-linear-to-br from-blue-50 to-indigo-50 p-5 rounded-xl border border-blue-200 shadow-sm">
                 <h4 className="text-blue-900 mb-4 font-semibold flex items-center gap-2">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 3v18h18"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></svg>
+                  <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 3v18h18" /><path d="M18 17V9" /><path d="M13 17V5" /><path d="M8 17v-3" /></svg>
                   Competitor Summary
                 </h4>
 
@@ -1612,7 +1612,7 @@ ${result?.competitorAnalysis.recommendedStrategy}
               <div className="bg-linear-to-br from-indigo-50 to-violet-50 p-5 rounded-xl border border-indigo-200 shadow-sm">
                 <div className="flex items-center justify-between mb-4">
                   <h4 className="text-indigo-900 font-semibold flex items-center gap-2">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21.21 15.89A10 10 0 1 1 8 2.83"/><path d="M22 12A10 10 0 0 0 12 2v10z"/></svg>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21.21 15.89A10 10 0 1 1 8 2.83" /><path d="M22 12A10 10 0 0 0 12 2v10z" /></svg>
                     Market Saturation
                   </h4>
                   <Badge className={`text-lg px-3 py-1 ${result.competitorAnalysis.marketSaturation < 0.3 ? 'bg-green-500' : result.competitorAnalysis.marketSaturation < 0.6 ? 'bg-amber-500' : 'bg-red-500'} text-white border-0`}>
@@ -1641,7 +1641,7 @@ ${result?.competitorAnalysis.recommendedStrategy}
             <CardHeader className="bg-linear-to-r from-cyan-50 to-teal-50 border-b">
               <div className="flex items-center gap-3">
                 <div className="p-2.5 bg-linear-to-br from-cyan-500 to-teal-600 rounded-xl text-white shadow-lg shadow-cyan-200">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+                  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /><polyline points="9 22 9 12 15 12 15 22" /></svg>
                 </div>
                 <div>
                   <CardTitle className="text-xl">Nearby Businesses</CardTitle>
@@ -1694,7 +1694,7 @@ ${result?.competitorAnalysis.recommendedStrategy}
             <CardHeader className="bg-linear-to-r from-violet-50 to-purple-50 border-b">
               <div className="flex items-center gap-3">
                 <div className="p-2.5 bg-linear-to-br from-violet-500 to-purple-600 rounded-xl text-white shadow-lg shadow-violet-200">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><circle cx="19" cy="5" r="2"/><circle cx="5" cy="5" r="2"/><circle cx="5" cy="19" r="2"/><circle cx="19" cy="19" r="2"/><line x1="12" y1="9" x2="12" y2="5"/><line x1="6.4" y1="6.5" x2="9.5" y2="9.5"/><line x1="17.5" y1="6.5" x2="14.5" y2="9.5"/><line x1="6.5" y1="17.5" x2="9.5" y2="14.5"/><line x1="17.5" y1="17.5" x2="14.5" y2="14.5"/></svg>
+                  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3" /><circle cx="19" cy="5" r="2" /><circle cx="5" cy="5" r="2" /><circle cx="5" cy="19" r="2" /><circle cx="19" cy="19" r="2" /><line x1="12" y1="9" x2="12" y2="5" /><line x1="6.4" y1="6.5" x2="9.5" y2="9.5" /><line x1="17.5" y1="6.5" x2="14.5" y2="9.5" /><line x1="6.5" y1="17.5" x2="9.5" y2="14.5" /><line x1="17.5" y1="17.5" x2="14.5" y2="14.5" /></svg>
                 </div>
                 <div>
                   <CardTitle className="text-xl">Cluster Analysis Details</CardTitle>
@@ -1723,7 +1723,7 @@ ${result?.competitorAnalysis.recommendedStrategy}
                         </div>
                         <h4 className="font-bold text-lg text-gray-900">Cluster {cluster.id + 1}</h4>
                       </div>
-                      <Badge 
+                      <Badge
                         className="px-4 py-2 text-sm font-semibold border-0 text-white"
                         style={{ backgroundColor: cluster.color }}
                       >
@@ -1784,17 +1784,16 @@ ${result?.competitorAnalysis.recommendedStrategy}
                 </div>
               ) : aiBusinessRecommendations ? (
                 <div className="space-y-6">
-                  
+
                   {/* Final Verdict Banner */}
-                  <div className={`relative overflow-hidden rounded-2xl p-6 ${
-                    aiBusinessRecommendations.final_verdict.suitability.includes("Highly") 
-                      ? "bg-gradient-to-r from-emerald-500 to-green-600" 
+                  <div className={`relative overflow-hidden rounded-2xl p-6 ${aiBusinessRecommendations.final_verdict.suitability.includes("Highly")
+                      ? "bg-gradient-to-r from-emerald-500 to-green-600"
                       : aiBusinessRecommendations.final_verdict.suitability.includes("Suitable")
-                      ? "bg-gradient-to-r from-blue-500 to-indigo-600"
-                      : aiBusinessRecommendations.final_verdict.suitability.includes("Moderate")
-                      ? "bg-gradient-to-r from-amber-500 to-orange-600"
-                      : "bg-gradient-to-r from-red-500 to-rose-600"
-                  } text-white shadow-lg`}>
+                        ? "bg-gradient-to-r from-blue-500 to-indigo-600"
+                        : aiBusinessRecommendations.final_verdict.suitability.includes("Moderate")
+                          ? "bg-gradient-to-r from-amber-500 to-orange-600"
+                          : "bg-gradient-to-r from-red-500 to-rose-600"
+                    } text-white shadow-lg`}>
                     <div className="flex items-start gap-4">
                       <div className="p-3 bg-white/20 rounded-xl backdrop-blur-sm">
                         <ThumbsUp className="w-6 h-6" />
@@ -1840,14 +1839,14 @@ ${result?.competitorAnalysis.recommendedStrategy}
 
                   {/* Grid: Location Analysis + Competitor Analysis */}
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    
+
                     {/* Location Analysis */}
                     <div className="bg-gradient-to-br from-blue-50 to-cyan-50 p-5 rounded-xl border border-blue-200">
                       <h4 className="font-semibold text-blue-900 flex items-center gap-2 mb-4">
                         <MapPin className="w-5 h-5" />
                         Location Analysis
                       </h4>
-                      
+
                       <div className="space-y-3">
                         <div className="bg-white/80 p-3 rounded-lg">
                           <p className="text-xs text-gray-500 mb-1">Zone Type</p>
@@ -1855,7 +1854,7 @@ ${result?.competitorAnalysis.recommendedStrategy}
                             {aiBusinessRecommendations.location_analysis.zone_type}
                           </Badge>
                         </div>
-                        
+
                         <div className="bg-white/80 p-3 rounded-lg">
                           <p className="text-xs text-gray-500 mb-2">Strengths</p>
                           <div className="flex flex-wrap gap-2">
@@ -1866,7 +1865,7 @@ ${result?.competitorAnalysis.recommendedStrategy}
                             ))}
                           </div>
                         </div>
-                        
+
                         <div className="bg-white/80 p-3 rounded-lg">
                           <p className="text-xs text-gray-500 mb-2">Weaknesses</p>
                           <div className="flex flex-wrap gap-2">
@@ -1893,28 +1892,27 @@ ${result?.competitorAnalysis.recommendedStrategy}
                         <Shield className="w-5 h-5" />
                         Competitor Analysis
                       </h4>
-                      
+
                       <div className="space-y-3">
                         <div className="bg-white/80 p-3 rounded-lg flex items-center justify-between">
                           <span className="text-sm text-gray-600">Competition Level</span>
-                          <Badge className={`border-0 ${
-                            aiBusinessRecommendations.competitor_analysis.competition_level === "Low" 
+                          <Badge className={`border-0 ${aiBusinessRecommendations.competitor_analysis.competition_level === "Low"
                               ? "bg-green-500 text-white"
                               : aiBusinessRecommendations.competitor_analysis.competition_level === "Medium"
-                              ? "bg-amber-500 text-white"
-                              : "bg-red-500 text-white"
-                          }`}>
+                                ? "bg-amber-500 text-white"
+                                : "bg-red-500 text-white"
+                            }`}>
                             {aiBusinessRecommendations.competitor_analysis.competition_level}
                           </Badge>
                         </div>
-                        
+
                         <div className="bg-white/80 p-3 rounded-lg">
                           <p className="text-xs text-gray-500 mb-2">Saturation Notes</p>
                           <p className="text-sm text-gray-700">
                             {aiBusinessRecommendations.competitor_analysis.saturation_notes}
                           </p>
                         </div>
-                        
+
                         <div className="bg-white/80 p-3 rounded-lg">
                           <p className="text-xs text-gray-500 mb-2">Opportunity Gaps</p>
                           <div className="flex flex-wrap gap-2">
@@ -1973,10 +1971,10 @@ ${result?.competitorAnalysis.recommendedStrategy}
                       <Sparkles className="w-5 h-5 text-amber-500" />
                       Recommended Businesses
                     </h4>
-                    
+
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                       {aiBusinessRecommendations.recommendations.map((rec, index) => (
-                        <div 
+                        <div
                           key={index}
                           className="bg-white rounded-2xl border-2 border-gray-100 p-5 hover:border-amber-300 hover:shadow-lg transition-all group"
                         >
@@ -1994,31 +1992,30 @@ ${result?.competitorAnalysis.recommendedStrategy}
                                 </Badge>
                               </div>
                             </div>
-                            <Badge className={`border-0 ${
-                              rec.competition_risk === "Low" 
+                            <Badge className={`border-0 ${rec.competition_risk === "Low"
                                 ? "bg-green-500 text-white"
                                 : rec.competition_risk === "Medium"
-                                ? "bg-amber-500 text-white"
-                                : "bg-red-500 text-white"
-                            }`}>
+                                  ? "bg-amber-500 text-white"
+                                  : "bg-red-500 text-white"
+                              }`}>
                               {rec.competition_risk === "Low" && <TrendingUp className="w-3 h-3 mr-1" />}
                               {rec.competition_risk === "High" && <TrendingDown className="w-3 h-3 mr-1" />}
                               {rec.competition_risk === "Medium" && <AlertTriangle className="w-3 h-3 mr-1" />}
                               {rec.competition_risk} Risk
                             </Badge>
                           </div>
-                          
+
                           <div className="space-y-3 text-sm">
                             <div className="bg-gray-50 p-3 rounded-lg">
                               <p className="text-xs font-medium text-gray-500 mb-1">Why it fits:</p>
                               <p className="text-gray-700">{rec.fit_reason}</p>
                             </div>
-                            
+
                             <div className="bg-blue-50 p-3 rounded-lg">
                               <p className="text-xs font-medium text-blue-600 mb-1">Ecosystem Synergy:</p>
                               <p className="text-gray-700">{rec.ecosystem_synergy}</p>
                             </div>
-                            
+
                             <div className="flex flex-wrap gap-1">
                               {rec.data_points_supporting.slice(0, 3).map((point, i) => (
                                 <Badge key={i} variant="outline" className="text-xs bg-white">

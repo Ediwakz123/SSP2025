@@ -29,54 +29,76 @@ import {
   UserX,
   Calendar,
   Activity,
+  MapPin,
+  Clock,
+  AlertTriangle,
+  CheckCircle,
+  XCircle,
+  Shield,
 } from "lucide-react";
 
 import { supabase } from "../../lib/supabase";
+
+type ApprovalStatus = "pending" | "approved" | "declined" | "flagged";
 
 interface ProfileUser {
   id: string;
   full_name: string | null;
   email: string | null;
+  address: string | null;
+  approval_status: ApprovalStatus;
   role: "admin" | "user";
   last_login: string | null;
   created_at: string | null;
   analyses_count: number;
 }
 
+const STATUS_CONFIG: Record<ApprovalStatus, { label: string; color: string; bgColor: string; icon: React.ElementType }> = {
+  pending: { label: "Pending", color: "text-amber-600", bgColor: "bg-amber-50 border-amber-200", icon: Clock },
+  approved: { label: "Approved", color: "text-green-600", bgColor: "bg-green-50 border-green-200", icon: CheckCircle },
+  declined: { label: "Declined", color: "text-red-600", bgColor: "bg-red-50 border-red-200", icon: XCircle },
+  flagged: { label: "Flagged – Outside Location", color: "text-orange-600", bgColor: "bg-orange-50 border-orange-200", icon: AlertTriangle },
+};
+
 export function UserManagement() {
   const [users, setUsers] = useState<ProfileUser[]>([]);
   const [_loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [roleFilter, setRoleFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
 
-const fetchUsers = async () => {
-  setLoading(true);
+  const fetchUsers = async () => {
+    setLoading(true);
 
-  const { data, error } = await supabase
-    .from("users_view")
-    .select("*");
+    // Fetch from profiles table directly to get approval_status and address
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("id, full_name, first_name, last_name, email, address, approval_status, role, created_at, last_login, analyses_count")
+      .order("created_at", { ascending: false });
 
-  if (error) {
-    console.error("USER FETCH ERROR:", error);
-    toast.error("Failed to load users");
+    if (error) {
+      console.error("USER FETCH ERROR:", error);
+      toast.error("Failed to load users");
+      setLoading(false);
+      return;
+    }
+
+    const usersList: ProfileUser[] = (data || []).map(u => ({
+      id: u.id,
+      email: u.email,
+      full_name: u.full_name || `${u.first_name || ""} ${u.last_name || ""}`.trim() || u.email,
+      address: u.address,
+      approval_status: u.approval_status || "pending",
+      role: u.role === "admin" ? "admin" : "user",
+      created_at: u.created_at,
+      last_login: u.last_login,
+      analyses_count: u.analyses_count || 0,
+    }));
+
+    setUsers(usersList);
     setLoading(false);
-    return;
-  }
-
-  const usersList: ProfileUser[] = data.map(u => ({
-    id: u.id,
-    email: u.email,
-    full_name: `${u.first_name || ""} ${u.last_name || ""}`.trim() || u.email,
-    role: u.role === "admin" ? "admin" : "user",
-    created_at: u.created_at,
-    last_login: u.last_sign_in_at,
-    analyses_count: 0,
-  }));
-
-  setUsers(usersList);
-  setLoading(false);
-};
-
+  };
 
   useEffect(() => {
     fetchUsers();
@@ -84,41 +106,77 @@ const fetchUsers = async () => {
 
   // Real-time updates when profiles table changes
   useEffect(() => {
-  const channel = supabase
-    .channel("profiles_realtime")
-    .on(
-      "postgres_changes",
-      { event: "*", schema: "public", table: "profiles" },
-      (_payload) => {
-        fetchUsers();
-      }
-    )
-    .subscribe();
+    const channel = supabase
+      .channel("profiles_realtime")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "profiles" },
+        (_payload) => {
+          fetchUsers();
+        }
+      )
+      .subscribe();
 
-  return () => {
-    supabase.removeChannel(channel);
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
+  const handleUserAction = async (userId: string, action: "approve" | "decline") => {
+    setActionLoading(userId);
+
+    try {
+      const newStatus = action === "approve" ? "approved" : "declined";
+
+      const { error } = await supabase
+        .from("profiles")
+        .update({ approval_status: newStatus })
+        .eq("id", userId);
+
+      if (error) throw error;
+
+      // Log the action
+      const { data: { user: adminUser } } = await supabase.auth.getUser();
+      await supabase.from("activity_logs").insert({
+        user_id: adminUser?.id,
+        action: `user_${action}d`,
+        user_email: adminUser?.email,
+        details: `User ${action}d`,
+        metadata: { target_user_id: userId, new_status: newStatus }
+      });
+
+      toast.success(`User ${action}d successfully`);
+      fetchUsers();
+    } catch (err) {
+      console.error(`Error ${action}ing user:`, err);
+      toast.error(`Failed to ${action} user`);
+    } finally {
+      setActionLoading(null);
+    }
   };
-}, []);
-
 
   const filteredUsers = useMemo(() => {
     return users
       .filter((u) =>
         roleFilter === "all" ? true : u.role === roleFilter
       )
+      .filter((u) =>
+        statusFilter === "all" ? true : u.approval_status === statusFilter
+      )
       .filter((u) => {
         const q = searchQuery.toLowerCase();
         return (
           (u.full_name || "").toLowerCase().includes(q) ||
-          (u.email || "").toLowerCase().includes(q)
+          (u.email || "").toLowerCase().includes(q) ||
+          (u.address || "").toLowerCase().includes(q)
         );
       });
-  }, [users, roleFilter, searchQuery]);
+  }, [users, roleFilter, statusFilter, searchQuery]);
 
   const totalUsers = users.length;
-  const adminCount = users.filter((u) => u.role === "admin").length;
-  const userCount = users.filter((u) => u.role === "user").length;
-  const activeCount = users.filter((u) => isUserActive(u.last_login)).length;
+  const pendingCount = users.filter((u) => u.approval_status === "pending").length;
+  const flaggedCount = users.filter((u) => u.approval_status === "flagged").length;
+  const approvedCount = users.filter((u) => u.approval_status === "approved").length;
 
   function isUserActive(lastLogin: string | null) {
     if (!lastLogin) return false;
@@ -129,10 +187,10 @@ const fetchUsers = async () => {
   return (
     <div className="page-wrapper space-y-6">
       {/* Hero Header */}
-      <div className="page-content relative overflow-hidden rounded-2xl bg-linear-to-br from-purple-600 via-fuchsia-500 to-pink-500 p-6 text-white">
+      <div className="page-content relative overflow-hidden rounded-2xl bg-gradient-to-br from-purple-600 via-fuchsia-500 to-pink-500 p-6 text-white">
         <div className="absolute top-0 right-0 w-48 h-48 bg-white/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/4" />
         <div className="absolute bottom-0 left-0 w-32 h-32 bg-white/10 rounded-full blur-3xl translate-y-1/2 -translate-x-1/4" />
-        
+
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="flex items-center gap-4">
             <div className="w-14 h-14 rounded-2xl bg-white/20 backdrop-blur-sm flex items-center justify-center">
@@ -141,11 +199,11 @@ const fetchUsers = async () => {
             <div>
               <h1 className="text-2xl font-bold">User Management</h1>
               <p className="text-white/80 text-sm mt-1">
-                Manage and monitor all {totalUsers} registered users
+                Manage and approve {totalUsers} registered users
               </p>
             </div>
           </div>
-          <Button 
+          <Button
             onClick={fetchUsers}
             className="bg-white text-purple-600 hover:bg-white/90 border-0"
           >
@@ -170,41 +228,41 @@ const fetchUsers = async () => {
           </div>
         </div>
 
-        <div className="stat-card-modern stat-success">
-          <div className="flex items-start justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-500 mb-1">Active Users</p>
-              <p className="text-2xl font-bold text-gray-900">{activeCount}</p>
-              <p className="text-xs text-gray-400 mt-1">Last 7 days</p>
-            </div>
-            <div className="w-12 h-12 bg-emerald-50 rounded-xl flex items-center justify-center">
-              <UserCheck className="w-6 h-6 text-emerald-600" />
-            </div>
-          </div>
-        </div>
-
         <div className="stat-card-modern stat-warning">
           <div className="flex items-start justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-500 mb-1">Admin Accounts</p>
-              <p className="text-2xl font-bold text-gray-900">{adminCount}</p>
-              <p className="text-xs text-gray-400 mt-1">Administrator role</p>
+              <p className="text-sm font-medium text-gray-500 mb-1">Pending Approval</p>
+              <p className="text-2xl font-bold text-gray-900">{pendingCount}</p>
+              <p className="text-xs text-gray-400 mt-1">Awaiting review</p>
             </div>
             <div className="w-12 h-12 bg-amber-50 rounded-xl flex items-center justify-center">
-              <UserCheck className="w-6 h-6 text-amber-600" />
+              <Clock className="w-6 h-6 text-amber-600" />
             </div>
           </div>
         </div>
 
-        <div className="stat-card-modern stat-info">
+        <div className="stat-card-modern" style={{ borderLeft: '4px solid #f97316' }}>
           <div className="flex items-start justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-500 mb-1">Regular Users</p>
-              <p className="text-2xl font-bold text-gray-900">{userCount}</p>
-              <p className="text-xs text-gray-400 mt-1">Standard accounts</p>
+              <p className="text-sm font-medium text-gray-500 mb-1">Flagged Users</p>
+              <p className="text-2xl font-bold text-gray-900">{flaggedCount}</p>
+              <p className="text-xs text-gray-400 mt-1">Outside service area</p>
             </div>
-            <div className="w-12 h-12 bg-blue-50 rounded-xl flex items-center justify-center">
-              <UserX className="w-6 h-6 text-blue-600" />
+            <div className="w-12 h-12 bg-orange-50 rounded-xl flex items-center justify-center">
+              <AlertTriangle className="w-6 h-6 text-orange-600" />
+            </div>
+          </div>
+        </div>
+
+        <div className="stat-card-modern stat-success">
+          <div className="flex items-start justify-between">
+            <div>
+              <p className="text-sm font-medium text-gray-500 mb-1">Approved</p>
+              <p className="text-2xl font-bold text-gray-900">{approvedCount}</p>
+              <p className="text-xs text-gray-400 mt-1">Active users</p>
+            </div>
+            <div className="w-12 h-12 bg-emerald-50 rounded-xl flex items-center justify-center">
+              <UserCheck className="w-6 h-6 text-emerald-600" />
             </div>
           </div>
         </div>
@@ -212,9 +270,9 @@ const fetchUsers = async () => {
 
       {/* User List */}
       <Card className="border-0 shadow-card overflow-hidden animate-fadeInUp delay-100">
-        <CardHeader className="bg-linear-to-r from-gray-50 to-white border-b border-gray-100">
+        <CardHeader className="bg-gradient-to-r from-gray-50 to-white border-b border-gray-100">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-linear-to-br from-purple-500 to-fuchsia-500 flex items-center justify-center">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-fuchsia-500 flex items-center justify-center">
               <Users className="w-5 h-5 text-white" />
             </div>
             <div>
@@ -228,19 +286,32 @@ const fetchUsers = async () => {
 
         <CardContent className="p-6">
           {/* Filters */}
-          <div className="flex gap-4 mb-6">
-            <div className="relative flex-1">
+          <div className="flex flex-wrap gap-4 mb-6">
+            <div className="relative flex-1 min-w-[200px]">
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 text-gray-400" />
               <Input
-                placeholder="Search by name or email..."
+                placeholder="Search by name, email, or address..."
                 className="pl-12 bg-gray-50 border-gray-200 focus:bg-white transition-colors"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
             </div>
 
-            <Select value={roleFilter} onValueChange={setRoleFilter}>
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
               <SelectTrigger className="w-[180px] bg-gray-50 border-gray-200">
+                <SelectValue placeholder="Status filter" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Statuses</SelectItem>
+                <SelectItem value="pending">Pending</SelectItem>
+                <SelectItem value="flagged">Flagged</SelectItem>
+                <SelectItem value="approved">Approved</SelectItem>
+                <SelectItem value="declined">Declined</SelectItem>
+              </SelectContent>
+            </Select>
+
+            <Select value={roleFilter} onValueChange={setRoleFilter}>
+              <SelectTrigger className="w-[140px] bg-gray-50 border-gray-200">
                 <SelectValue placeholder="Role filter" />
               </SelectTrigger>
               <SelectContent>
@@ -254,55 +325,123 @@ const fetchUsers = async () => {
           {/* User Cards */}
           <ScrollArea className="h-[600px] pr-4">
             <div className="space-y-3">
-              {filteredUsers.map((u) => (
-                <div
-                  key={u.id}
-                  className="flex items-center justify-between p-5 bg-gray-50 rounded-xl hover:bg-gray-100 transition-all duration-200 group"
-                >
-                  <div className="flex items-center gap-4">
-                    <Avatar className="h-14 w-14 border-2 border-white shadow-md">
-                      <AvatarFallback className="bg-linear-to-br from-indigo-500 to-purple-500 text-white font-semibold">
-                        {getInitials(u.full_name)}
-                      </AvatarFallback>
-                    </Avatar>
+              {filteredUsers.map((u) => {
+                const statusConfig = STATUS_CONFIG[u.approval_status];
+                const StatusIcon = statusConfig.icon;
+                const isFlagged = u.approval_status === "flagged";
+                const needsAction = u.approval_status === "pending" || u.approval_status === "flagged";
 
-                    <div>
-                      <div className="flex items-center gap-2 mb-1">
-                        <p className="font-semibold text-gray-900">{u.full_name || "No Name"}</p>
-                        <span className={`badge-modern ${u.role === "admin" ? "badge-primary" : "badge-info"}`}>
-                          {u.role}
-                        </span>
-                        {isUserActive(u.last_login) && (
-                          <span className="badge-modern badge-success">
-                            Active
+                return (
+                  <div
+                    key={u.id}
+                    className={`flex flex-col lg:flex-row lg:items-center justify-between p-5 rounded-xl transition-all duration-200 group ${isFlagged
+                        ? "bg-orange-50 border-2 border-orange-200 hover:border-orange-300"
+                        : u.approval_status === "pending"
+                          ? "bg-amber-50 border border-amber-200 hover:border-amber-300"
+                          : "bg-gray-50 hover:bg-gray-100"
+                      }`}
+                  >
+                    <div className="flex items-start gap-4 flex-1">
+                      <Avatar className="h-14 w-14 border-2 border-white shadow-md">
+                        <AvatarFallback className={`font-semibold ${isFlagged
+                            ? "bg-gradient-to-br from-orange-400 to-red-500 text-white"
+                            : "bg-gradient-to-br from-indigo-500 to-purple-500 text-white"
+                          }`}>
+                          {getInitials(u.full_name)}
+                        </AvatarFallback>
+                      </Avatar>
+
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1 flex-wrap">
+                          <p className="font-semibold text-gray-900">{u.full_name || "No Name"}</p>
+                          <span className={`badge-modern ${u.role === "admin" ? "badge-primary" : "badge-info"}`}>
+                            {u.role}
                           </span>
-                        )}
-                      </div>
-
-                      <p className="text-sm text-gray-500">{u.email}</p>
-                      <div className="flex items-center gap-4 text-xs text-gray-400 mt-2">
-                        <div className="flex items-center gap-1">
-                          <Calendar className="h-3 w-3" />
-                          Joined: {new Date(u.created_at!).toLocaleDateString()}
+                          {/* Approval Status Badge */}
+                          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border ${statusConfig.bgColor} ${statusConfig.color}`}>
+                            <StatusIcon className="w-3 h-3" />
+                            {statusConfig.label}
+                          </span>
+                          {isUserActive(u.last_login) && (
+                            <span className="badge-modern badge-success">
+                              Active
+                            </span>
+                          )}
                         </div>
 
-                        {u.last_login && (
-                          <div className="flex items-center gap-1">
-                            <Activity className="h-3 w-3" />
-                            Last: {new Date(u.last_login).toLocaleDateString()}
+                        <p className="text-sm text-gray-500 truncate">{u.email}</p>
+
+                        {/* Address */}
+                        {u.address && (
+                          <div className="flex items-start gap-1 mt-2 text-xs text-gray-500">
+                            <MapPin className="w-3 h-3 mt-0.5 flex-shrink-0" />
+                            <span className={`${isFlagged ? "text-orange-600 font-medium" : ""}`}>
+                              {u.address}
+                            </span>
                           </div>
                         )}
+
+                        <div className="flex items-center gap-4 text-xs text-gray-400 mt-2">
+                          <div className="flex items-center gap-1">
+                            <Calendar className="h-3 w-3" />
+                            Joined: {u.created_at ? new Date(u.created_at).toLocaleDateString() : "N/A"}
+                          </div>
+
+                          {u.last_login && (
+                            <div className="flex items-center gap-1">
+                              <Activity className="h-3 w-3" />
+                              Last: {new Date(u.last_login).toLocaleDateString()}
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </div>
-                  </div>
 
-                  <div className="text-right">
-                    <p className="text-sm text-gray-500">Analyses</p>
-                    <p className="text-2xl font-bold text-gray-900">{u.analyses_count}</p>
+                    {/* Actions */}
+                    <div className="flex items-center gap-3 mt-4 lg:mt-0 lg:ml-4">
+                      {u.role !== "admin" && needsAction && (
+                        <>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="bg-green-50 border-green-200 text-green-700 hover:bg-green-100 hover:border-green-300"
+                            onClick={() => handleUserAction(u.id, "approve")}
+                            disabled={actionLoading === u.id}
+                          >
+                            <CheckCircle className="w-4 h-4 mr-1" />
+                            Approve
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="bg-red-50 border-red-200 text-red-700 hover:bg-red-100 hover:border-red-300"
+                            onClick={() => handleUserAction(u.id, "decline")}
+                            disabled={actionLoading === u.id}
+                          >
+                            <XCircle className="w-4 h-4 mr-1" />
+                            Decline
+                          </Button>
+                        </>
+                      )}
+
+                      {u.approval_status === "approved" && u.role !== "admin" && (
+                        <div className="text-right">
+                          <p className="text-sm text-gray-500">Analyses</p>
+                          <p className="text-2xl font-bold text-gray-900">{u.analyses_count}</p>
+                        </div>
+                      )}
+
+                      {u.role === "admin" && (
+                        <div className="flex items-center gap-2 text-purple-600">
+                          <Shield className="w-5 h-5" />
+                          <span className="text-sm font-medium">Admin</span>
+                        </div>
+                      )}
+                    </div>
                   </div>
-                </div>
-              ))}
-              
+                );
+              })}
+
               {filteredUsers.length === 0 && (
                 <div className="text-center py-12">
                   <Users className="w-12 h-12 text-gray-200 mx-auto mb-3" />
@@ -325,3 +464,4 @@ function getInitials(name?: string | null) {
     .join("")
     .toUpperCase();
 }
+

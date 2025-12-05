@@ -299,6 +299,43 @@ export function validateAge(
 }
 
 // -----------------------------------------------------------------------------
+// ADDRESS VALIDATION (Sta. Cruz, Santa Maria, Bulacan)
+// -----------------------------------------------------------------------------
+
+export interface AddressValidationResult extends ValidationResult {
+  isFlagged?: boolean;
+}
+
+export function validateAddress(address: string): AddressValidationResult {
+  const trimmed = address.trim().toLowerCase();
+
+  if (!trimmed) {
+    return { isValid: false, error: "Address is required" };
+  }
+
+  // Check for Sta. Cruz or Santa Cruz
+  const hasStaCruz = trimmed.includes("sta. cruz") ||
+    trimmed.includes("sta cruz") ||
+    trimmed.includes("santa cruz");
+
+  // Check for Santa Maria
+  const hasSantaMaria = trimmed.includes("santa maria");
+
+  // Check for Bulacan
+  const hasBulacan = trimmed.includes("bulacan");
+
+  if (hasStaCruz && hasSantaMaria && hasBulacan) {
+    return { isValid: true, isFlagged: false };
+  }
+
+  // Address is outside target area - still valid for form but will be flagged
+  return {
+    isValid: true,
+    isFlagged: true
+  };
+}
+
+// -----------------------------------------------------------------------------
 // COORDINATES VALIDATION
 // -----------------------------------------------------------------------------
 
