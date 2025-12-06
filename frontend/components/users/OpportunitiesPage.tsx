@@ -409,6 +409,152 @@ export function OpportunitiesPage() {
     loadData();
   }, [navigationState?.fromClustering, navigationState?.selectedCategory]);
 
+  // ============================================================================
+  // ALL MEMOIZED VALUES - MUST BE BEFORE EARLY RETURNS
+  // ============================================================================
+
+  // Extract safe values from clustering results
+  const businessType = clusteringResults?.business_category || "";
+  const numClusters = clusteringResults?.num_clusters ?? 0;
+  const locations = clusteringResults?.locations || [];
+
+  // Build opportunities array (safe for empty data)
+  const opportunities: Opportunity[] = useMemo(() => {
+    if (!locations || locations.length === 0) return [];
+
+    return locations.map((loc: LocationData): Opportunity => {
+      const businessDensity: number = loc.business_density_200m || 0;
+      const competitors: number = loc.competitor_density_200m || 0;
+
+      return {
+        title: `${businessType || "Business"} near ${loc.street || "Unknown"}`,
+        category: loc.general_category || "",
+        location: loc.street || "Unknown",
+        businessDensity,
+        competitors,
+        zone_type: loc.zone_type || "Mixed",
+        saturation: computeSaturation(businessDensity, competitors),
+        score: computeOpportunityScore(businessDensity, competitors, loc.zone_type || "Mixed"),
+        cluster: loc.cluster,
+        coordinates: {
+          lat: loc.latitude || 0,
+          lng: loc.longitude || 0,
+        },
+        insights: generateInsights({
+          businessDensity,
+          competitors,
+          zone_type: loc.zone_type || "Mixed",
+        }),
+      };
+    });
+  }, [locations, businessType]);
+
+  // Build enhanced opportunities with new fields
+  const enhancedOpportunities: EnhancedOpportunityData[] = useMemo(() => {
+    if (opportunities.length === 0) return [];
+
+    return opportunities.map((op) => {
+      const zoneAnalysis = determineBestZone(
+        op.businessDensity,
+        op.competitors,
+        op.zone_type,
+        businessType
+      );
+      const suitability = evaluateZoneSuitability(
+        businessType,
+        op.businessDensity,
+        op.competitors
+      );
+      const timeFeasibility = evaluateTimeWorkFeasibility(businessType, op.zone_type);
+      const capital = estimateRequiredCapital(businessType, op.zone_type);
+      const profitability = estimateProfitability(op.businessDensity, op.competitors, businessType);
+      const risk = assessRiskLevel(op.competitors, businessType);
+      const model = suggestBusinessModel(businessType, op.zone_type, op.competitors);
+      const zoneInsights = generateZoneInsights(op.zone_type, businessType, op.businessDensity, op.competitors);
+
+      return {
+        ...op,
+        requiredCapital: capital,
+        expectedProfitability: profitability,
+        riskLevel: risk,
+        suggestedBusinessModel: model,
+        timeWorkFeasibility: timeFeasibility,
+        zoneSuitability: suitability.suitability,
+        insights: [...op.insights, ...zoneInsights],
+      };
+    });
+  }, [opportunities, businessType]);
+
+  // Compute aggregate zone analysis for all opportunities
+  const aggregateZoneAnalysis = useMemo(() => {
+    if (opportunities.length === 0) {
+      return {
+        bestZone: "Mixed" as const,
+        score: 0,
+        reasoning: ["No opportunities available for analysis"],
+        competitionLevel: "Low" as const,
+        marketDemand: "Low" as const,
+        accessibility: "Moderate" as const,
+      };
+    }
+    const avgDensity = opportunities.reduce((sum, op) => sum + op.businessDensity, 0) / opportunities.length;
+    const avgCompetitors = opportunities.reduce((sum, op) => sum + op.competitors, 0) / opportunities.length;
+    const primaryZone = opportunities[0]?.zone_type || "Mixed";
+
+    return determineBestZone(avgDensity, avgCompetitors, primaryZone, businessType);
+  }, [opportunities, businessType]);
+
+  const aggregateSuitability = useMemo(() => {
+    if (opportunities.length === 0) {
+      return {
+        suitability: "Both" as const,
+        residentialScore: 50,
+        commercialScore: 50,
+        explanation: "No opportunities available for suitability analysis.",
+      };
+    }
+    const avgDensity = opportunities.reduce((sum, op) => sum + op.businessDensity, 0) / opportunities.length;
+    const avgCompetitors = opportunities.reduce((sum, op) => sum + op.competitors, 0) / opportunities.length;
+
+    return evaluateZoneSuitability(businessType, avgDensity, avgCompetitors);
+  }, [opportunities, businessType]);
+
+  // Generate aggregate insights panel data
+  const aggregateInsights = useMemo(() => {
+    if (opportunities.length === 0) {
+      return {
+        risks: ["No opportunities data available"],
+        advantages: [],
+        marketConsiderations: [],
+        strategies: [],
+        zoneGuidance: [],
+      };
+    }
+    const avgDensity = opportunities.reduce((sum, op) => sum + op.businessDensity, 0) / opportunities.length;
+    const avgCompetitors = opportunities.reduce((sum, op) => sum + op.competitors, 0) / opportunities.length;
+    const avgScore = opportunities.reduce((sum, op) => sum + op.score, 0) / opportunities.length;
+    const primaryZone = opportunities[0]?.zone_type || "Mixed";
+
+    return generateInsightsPanelData(businessType, primaryZone, avgDensity, avgCompetitors, avgScore);
+  }, [opportunities, businessType]);
+
+  // Derived values
+  const displayedOps = showAll ? enhancedOpportunities : enhancedOpportunities.slice(0, 5);
+  const kpis = useMemo(() => calculateKPIs(opportunities), [opportunities]);
+  const categoryStats = useMemo(() => buildCategoryStats(businesses), [businesses]);
+  const zoneStats = useMemo(() => buildZoneStats(businesses), [businesses]);
+  const totalBusinesses = businesses.length;
+  const marketGaps = useMemo(() => buildMarketGaps(businesses, opportunities), [businesses, opportunities]);
+  const topCategory = categoryStats[0];
+  const lowestCompetition = useMemo(() =>
+    [...categoryStats].sort((a, b) => a.avgCompetitors - b.avgCompetitors)[0],
+    [categoryStats]
+  );
+
+  // ============================================================================
+  // EARLY RETURNS - AFTER ALL HOOKS
+  // ============================================================================
+
   // ----------------------------------------
   // LOADING SCREEN - Skeleton Cards
   // ----------------------------------------
@@ -537,144 +683,6 @@ export function OpportunitiesPage() {
       </div>
     );
   }
-
-  const businessType = clusteringResults.business_category;
-  const numClusters = clusteringResults.num_clusters ?? 0;
-
-  // Build opportunities array
-  const opportunities: Opportunity[] = clusteringResults.locations.map(
-    (loc: LocationData): Opportunity => {
-      const businessDensity: number = loc.business_density_200m;
-      const competitors: number = loc.competitor_density_200m;
-
-      return {
-        title: `${businessType} near ${loc.street}`,
-        category: loc.general_category,
-        location: loc.street,
-        businessDensity,
-        competitors,
-        zone_type: loc.zone_type,
-        saturation: computeSaturation(businessDensity, competitors),
-        score: computeOpportunityScore(
-          businessDensity,
-          competitors,
-          loc.zone_type
-        ),
-        cluster: loc.cluster,
-        coordinates: {
-          lat: loc.latitude,
-          lng: loc.longitude,
-        },
-        insights: generateInsights({
-          businessDensity,
-          competitors,
-          zone_type: loc.zone_type,
-        }),
-      };
-    }
-  );
-
-  // Build enhanced opportunities with new fields
-  const enhancedOpportunities: EnhancedOpportunityData[] = useMemo(() => {
-    return opportunities.map((op) => {
-      const zoneAnalysis = determineBestZone(
-        op.businessDensity,
-        op.competitors,
-        op.zone_type,
-        businessType
-      );
-      const suitability = evaluateZoneSuitability(
-        businessType,
-        op.businessDensity,
-        op.competitors
-      );
-      const timeFeasibility = evaluateTimeWorkFeasibility(businessType, op.zone_type);
-      const capital = estimateRequiredCapital(businessType, op.zone_type);
-      const profitability = estimateProfitability(op.businessDensity, op.competitors, businessType);
-      const risk = assessRiskLevel(op.competitors, businessType);
-      const model = suggestBusinessModel(businessType, op.zone_type, op.competitors);
-      const zoneInsights = generateZoneInsights(op.zone_type, businessType, op.businessDensity, op.competitors);
-
-      return {
-        ...op,
-        requiredCapital: capital,
-        expectedProfitability: profitability,
-        riskLevel: risk,
-        suggestedBusinessModel: model,
-        timeWorkFeasibility: timeFeasibility,
-        zoneSuitability: suitability.suitability,
-        insights: [...op.insights, ...zoneInsights],
-      };
-    });
-  }, [opportunities, businessType]);
-
-  // Compute aggregate zone analysis for all opportunities
-  const aggregateZoneAnalysis = useMemo(() => {
-    if (opportunities.length === 0) {
-      return {
-        bestZone: "Mixed" as const,
-        score: 0,
-        reasoning: ["No opportunities available for analysis"],
-        competitionLevel: "Low" as const,
-        marketDemand: "Low" as const,
-        accessibility: "Moderate" as const,
-      };
-    }
-    const avgDensity = opportunities.reduce((sum, op) => sum + op.businessDensity, 0) / opportunities.length;
-    const avgCompetitors = opportunities.reduce((sum, op) => sum + op.competitors, 0) / opportunities.length;
-    const primaryZone = opportunities[0]?.zone_type || "Mixed";
-
-    return determineBestZone(avgDensity, avgCompetitors, primaryZone, businessType);
-  }, [opportunities, businessType]);
-
-  const aggregateSuitability = useMemo(() => {
-    if (opportunities.length === 0) {
-      return {
-        suitability: "Both" as const,
-        residentialScore: 50,
-        commercialScore: 50,
-        explanation: "No opportunities available for suitability analysis.",
-      };
-    }
-    const avgDensity = opportunities.reduce((sum, op) => sum + op.businessDensity, 0) / opportunities.length;
-    const avgCompetitors = opportunities.reduce((sum, op) => sum + op.competitors, 0) / opportunities.length;
-
-    return evaluateZoneSuitability(businessType, avgDensity, avgCompetitors);
-  }, [opportunities, businessType]);
-
-  // Generate aggregate insights panel data
-  const aggregateInsights = useMemo(() => {
-    if (opportunities.length === 0) {
-      return {
-        risks: ["No opportunities data available"],
-        advantages: [],
-        marketConsiderations: [],
-        strategies: [],
-        zoneGuidance: [],
-      };
-    }
-    const avgDensity = opportunities.reduce((sum, op) => sum + op.businessDensity, 0) / opportunities.length;
-    const avgCompetitors = opportunities.reduce((sum, op) => sum + op.competitors, 0) / opportunities.length;
-    const avgScore = opportunities.reduce((sum, op) => sum + op.score, 0) / opportunities.length;
-    const primaryZone = opportunities[0]?.zone_type || "Mixed";
-
-    return generateInsightsPanelData(businessType, primaryZone, avgDensity, avgCompetitors, avgScore);
-  }, [opportunities, businessType]);
-
-  const displayedOps = showAll ? enhancedOpportunities : enhancedOpportunities.slice(0, 5);
-  const kpis = calculateKPIs(opportunities);
-
-  // Overview + Market Gap derived data
-  const categoryStats = buildCategoryStats(businesses);
-  const zoneStats = buildZoneStats(businesses);
-  const totalBusinesses = businesses.length;
-
-  const marketGaps = buildMarketGaps(businesses, opportunities);
-
-  const topCategory = categoryStats[0];
-  const lowestCompetition = [...categoryStats].sort(
-    (a, b) => a.avgCompetitors - b.avgCompetitors
-  )[0];
 
   // ---------------------------------------------------------------------------
   // EXPORT FUNCTIONS (Opportunities list only)
