@@ -243,10 +243,11 @@ export function generateInsightsPanelData(
     }
 
     // Market considerations
+    const safeCategory = category || "Business";
     if (businessDensity >= 10) {
         insights.marketConsiderations.push("Strong business ecosystem for potential partnerships");
     }
-    insights.marketConsiderations.push(`${category} segment shows consistent local demand`);
+    insights.marketConsiderations.push(`${safeCategory} segment shows consistent local demand`);
     if (competitorDensity >= 3 && competitorDensity <= 5) {
         insights.marketConsiderations.push("Moderate competition validates market viability");
     }

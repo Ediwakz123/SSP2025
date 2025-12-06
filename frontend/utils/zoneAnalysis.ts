@@ -102,7 +102,8 @@ export function determineBestZone(
         accessibility = "Moderate";
         // Check if category is suitable for residential
         const residentialFriendly = ["Services", "Food & Beverages", "Restaurant", "Retail"];
-        if (residentialFriendly.some(c => category.includes(c))) {
+        const safeCategory = category || "";
+        if (residentialFriendly.some(c => safeCategory.includes(c))) {
             score += 5;
             reasoning.push("Residential zone suitable for community-focused business");
         }
@@ -132,6 +133,8 @@ export function evaluateZoneSuitability(
     businessDensity: number,
     competitorDensity: number
 ): ZoneSuitabilityResult {
+    const safeCategory = category || "";
+
     // Categories more suited for residential areas
     const residentialCategories = [
         "Services", "Food & Beverages", "Pet Store"
@@ -149,13 +152,13 @@ export function evaluateZoneSuitability(
     let commercialScore = 50;
 
     // Category-based scoring
-    if (residentialCategories.some(c => category.includes(c))) {
+    if (residentialCategories.some(c => safeCategory.includes(c))) {
         residentialScore += 25;
     }
-    if (commercialCategories.some(c => category.includes(c))) {
+    if (commercialCategories.some(c => safeCategory.includes(c))) {
         commercialScore += 25;
     }
-    if (flexibleCategories.some(c => category.includes(c))) {
+    if (flexibleCategories.some(c => safeCategory.includes(c))) {
         residentialScore += 15;
         commercialScore += 15;
     }
@@ -175,13 +178,13 @@ export function evaluateZoneSuitability(
 
     if (diff < 15) {
         suitability = "Both";
-        explanation = `This ${category} business can thrive in both residential and commercial zones. Residential offers community loyalty while commercial provides higher foot traffic.`;
+        explanation = `This ${safeCategory || "business"} can thrive in both residential and commercial zones. Residential offers community loyalty while commercial provides higher foot traffic.`;
     } else if (residentialScore > commercialScore) {
         suitability = "Residential";
-        explanation = `Residential zones are ideal for ${category} due to community demand, lower competition, and consistent daily customer patterns.`;
+        explanation = `Residential zones are ideal for ${safeCategory || "this business"} due to community demand, lower competition, and consistent daily customer patterns.`;
     } else {
         suitability = "Commercial";
-        explanation = `Commercial zones are recommended for ${category} due to higher visibility, foot traffic, and synergy with surrounding businesses.`;
+        explanation = `Commercial zones are recommended for ${safeCategory || "this business"} due to higher visibility, foot traffic, and synergy with surrounding businesses.`;
     }
 
     return {
@@ -201,6 +204,7 @@ export function evaluateTimeWorkFeasibility(
     preferredHours?: { start: number; end: number }
 ): TimeWorkFeasibility {
     const normalizedZone = zoneType?.toLowerCase() || "";
+    const safeCategory = category || "";
 
     // Default peak hours by category
     const categoryPeakHours: Record<string, string[]> = {
@@ -215,7 +219,7 @@ export function evaluateTimeWorkFeasibility(
 
     // Find matching category or use default
     const peakHours = Object.entries(categoryPeakHours).find(([key]) =>
-        category.toLowerCase().includes(key.toLowerCase())
+        safeCategory.toLowerCase().includes(key.toLowerCase())
     )?.[1] || ["9:00 AM - 12:00 PM", "2:00 PM - 5:00 PM"];
 
     // Determine flexibility
@@ -250,9 +254,9 @@ export function evaluateTimeWorkFeasibility(
 
     // Determine profit impact
     let profitImpact: "Low" | "Medium" | "High" = "Medium";
-    if (["Restaurant", "Entertainment / Leisure"].some(c => category.includes(c))) {
+    if (["Restaurant", "Entertainment / Leisure"].some(c => safeCategory.includes(c))) {
         profitImpact = "High"; // These are very time-sensitive
-    } else if (["Services", "Pet Store"].some(c => category.includes(c))) {
+    } else if (["Services", "Pet Store"].some(c => safeCategory.includes(c))) {
         profitImpact = "Low"; // More consistent throughout day
     }
 
@@ -281,14 +285,15 @@ function formatHour(hour: number): string {
 export function estimateRequiredCapital(category: string, zoneType: string): CapitalLevel {
     const highCapitalCategories = ["Restaurant", "Entertainment / Leisure"];
     const lowCapitalCategories = ["Services", "Pet Store"];
+    const safeCategory = category || "";
 
     const normalizedZone = zoneType?.toLowerCase() || "";
     const isCommercial = normalizedZone.includes("commercial");
 
-    if (highCapitalCategories.some(c => category.includes(c))) {
+    if (highCapitalCategories.some(c => safeCategory.includes(c))) {
         return "High";
     }
-    if (lowCapitalCategories.some(c => category.includes(c))) {
+    if (lowCapitalCategories.some(c => safeCategory.includes(c))) {
         return isCommercial ? "Medium" : "Low";
     }
     return isCommercial ? "Medium" : "Low";
@@ -304,10 +309,11 @@ export function estimateProfitability(
 ): ProfitabilityLevel {
     // Base on competition ratio
     const ratio = businessDensity / (competitorDensity + 1);
+    const safeCategory = category || "";
 
     // High growth categories
     const highGrowthCategories = ["Food & Beverages", "Services", "Restaurant"];
-    const isHighGrowth = highGrowthCategories.some(c => category.includes(c));
+    const isHighGrowth = highGrowthCategories.some(c => safeCategory.includes(c));
 
     if (ratio >= 5 && isHighGrowth) {
         return "Very High";
@@ -328,9 +334,10 @@ export function assessRiskLevel(
     competitorDensity: number,
     category: string
 ): RiskLevel {
+    const safeCategory = category || "";
     // Higher risk categories
     const highRiskCategories = ["Restaurant", "Entertainment / Leisure"];
-    const isHighRisk = highRiskCategories.some(c => category.includes(c));
+    const isHighRisk = highRiskCategories.some(c => safeCategory.includes(c));
 
     if (competitorDensity >= 8 || (competitorDensity >= 5 && isHighRisk)) {
         return "High";
@@ -350,6 +357,7 @@ export function suggestBusinessModel(
     competitorDensity: number
 ): string {
     const normalizedZone = zoneType?.toLowerCase() || "";
+    const safeCategory = category || "";
 
     const models: Record<string, string[]> = {
         "Restaurant": ["Fast-casual dining", "Cloud kitchen with delivery", "Specialty cuisine"],
@@ -362,7 +370,7 @@ export function suggestBusinessModel(
     };
 
     const categoryModels = Object.entries(models).find(([key]) =>
-        category.toLowerCase().includes(key.toLowerCase())
+        safeCategory.toLowerCase().includes(key.toLowerCase())
     )?.[1] || ["Standard retail model", "Service-focused", "Hybrid approach"];
 
     // Choose based on competition
