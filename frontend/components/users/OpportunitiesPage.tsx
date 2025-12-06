@@ -21,7 +21,7 @@ import {
   Zap,
 } from "lucide-react";
 
-import Papa from "papaparse";
+
 import * as XLSX from "xlsx";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -899,98 +899,204 @@ export function OpportunitiesPage() {
   }
 
   // ---------------------------------------------------------------------------
-  // EXPORT FUNCTIONS (Opportunities list only)
+  // EXPORT FUNCTIONS (PDF and Excel only - No CSV)
   // ---------------------------------------------------------------------------
 
-  const exportCSV = () => {
-    const rows = opportunities.map((o: Opportunity) => ({
-      Title: o.title,
-      Category: o.category,
-      Cluster: o.cluster,
-      BusinessDensity: o.businessDensity,
-      Competitors: o.competitors,
-      ZoneType: o.zone_type,
-      Saturation: `${o.saturation}%`,
-      Score: `${o.score}%`,
-      Latitude: o.coordinates.lat,
-      Longitude: o.coordinates.lng,
-      Insights: o.insights.join(" | "),
-    }));
-
-    const csv = Papa.unparse(rows);
-    const blob = new Blob([csv], { type: "text/csv" });
-    const url = URL.createObjectURL(blob);
-
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "opportunities.csv";
-    a.click();
-
-    toast.success("Exported report as CSV");
-    logActivity("Exported Opportunities Report", { format: "CSV" });
-  };
-
   const exportExcel = () => {
-    const rows = opportunities.map((o: Opportunity) => ({
-      Title: o.title,
-      Category: o.category,
-      Cluster: o.cluster,
-      BusinessDensity: o.businessDensity,
-      Competitors: o.competitors,
-      ZoneType: o.zone_type,
-      Saturation: `${o.saturation}%`,
-      Score: `${o.score}%`,
-      Latitude: o.coordinates.lat,
-      Longitude: o.coordinates.lng,
-      Insights: o.insights.join(" | "),
+    const workbook = XLSX.utils.book_new();
+
+    // Sheet 1: Clusters Summary
+    const clustersSummary = clusterKPIs.clusterStats.map((cluster) => ({
+      "Cluster ID": cluster.clusterId,
+      "Opportunity Score": cluster.opportunityScore,
+      "Avg Density": cluster.avgDensity,
+      "Avg Competitors": cluster.avgCompetition,
+      "Location Count": cluster.locationCount,
+      "Commercial Zones": cluster.commercialCount,
+      "Residential Zones": cluster.residentialCount,
+      "Mixed Zones": cluster.mixedCount,
+      "Center Latitude": cluster.centerLat.toFixed(6),
+      "Center Longitude": cluster.centerLng.toFixed(6),
+    }));
+    const sheet1 = XLSX.utils.json_to_sheet(clustersSummary);
+    XLSX.utils.book_append_sheet(workbook, sheet1, "Clusters Summary");
+
+    // Sheet 2: Raw K-means Output (all locations with cluster assignment)
+    const rawKmeans = locations.map((loc, idx) => ({
+      "Point ID": idx + 1,
+      "Street": loc.street,
+      "Category": loc.general_category,
+      "Latitude": loc.latitude,
+      "Longitude": loc.longitude,
+      "Assigned Cluster": loc.cluster || 0,
+      "Business Density": loc.business_density_200m,
+      "Competitor Density": loc.competitor_density_200m,
+      "Zone Type": loc.zone_type,
+    }));
+    const sheet2 = XLSX.utils.json_to_sheet(rawKmeans);
+    XLSX.utils.book_append_sheet(workbook, sheet2, "Raw K-means Data");
+
+    // Sheet 3: Insights & Recommendations
+    const insightsData = clusterInsights.map((insight, idx) => ({
+      "Insight #": idx + 1,
+      "Insight": insight,
+      "Type": insight.includes("Cluster") ? "Cluster Analysis" :
+        insight.includes("commercial") ? "Zone Analysis" :
+          insight.includes("Market gap") ? "Market Gap" : "General",
     }));
 
-    const worksheet = XLSX.utils.json_to_sheet(rows);
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, "Opportunities");
-    XLSX.writeFile(workbook, "opportunities.xlsx");
-    toast.success("Exported report as Excel");
-    logActivity("Exported Opportunities Report", { format: "Excel" });
+    // Add cluster-specific recommendations
+    clusterKPIs.clusterStats.forEach((cluster) => {
+      let recommendation = "";
+      if (cluster.avgCompetition < 2 && cluster.avgDensity > 10) {
+        recommendation = "High-value opportunity area - Recommended for new business";
+      } else if (cluster.avgCompetition > 5) {
+        recommendation = "High competition - Consider differentiation strategy";
+      } else if (cluster.avgDensity < 5) {
+        recommendation = "Emerging market - Early mover advantage possible";
+      } else {
+        recommendation = "Moderate opportunity - Standard market entry";
+      }
+
+      insightsData.push({
+        "Insight #": insightsData.length + 1,
+        "Insight": `Cluster ${cluster.clusterId}: ${recommendation}`,
+        "Type": "Recommendation",
+      });
+    });
+
+    const sheet3 = XLSX.utils.json_to_sheet(insightsData);
+    XLSX.utils.book_append_sheet(workbook, sheet3, "Insights & Recommendations");
+
+    XLSX.writeFile(workbook, `opportunities_report_${businessType.replace(/\s+/g, '_')}.xlsx`);
+    toast.success("Exported report as Excel (3 sheets)");
+    logActivity("Exported Opportunities Report", { format: "Excel", sheets: 3 });
   };
 
   const exportPDF = () => {
     const doc = new jsPDF();
-    doc.text("Business Opportunities Report", 14, 10);
+    const pageWidth = doc.internal.pageSize.getWidth();
+    let yPos = 15;
 
-    const rows = opportunities.map((o: Opportunity) => [
-      o.title,
-      o.category,
-      o.cluster ?? 0,
-      o.businessDensity,
-      o.competitors,
-      o.zone_type,
-      `${o.saturation}%`,
-      `${o.score}%`,
-      o.coordinates.lat,
-      o.coordinates.lng,
+    // Title
+    doc.setFontSize(20);
+    doc.setFont("helvetica", "bold");
+    doc.text("Business Opportunities Report", pageWidth / 2, yPos, { align: "center" });
+    yPos += 8;
+
+    doc.setFontSize(12);
+    doc.setFont("helvetica", "normal");
+    doc.text(`Category: ${businessType}`, pageWidth / 2, yPos, { align: "center" });
+    yPos += 5;
+    doc.setFontSize(10);
+    doc.text(`Generated: ${new Date().toLocaleDateString()}`, pageWidth / 2, yPos, { align: "center" });
+    yPos += 12;
+
+    // Dashboard Metrics Section
+    doc.setFontSize(14);
+    doc.setFont("helvetica", "bold");
+    doc.text("Dashboard Metrics", 14, yPos);
+    yPos += 8;
+
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "normal");
+    const metrics = [
+      ["Total Opportunities", clusterKPIs.totalOpportunities.toString()],
+      ["Number of Clusters", clusterKPIs.numClusters.toString()],
+      ["Avg Business Density", clusterKPIs.avgBusinessDensity.toString()],
+      ["Avg Competition", clusterKPIs.avgCompetition.toString()],
+      ["Commercial Zones", clusterKPIs.commercialZoneCount.toString()],
+      ["Residential Zones", clusterKPIs.residentialZoneCount.toString()],
+    ];
+
+    autoTable(doc, {
+      startY: yPos,
+      head: [["Metric", "Value"]],
+      body: metrics,
+      theme: "grid",
+      headStyles: { fillColor: [59, 130, 246], textColor: 255 },
+      styles: { fontSize: 9 },
+    });
+    yPos = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 10;
+
+    // Cluster Analysis Section
+    doc.setFontSize(14);
+    doc.setFont("helvetica", "bold");
+    doc.text("Cluster Analysis", 14, yPos);
+    yPos += 8;
+
+    const clusterRows = clusterKPIs.clusterStats.map((cluster) => [
+      cluster.clusterId.toString(),
+      cluster.opportunityScore.toString(),
+      cluster.avgDensity.toString(),
+      cluster.avgCompetition.toString(),
+      cluster.locationCount.toString(),
+      cluster.commercialCount.toString(),
     ]);
 
     autoTable(doc, {
-      head: [
-        [
-          "Title",
-          "Category",
-          "Cluster",
-          "Density",
-          "Competitors",
-          "Zone",
-          "Saturation",
-          "Score",
-          "Lat",
-          "Lng",
-        ],
-      ],
-      body: rows,
-      startY: 20,
+      startY: yPos,
+      head: [["Cluster", "Score", "Density", "Competition", "Locations", "Commercial"]],
+      body: clusterRows,
+      theme: "striped",
+      headStyles: { fillColor: [16, 185, 129], textColor: 255 },
       styles: { fontSize: 8 },
     });
+    yPos = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 10;
 
-    doc.save("opportunities.pdf");
+    // Opportunities Table
+    if (yPos > 200) {
+      doc.addPage();
+      yPos = 15;
+    }
+
+    doc.setFontSize(14);
+    doc.setFont("helvetica", "bold");
+    doc.text("Opportunity Locations", 14, yPos);
+    yPos += 8;
+
+    const oppRows = opportunities.slice(0, 20).map((o: Opportunity) => [
+      o.title.substring(0, 25),
+      o.cluster?.toString() ?? "0",
+      o.businessDensity.toString(),
+      o.competitors.toString(),
+      o.zone_type,
+      `${o.score}%`,
+    ]);
+
+    autoTable(doc, {
+      startY: yPos,
+      head: [["Location", "Cluster", "Density", "Competitors", "Zone", "Score"]],
+      body: oppRows,
+      theme: "striped",
+      headStyles: { fillColor: [139, 92, 246], textColor: 255 },
+      styles: { fontSize: 7 },
+    });
+    yPos = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 10;
+
+    // Insights & Recommendations Section
+    if (yPos > 220) {
+      doc.addPage();
+      yPos = 15;
+    }
+
+    doc.setFontSize(14);
+    doc.setFont("helvetica", "bold");
+    doc.text("Insights & Recommendations", 14, yPos);
+    yPos += 8;
+
+    doc.setFontSize(9);
+    doc.setFont("helvetica", "normal");
+    clusterInsights.forEach((insight, idx) => {
+      if (yPos > 280) {
+        doc.addPage();
+        yPos = 15;
+      }
+      doc.text(`${idx + 1}. ${insight}`, 14, yPos, { maxWidth: pageWidth - 28 });
+      yPos += 6;
+    });
+
+    doc.save(`opportunities_report_${businessType.replace(/\s+/g, '_')}.pdf`);
     toast.success("Exported report as PDF");
     logActivity("Exported Opportunities Report", { format: "PDF" });
   };
