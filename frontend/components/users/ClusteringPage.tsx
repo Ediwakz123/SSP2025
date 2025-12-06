@@ -350,11 +350,12 @@ export function ClusteringPage() {
       return;
     }
 
-    // Don't detect category if business is invalid
+    // Don't detect category if business is invalid - but keep loading state as-is
+    // to avoid visual flash when validation completes
     if (businessValidation && !businessValidation.valid) {
       setAiCategory(null);
       setAiCategoryExplanation(null);
-      setAiCategoryLoading(false);
+      // Don't reset loading here - let the UI handle invalid state separately
       return;
     }
 
@@ -405,7 +406,7 @@ export function ClusteringPage() {
       } finally {
         setAiCategoryLoading(false);
       }
-    }, 600);
+    }, 300); // Reduced debounce for faster response
 
     return () => {
       clearTimeout(timeoutId);
