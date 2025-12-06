@@ -25,6 +25,8 @@ import Papa from "papaparse";
 import * as XLSX from "xlsx";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
+import { RefreshCw, AlertCircle } from "lucide-react";
+import { Skeleton } from "../shared/ErrorBoundary";
 
 // New imports for enhanced features
 import {
@@ -351,6 +353,7 @@ export function OpportunitiesPage() {
     useState<ClusteringRow | null>(null);
   const [businesses, setBusinesses] = useState<BusinessRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [selectedTab, setSelectedTab] = useState("overview");
   const [showAll, setShowAll] = useState(false);
   const [openExportModal, setOpenExportModal] = useState(false);
@@ -358,8 +361,11 @@ export function OpportunitiesPage() {
 
 
   // Load clustering result and active businesses
-  useEffect(() => {
-    const loadData = async () => {
+  const loadData = async () => {
+    setLoading(true);
+    setError(null);
+
+    try {
       // Build query - if coming from ClusteringPage with a category, filter by it
       let clusterQuery = supabase
         .from("clustering_opportunities")
@@ -379,44 +385,124 @@ export function OpportunitiesPage() {
           .eq("status", "Active"),
       ]);
 
-      if (!clusterRes.error && clusterRes.data) {
+      // Handle clustering results - don't crash on missing data
+      if (clusterRes.error) {
+        console.log("No clustering opportunities found:", clusterRes.error.message);
+        // This is expected if no clustering has been done yet
+        setClusteringResults(null);
+      } else if (clusterRes.data) {
         setClusteringResults(clusterRes.data as ClusteringRow);
       }
 
       if (!bizRes.error && bizRes.data) {
         setBusinesses(bizRes.data as BusinessRow[]);
       }
-
+    } catch (err) {
+      console.error("Error loading opportunities data:", err);
+      setError("Failed to load opportunities. Please try again.");
+    } finally {
       setLoading(false);
-    };
+    }
+  };
 
+  useEffect(() => {
     loadData();
   }, [navigationState?.fromClustering, navigationState?.selectedCategory]);
 
   // ----------------------------------------
-  // LOADING SCREEN
+  // LOADING SCREEN - Skeleton Cards
   // ----------------------------------------
   if (loading) {
     return (
-      <div className="min-h-[60vh] flex items-center justify-center">
-        <div className="text-center space-y-4">
-          <div className="relative">
-            <div className="w-16 h-16 rounded-full bg-linear-to-br from-blue-500 to-indigo-600 flex items-center justify-center mx-auto animate-pulse">
-              <Lightbulb className="w-8 h-8 text-white" />
-            </div>
-            <div className="absolute inset-0 w-16 h-16 mx-auto rounded-full border-4 border-blue-200 border-t-blue-500 animate-spin" />
-          </div>
-          <div>
-            <p className="text-lg font-semibold text-gray-900">Loading Opportunities</p>
-            <p className="text-sm text-gray-500">Analyzing business data for insights...</p>
+      <div className="space-y-8 p-6">
+        {/* Hero skeleton */}
+        <div className="relative overflow-hidden rounded-2xl bg-linear-to-br from-blue-100 to-indigo-100 p-8 animate-pulse">
+          <div className="h-10 w-64 bg-blue-200 rounded-lg mb-4" />
+          <div className="h-5 w-96 bg-blue-200/70 rounded" />
+        </div>
+
+        {/* KPI Cards skeleton */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          {[1, 2, 3, 4].map((i) => (
+            <Card key={i} className="border-0 shadow-md animate-pulse">
+              <CardContent className="p-6">
+                <div className="h-4 w-24 bg-gray-200 rounded mb-3" />
+                <div className="h-8 w-16 bg-gray-200 rounded" />
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+
+        {/* Opportunity cards skeleton */}
+        <div className="grid gap-6">
+          {[1, 2, 3].map((i) => (
+            <Card key={i} className="border-0 shadow-lg animate-pulse">
+              <CardHeader className="bg-gray-50/50 border-b">
+                <div className="flex gap-2 mb-3">
+                  <div className="h-6 w-20 bg-gray-200 rounded-full" />
+                  <div className="h-6 w-24 bg-gray-200 rounded-full" />
+                  <div className="h-6 w-20 bg-gray-200 rounded-full" />
+                </div>
+                <div className="h-6 w-64 bg-gray-200 rounded" />
+              </CardHeader>
+              <CardContent className="p-6 space-y-4">
+                <div className="grid grid-cols-4 gap-3">
+                  {[1, 2, 3, 4].map((j) => (
+                    <div key={j} className="p-3 bg-gray-100 rounded-xl">
+                      <div className="h-4 w-12 bg-gray-200 rounded mb-2" />
+                      <div className="h-6 w-8 bg-gray-200 rounded" />
+                    </div>
+                  ))}
+                </div>
+                <div className="h-20 bg-gray-100 rounded-xl" />
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+
+        {/* Loading indicator */}
+        <div className="text-center text-gray-500">
+          <div className="flex items-center justify-center gap-2">
+            <RefreshCw className="w-4 h-4 animate-spin" />
+            <span>Analyzing business data for insights...</span>
           </div>
         </div>
       </div>
     );
   }
 
+  // ----------------------------------------
+  // ERROR STATE
+  // ----------------------------------------
+  if (error) {
+    return (
+      <div className="page-wrapper">
+        <Card className="p-12 text-center border-0 shadow-xl bg-white/80 backdrop-blur-sm">
+          <div className="flex flex-col items-center gap-4">
+            <div className="w-16 h-16 rounded-full bg-linear-to-br from-red-100 to-rose-200 flex items-center justify-center">
+              <AlertCircle className="w-8 h-8 text-red-500" />
+            </div>
+            <div>
+              <h3 className="text-xl font-semibold text-gray-700">Something went wrong</h3>
+              <p className="text-gray-500 mt-1">{error}</p>
+            </div>
+            <Button
+              onClick={loadData}
+              className="mt-4 bg-linear-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700"
+            >
+              <RefreshCw className="w-4 h-4 mr-2" />
+              Try Again
+            </Button>
+          </div>
+        </Card>
+      </div>
+    );
+  }
 
-  if (!clusteringResults || !clusteringResults.locations) {
+  // ----------------------------------------
+  // EMPTY STATE - No clustering data
+  // ----------------------------------------
+  if (!clusteringResults || !clusteringResults.locations || clusteringResults.locations.length === 0) {
     return (
       <div className="page-wrapper">
         <Card className="p-12 text-center border-0 shadow-xl bg-white/80 backdrop-blur-sm">
@@ -426,14 +512,26 @@ export function OpportunitiesPage() {
             </div>
             <div>
               <h3 className="text-xl font-semibold text-gray-700">No Opportunities Yet</h3>
-              <p className="text-gray-500 mt-1">Run clustering analysis first to discover business opportunities</p>
+              <p className="text-gray-500 mt-1 max-w-md">
+                Run a clustering analysis on the Clustering page to discover business opportunities tailored to your preferences.
+              </p>
             </div>
-            <Button
-              onClick={() => navigate("/user/dashboard/clustering")}
-              className="mt-4 bg-linear-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700"
-            >
-              Go to Clustering
-            </Button>
+            <div className="flex gap-3 mt-4">
+              <Button
+                onClick={() => navigate("/user/dashboard/clustering")}
+                className="bg-linear-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700"
+              >
+                Go to Clustering
+              </Button>
+              <Button
+                variant="outline"
+                onClick={loadData}
+                className="hover:bg-gray-50"
+              >
+                <RefreshCw className="w-4 h-4 mr-2" />
+                Refresh
+              </Button>
+            </div>
           </div>
         </Card>
       </div>
