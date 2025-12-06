@@ -512,25 +512,52 @@ export function OpportunitiesPage() {
 
   // Compute aggregate zone analysis for all opportunities
   const aggregateZoneAnalysis = useMemo(() => {
-    const avgDensity = opportunities.reduce((sum, op) => sum + op.businessDensity, 0) / opportunities.length || 0;
-    const avgCompetitors = opportunities.reduce((sum, op) => sum + op.competitors, 0) / opportunities.length || 0;
+    if (opportunities.length === 0) {
+      return {
+        bestZone: "Mixed" as const,
+        score: 0,
+        reasoning: ["No opportunities available for analysis"],
+        competitionLevel: "Low" as const,
+        marketDemand: "Low" as const,
+        accessibility: "Moderate" as const,
+      };
+    }
+    const avgDensity = opportunities.reduce((sum, op) => sum + op.businessDensity, 0) / opportunities.length;
+    const avgCompetitors = opportunities.reduce((sum, op) => sum + op.competitors, 0) / opportunities.length;
     const primaryZone = opportunities[0]?.zone_type || "Mixed";
 
     return determineBestZone(avgDensity, avgCompetitors, primaryZone, businessType);
   }, [opportunities, businessType]);
 
   const aggregateSuitability = useMemo(() => {
-    const avgDensity = opportunities.reduce((sum, op) => sum + op.businessDensity, 0) / opportunities.length || 0;
-    const avgCompetitors = opportunities.reduce((sum, op) => sum + op.competitors, 0) / opportunities.length || 0;
+    if (opportunities.length === 0) {
+      return {
+        suitability: "Both" as const,
+        residentialScore: 50,
+        commercialScore: 50,
+        explanation: "No opportunities available for suitability analysis.",
+      };
+    }
+    const avgDensity = opportunities.reduce((sum, op) => sum + op.businessDensity, 0) / opportunities.length;
+    const avgCompetitors = opportunities.reduce((sum, op) => sum + op.competitors, 0) / opportunities.length;
 
     return evaluateZoneSuitability(businessType, avgDensity, avgCompetitors);
   }, [opportunities, businessType]);
 
   // Generate aggregate insights panel data
   const aggregateInsights = useMemo(() => {
-    const avgDensity = opportunities.reduce((sum, op) => sum + op.businessDensity, 0) / opportunities.length || 0;
-    const avgCompetitors = opportunities.reduce((sum, op) => sum + op.competitors, 0) / opportunities.length || 0;
-    const avgScore = opportunities.reduce((sum, op) => sum + op.score, 0) / opportunities.length || 0;
+    if (opportunities.length === 0) {
+      return {
+        risks: ["No opportunities data available"],
+        advantages: [],
+        marketConsiderations: [],
+        strategies: [],
+        zoneGuidance: [],
+      };
+    }
+    const avgDensity = opportunities.reduce((sum, op) => sum + op.businessDensity, 0) / opportunities.length;
+    const avgCompetitors = opportunities.reduce((sum, op) => sum + op.competitors, 0) / opportunities.length;
+    const avgScore = opportunities.reduce((sum, op) => sum + op.score, 0) / opportunities.length;
     const primaryZone = opportunities[0]?.zone_type || "Mixed";
 
     return generateInsightsPanelData(businessType, primaryZone, avgDensity, avgCompetitors, avgScore);
