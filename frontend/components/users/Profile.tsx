@@ -20,17 +20,17 @@ import {
   SelectItem,
 } from "../ui/select";
 
-import { 
-  Mail, 
-  Calendar, 
-  Pencil, 
-  Save, 
-  X, 
-  Loader2, 
-  User, 
-  Phone, 
-  MapPin, 
-  Shield, 
+import {
+  Mail,
+  Calendar,
+  Pencil,
+  Save,
+  X,
+  Loader2,
+  User,
+  Phone,
+  MapPin,
+  Shield,
   CheckCircle,
   Sparkles
 } from "lucide-react";
@@ -40,7 +40,6 @@ interface ProfileData {
   email: string;
   firstName: string;
   lastName: string;
-  age: number | "";
   gender: string;
   contactNumber: string;
   address: string;
@@ -59,7 +58,6 @@ export function Profile() {
   const [formData, setFormData] = useState({
     firstName: "",
     lastName: "",
-    age: "",
     gender: "",
     contactNumber: "",
     address: "",
@@ -68,7 +66,6 @@ export function Profile() {
   const [errors, setErrors] = useState({
     firstName: "",
     lastName: "",
-    age: "",
     contactNumber: "",
   });
 
@@ -89,7 +86,6 @@ export function Profile() {
         email: u.email ?? "",
         firstName: u.user_metadata.first_name || "",
         lastName: u.user_metadata.last_name || "",
-        age: u.user_metadata.age || "",
         gender: u.user_metadata.gender || "",
         contactNumber: u.user_metadata.contact_number || "",
         address: u.user_metadata.address || "",
@@ -102,7 +98,6 @@ export function Profile() {
       setFormData({
         firstName: p.firstName,
         lastName: p.lastName,
-        age: p.age ? String(p.age) : "",
         gender: p.gender,
         contactNumber: p.contactNumber,
         address: p.address,
@@ -143,7 +138,7 @@ export function Profile() {
   // VALIDATION
   // ----------------------------------------------------
   const validateForm = () => {
-    const newErrors = { firstName: "", lastName: "", age: "", contactNumber: "" };
+    const newErrors = { firstName: "", lastName: "", contactNumber: "" };
     let valid = true;
 
     if (!formData.firstName.trim()) {
@@ -153,13 +148,6 @@ export function Profile() {
     if (!formData.lastName.trim()) {
       newErrors.lastName = "Required";
       valid = false;
-    }
-    if (formData.age) {
-      const n = Number(formData.age);
-      if (isNaN(n) || n < 1 || n > 120) {
-        newErrors.age = "Invalid age";
-        valid = false;
-      }
     }
     if (formData.contactNumber && !/^\+?[\d\s\-()]{7,20}$/.test(formData.contactNumber)) {
       newErrors.contactNumber = "Invalid phone number";
@@ -187,7 +175,6 @@ export function Profile() {
         data: {
           first_name: capitalize(formData.firstName),
           last_name: capitalize(formData.lastName),
-          age: formData.age ? Number(formData.age) : null,
           gender: formData.gender,
           contact_number: cleanPhone(formData.contactNumber),
           address: formData.address.trim(),
@@ -208,7 +195,6 @@ export function Profile() {
       logActivity("Saved Profile", {
         firstName: formData.firstName,
         lastName: formData.lastName,
-        age: formData.age,
         gender: formData.gender,
         contactNumber: formData.contactNumber,
         address: formData.address,
@@ -230,7 +216,6 @@ export function Profile() {
     const fields = [
       profile.firstName,
       profile.lastName,
-      profile.age,
       profile.gender,
       profile.contactNumber,
       profile.address,
@@ -270,7 +255,7 @@ export function Profile() {
         {/* Decorative elements */}
         <div className="absolute top-0 right-0 w-80 h-80 bg-white/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/4" />
         <div className="absolute bottom-0 left-0 w-64 h-64 bg-white/10 rounded-full blur-3xl translate-y-1/2 -translate-x-1/4" />
-        
+
         <div className="relative z-10 flex flex-col md:flex-row gap-6 items-center">
           {/* Avatar with gradient ring */}
           <div className="relative">
@@ -330,11 +315,10 @@ export function Profile() {
         <CardContent className="p-6">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-3">
-              <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${
-                completionPercentage === 100 
-                  ? "bg-emerald-100 text-emerald-600" 
+              <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${completionPercentage === 100
+                  ? "bg-emerald-100 text-emerald-600"
                   : "bg-indigo-100 text-indigo-600"
-              }`}>
+                }`}>
                 {completionPercentage === 100 ? (
                   <CheckCircle className="w-6 h-6" />
                 ) : (
@@ -344,29 +328,27 @@ export function Profile() {
               <div>
                 <h3 className="font-semibold text-gray-900">Profile Completion</h3>
                 <p className="text-sm text-gray-500">
-                  {completionPercentage === 100 
-                    ? "Your profile is complete!" 
+                  {completionPercentage === 100
+                    ? "Your profile is complete!"
                     : "Fill in missing fields to complete your profile"
                   }
                 </p>
               </div>
             </div>
             <div className="text-right">
-              <span className={`text-2xl font-bold ${
-                completionPercentage === 100 ? "text-emerald-600" : "text-indigo-600"
-              }`}>
+              <span className={`text-2xl font-bold ${completionPercentage === 100 ? "text-emerald-600" : "text-indigo-600"
+                }`}>
                 {completionPercentage}%
               </span>
             </div>
           </div>
           <div className="relative">
             <Progress value={completionPercentage} className="h-3 bg-gray-100" />
-            <div 
-              className={`absolute top-0 left-0 h-3 rounded-full transition-all duration-500 ${
-                completionPercentage === 100 
-                  ? "bg-linear-to-r from-emerald-400 to-teal-400" 
+            <div
+              className={`absolute top-0 left-0 h-3 rounded-full transition-all duration-500 ${completionPercentage === 100
+                  ? "bg-linear-to-r from-emerald-400 to-teal-400"
                   : "bg-linear-to-r from-indigo-500 to-purple-500"
-              }`}
+                }`}
               style={{ width: `${completionPercentage}%` }}
             />
           </div>
@@ -435,43 +417,27 @@ export function Profile() {
               Additional Details
             </h3>
 
-            <div className="grid md:grid-cols-2 gap-6">
-              <div className="space-y-2">
-                <Label className="font-medium text-gray-700">Age</Label>
-                <Input
-                  className={`${editClass} transition-all duration-200`}
-                  type="number"
-                  disabled={!editing}
-                  value={formData.age}
-                  onChange={(e) => setFormData({ ...formData, age: e.target.value })}
-                  min="1"
-                  max="120"
-                />
-                {errors.age && <p className="text-red-500 text-sm">{errors.age}</p>}
-              </div>
-
-              <div className="space-y-2">
-                <Label className="font-medium text-gray-700">Gender</Label>
-                {editing ? (
-                  <Select
-                    value={formData.gender}
-                    onValueChange={(value) =>
-                      setFormData({ ...formData, gender: value })
-                    }
-                  >
-                    <SelectTrigger className={`${editClass} transition-all duration-200`}>
-                      <SelectValue placeholder="Select gender" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="male">Male</SelectItem>
-                      <SelectItem value="female">Female</SelectItem>
-                      <SelectItem value="other">Other</SelectItem>
-                    </SelectContent>
-                  </Select>
-                ) : (
-                  <Input disabled className="bg-gray-50 border-gray-200" value={formatGender(formData.gender)} />
-                )}
-              </div>
+            <div className="space-y-2">
+              <Label className="font-medium text-gray-700">Gender</Label>
+              {editing ? (
+                <Select
+                  value={formData.gender}
+                  onValueChange={(value) =>
+                    setFormData({ ...formData, gender: value })
+                  }
+                >
+                  <SelectTrigger className={`${editClass} transition-all duration-200`}>
+                    <SelectValue placeholder="Select gender" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="male">Male</SelectItem>
+                    <SelectItem value="female">Female</SelectItem>
+                    <SelectItem value="other">Other</SelectItem>
+                  </SelectContent>
+                </Select>
+              ) : (
+                <Input disabled className="bg-gray-50 border-gray-200" value={formatGender(formData.gender)} />
+              )}
             </div>
           </div>
 
@@ -538,8 +504,8 @@ export function Profile() {
                 <X className="mr-2 w-4 h-4" /> Cancel
               </Button>
 
-              <Button 
-                onClick={handleSave} 
+              <Button
+                onClick={handleSave}
                 disabled={saving}
                 className="px-8 bg-linear-to-r from-indigo-500 to-purple-500 hover:from-indigo-600 hover:to-purple-600 shadow-lg shadow-indigo-500/25 hover:shadow-xl hover:shadow-indigo-500/30 transition-all"
               >

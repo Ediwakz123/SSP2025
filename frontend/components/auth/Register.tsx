@@ -2,7 +2,7 @@ import { useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { supabase } from "../../lib/supabase";
-import { ArrowLeft, MapPin, User, Mail, Lock, Phone, MapPinned, Calendar, Users, CheckCircle2, AlertCircle } from "lucide-react";
+import { ArrowLeft, MapPin, User, Mail, Lock, Phone, MapPinned, Calendar, Users, CheckCircle2, AlertCircle, Eye, EyeOff } from "lucide-react";
 
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
@@ -60,6 +60,10 @@ export function Register() {
 
   // Field-level errors
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+
+  // Password visibility toggles
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -331,7 +335,7 @@ export function Register() {
                 <div className="relative">
                   <Input
                     name="password"
-                    type="password"
+                    type={showPassword ? "text" : "password"}
                     icon={<Lock className="w-5 h-5" />}
                     placeholder="Minimum 8 characters"
                     value={formData.password}
@@ -339,7 +343,20 @@ export function Register() {
                     onBlur={() => handleBlur("password")}
                     error={!!fieldErrors.password}
                     disabled={isLoading}
+                    className="pr-12"
                   />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors p-1"
+                    tabIndex={-1}
+                  >
+                    {showPassword ? (
+                      <EyeOff className="w-4 h-4" />
+                    ) : (
+                      <Eye className="w-4 h-4" />
+                    )}
+                  </button>
                   <FieldSuccess show={isFieldValid("password")} />
                 </div>
                 <FieldError error={fieldErrors.password} />
@@ -353,7 +370,7 @@ export function Register() {
                 <div className="relative">
                   <Input
                     name="confirmPassword"
-                    type="password"
+                    type={showConfirmPassword ? "text" : "password"}
                     icon={<Lock className="w-5 h-5" />}
                     placeholder="Confirm your password"
                     value={formData.confirmPassword}
@@ -361,7 +378,20 @@ export function Register() {
                     onBlur={() => handleBlur("confirmPassword")}
                     error={!!fieldErrors.confirmPassword}
                     disabled={isLoading}
+                    className="pr-12"
                   />
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors p-1"
+                    tabIndex={-1}
+                  >
+                    {showConfirmPassword ? (
+                      <EyeOff className="w-4 h-4" />
+                    ) : (
+                      <Eye className="w-4 h-4" />
+                    )}
+                  </button>
                   <FieldSuccess show={isFieldValid("confirmPassword")} />
                 </div>
                 <FieldError error={fieldErrors.confirmPassword} />

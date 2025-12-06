@@ -16,7 +16,7 @@ import {
   SelectValue,
 } from "../ui/select";
 import { Label } from "../ui/label";
-import { MapPin, Filter, RefreshCcw, Loader2, Globe, Layers, Compass } from "lucide-react";
+import { MapPin, Filter, RefreshCcw, Loader2, Globe, Layers, Compass, List, ChevronRight, Building, Info } from "lucide-react";
 import { useLocation } from "react-router-dom";
 import { supabase } from "../../lib/supabase";
 import { LOCATION_INFO } from "../../data/businesses";
@@ -47,7 +47,7 @@ const CATEGORY_COLORS: Record<string, string> = {
   Services: "#f59e0b",
   "Merchandising / Trading": "#ef4444",
   "Entertainment / Leisure": "#a78bfa",
-  Miscellaneous: "#475569",
+  Restaurant: "#475569",
 };
 
 
@@ -58,7 +58,7 @@ const CATEGORY_COLORS: Record<string, string> = {
 // NORMALIZATION (prevents duplicate legend entries)
 // ---------------------------------------------------------
 function normalizeCategory(raw?: string | null): string {
-  if (!raw) return "Miscellaneous";
+  if (!raw) return "Restaurant";
 
   const cleaned = raw.trim();
 
@@ -68,12 +68,12 @@ function normalizeCategory(raw?: string | null): string {
     "Services",
     "Merchandising / Trading",
     "Entertainment / Leisure",
-    "Miscellaneous",
+    "Restaurant",
   ];
 
   if (allowed.includes(cleaned)) return cleaned;
 
-  return "Miscellaneous";
+  return "Restaurant";
 }
 
 
@@ -121,7 +121,7 @@ export function MapPage() {
   const mapRef = useRef<HTMLDivElement>(null);
   const leafletMap = useRef<L.Map | null>(null);
   const clusterLayer = useRef<MarkerClusterGroup | null>(null);
-const { state: _state } = useLocation();
+  const { state: _state } = useLocation();
   const [businesses, setBusinesses] = useState<Business[]>([]);
   const [categories, setCategories] = useState<string[]>([]);
   const [selectedCategory, setSelectedCategory] = useState("all");
@@ -129,8 +129,13 @@ const { state: _state } = useLocation();
   const [totalMarkers, setTotalMarkers] = useState(0);
   const [isLeafletReady, setIsLeafletReady] = useState(false);
 
+  // Business list panel state
+  const [currentBatch, setCurrentBatch] = useState(1);
+  const BATCH_SIZE = 10;
+  const [selectedBusinessId, setSelectedBusinessId] = useState<number | null>(null);
 
-  
+
+
   // ---------------------------------------------------------
   // LOAD SUPABASE DATA
   // ---------------------------------------------------------
@@ -273,26 +278,26 @@ const { state: _state } = useLocation();
       const safe = clampToStaCruz(b.latitude, b.longitude);
 
       const marker = Leaflet.circleMarker([safe.latitude, safe.longitude], {
-  radius: 8,
-  fillColor: color,
-  color: "#fff",
-  weight: 2,
-  fillOpacity: 0.9,
-})
-  // 👇 ADD THIS CLICK EVENT
-  .on("click", () => {
-    toast.message(`Viewing: ${b.business_name}`);
+        radius: 8,
+        fillColor: color,
+        color: "#fff",
+        weight: 2,
+        fillOpacity: 0.9,
+      })
+        // 👇 ADD THIS CLICK EVENT
+        .on("click", () => {
+          toast.message(`Viewing: ${b.business_name}`);
 
-    logActivity("Viewed Business Marker", {
-      business_name: b.business_name,
-      category: cleanCategory,
-      zone: b.zone_type,
-      street: b.street,
-    });
-  })
+          logActivity("Viewed Business Marker", {
+            business_name: b.business_name,
+            category: cleanCategory,
+            zone: b.zone_type,
+            street: b.street,
+          });
+        })
 
-  // keep your popup — no changes
-  .bindPopup(`
+        // keep your popup — no changes
+        .bindPopup(`
     <strong>${b.business_name}</strong><br/>
     <span style="color:${color};font-weight:600;">${cleanCategory}</span><br/>
     <small>${b.street ?? ""}</small><br/>
@@ -340,46 +345,46 @@ const { state: _state } = useLocation();
   // RESET
   // ---------------------------------------------------------
   const resetView = () => {
-  setSelectedCategory("all");
-  setSelectedZone("all");
-  renderClusters(businesses);
+    setSelectedCategory("all");
+    setSelectedZone("all");
+    renderClusters(businesses);
 
-  toast.success("Map view reset");
-  logActivity("Reset Map View");
-};
-
-
+    toast.success("Map view reset");
+    logActivity("Reset Map View");
+  };
 
 
-// ---------------------------
-// MAP LOADING SCREEN
-// ---------------------------
-if (!isLeafletReady || businesses.length === 0) {
-  return (
-    <div className="flex flex-col items-center justify-center h-[60vh] animate-fadeIn">
-      <div className="relative">
-        <div className="w-16 h-16 rounded-2xl bg-linear-to-br from-cyan-500 to-blue-600 animate-pulse flex items-center justify-center">
-          <Loader2 className="w-8 h-8 text-white animate-spin" />
+
+
+  // ---------------------------
+  // MAP LOADING SCREEN
+  // ---------------------------
+  if (!isLeafletReady || businesses.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center h-[60vh] animate-fadeIn">
+        <div className="relative">
+          <div className="w-16 h-16 rounded-2xl bg-linear-to-br from-cyan-500 to-blue-600 animate-pulse flex items-center justify-center">
+            <Loader2 className="w-8 h-8 text-white animate-spin" />
+          </div>
+          <div className="absolute -inset-4 bg-linear-to-br from-cyan-500/20 to-blue-600/20 rounded-3xl blur-xl animate-pulse" />
         </div>
-        <div className="absolute -inset-4 bg-linear-to-br from-cyan-500/20 to-blue-600/20 rounded-3xl blur-xl animate-pulse" />
+        <p className="mt-6 text-gray-600 font-medium">Loading map...</p>
+        <p className="text-sm text-gray-400 mt-1">Preparing visualization</p>
       </div>
-      <p className="mt-6 text-gray-600 font-medium">Loading map...</p>
-      <p className="text-sm text-gray-400 mt-1">Preparing visualization</p>
-    </div>
-  );
-}
+    );
+  }
 
   // ---------------------------------------------------------
   // UI
   // ---------------------------------------------------------
   return (
-    
+
     <div className="page-wrapper space-y-6">
       {/* Hero Header */}
       <div className="page-content relative overflow-hidden rounded-2xl bg-linear-to-br from-cyan-500 via-blue-500 to-indigo-500 p-6 text-white">
         <div className="absolute top-0 right-0 w-48 h-48 bg-white/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/4" />
         <div className="absolute bottom-0 left-0 w-32 h-32 bg-white/10 rounded-full blur-3xl translate-y-1/2 -translate-x-1/4" />
-        
+
         <div className="relative z-10 flex items-center gap-4">
           <div className="w-14 h-14 rounded-2xl bg-white/20 backdrop-blur-sm flex items-center justify-center">
             <Globe className="w-7 h-7 text-white" />
@@ -415,17 +420,17 @@ if (!isLeafletReady || businesses.length === 0) {
             <div className="space-y-2">
               <Label className="font-medium text-gray-700">Business Category</Label>
               <Select
-  value={selectedCategory}
-  onValueChange={(value) => {
-    setSelectedCategory(value);
-    toast.info(
-      value === "all"
-        ? "Showing all business categories"
-        : `Filtered by category: ${value}`
-    );
-    logActivity("Filtered Map by Category", { category: value });
-  }}
->
+                value={selectedCategory}
+                onValueChange={(value) => {
+                  setSelectedCategory(value);
+                  toast.info(
+                    value === "all"
+                      ? "Showing all business categories"
+                      : `Filtered by category: ${value}`
+                  );
+                  logActivity("Filtered Map by Category", { category: value });
+                }}
+              >
 
                 <SelectTrigger className="bg-white border-gray-200 hover:border-indigo-300 transition-colors">
                   <SelectValue placeholder="All Categories" />
@@ -435,8 +440,8 @@ if (!isLeafletReady || businesses.length === 0) {
                   {categories.map((c) => (
                     <SelectItem key={c} value={c}>
                       <div className="flex items-center gap-2">
-                        <div 
-                          className="w-3 h-3 rounded-full" 
+                        <div
+                          className="w-3 h-3 rounded-full"
                           style={{ backgroundColor: CATEGORY_COLORS[c] || "#6b7280" }}
                         />
                         {c}
@@ -464,8 +469,8 @@ if (!isLeafletReady || businesses.length === 0) {
           </div>
 
           <div className="mt-6 flex flex-wrap items-center gap-3">
-            <Button 
-              onClick={resetView} 
+            <Button
+              onClick={resetView}
               variant="outline"
               className="gap-2 hover:bg-gray-50 border-gray-200"
             >
@@ -504,6 +509,105 @@ if (!isLeafletReady || businesses.length === 0) {
         </CardContent>
       </Card>
 
+      {/* Map Description */}
+      <div className="p-4 bg-blue-50 rounded-xl border border-blue-100 flex items-start gap-3 animate-fadeInUp delay-150">
+        <Info className="w-5 h-5 text-blue-500 mt-0.5 shrink-0" />
+        <p className="text-sm text-gray-700">
+          This interactive map displays all <strong>{businesses.length} businesses</strong> in Sta. Cruz using business centroids.
+          Click any business marker to view details including business name, location, and zone type.
+        </p>
+      </div>
+
+      {/* Business List Panel */}
+      <Card className="border-0 shadow-card overflow-hidden animate-fadeInUp delay-175">
+        <CardHeader className="bg-linear-to-r from-gray-50 to-white border-b border-gray-100">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-linear-to-br from-emerald-500 to-teal-500 flex items-center justify-center">
+                <List className="w-5 h-5 text-white" />
+              </div>
+              <div>
+                <CardTitle className="text-lg">Business Directory</CardTitle>
+                <CardDescription>
+                  Showing {Math.min(currentBatch * BATCH_SIZE, businesses.length)} of {businesses.length} businesses
+                </CardDescription>
+              </div>
+            </div>
+            <div className="badge-modern badge-info">
+              Batch {currentBatch} of {Math.ceil(businesses.length / BATCH_SIZE)}
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="p-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 max-h-[400px] overflow-y-auto">
+            {businesses.slice(0, currentBatch * BATCH_SIZE).map((business) => {
+              const cleanCategory = normalizeCategory(business.general_category);
+              const color = CATEGORY_COLORS[cleanCategory] || "#6b7280";
+              const isSelected = selectedBusinessId === business.id;
+
+              return (
+                <button
+                  key={business.id}
+                  onClick={() => {
+                    setSelectedBusinessId(business.id);
+                    if (leafletMap.current) {
+                      const safe = clampToStaCruz(business.latitude, business.longitude);
+                      leafletMap.current.setView([safe.latitude, safe.longitude], 17);
+                    }
+                    toast.info(`Viewing: ${business.business_name}`);
+                    logActivity("Selected Business from List", {
+                      business_name: business.business_name,
+                      category: cleanCategory
+                    });
+                  }}
+                  className={`text-left p-3 rounded-xl border transition-all duration-200 ${isSelected
+                      ? "bg-indigo-50 border-indigo-300 shadow-md"
+                      : "bg-white border-gray-200 hover:bg-gray-50 hover:border-gray-300"
+                    }`}
+                >
+                  <div className="flex items-start gap-3">
+                    <div
+                      className="w-3 h-3 rounded-full mt-1.5 shrink-0"
+                      style={{ backgroundColor: color }}
+                    />
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-gray-900 truncate text-sm">
+                        {business.business_name}
+                      </p>
+                      <p className="text-xs text-gray-500 truncate mt-0.5">
+                        {cleanCategory}
+                      </p>
+                      <div className="flex items-center gap-2 mt-1">
+                        <span className={`text-xs px-2 py-0.5 rounded-full ${business.zone_type === "Commercial"
+                            ? "bg-blue-100 text-blue-700"
+                            : "bg-green-100 text-green-700"
+                          }`}>
+                          {business.zone_type}
+                        </span>
+                      </div>
+                    </div>
+                    <ChevronRight className="w-4 h-4 text-gray-400 shrink-0" />
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Load More Button */}
+          {currentBatch * BATCH_SIZE < businesses.length && (
+            <div className="mt-4 text-center">
+              <Button
+                onClick={() => setCurrentBatch(currentBatch + 1)}
+                variant="outline"
+                className="gap-2"
+              >
+                Load More ({businesses.length - currentBatch * BATCH_SIZE} remaining)
+              </Button>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
       {/* Legend */}
       <Card className="border-0 shadow-card overflow-hidden animate-fadeInUp delay-200">
         <CardHeader className="bg-linear-to-r from-gray-50 to-white border-b border-gray-100">
@@ -528,15 +632,14 @@ if (!isLeafletReady || businesses.length === 0) {
                     toast.info(`Filtered by: ${category}`);
                     logActivity("Clicked Legend Category", { category });
                   }}
-                  className={`flex items-center gap-3 p-3 rounded-xl transition-all duration-200 ${
-                    isSelected 
-                      ? "bg-indigo-50 border-2 border-indigo-300 shadow-sm" 
-                      : "bg-gray-50 border-2 border-transparent hover:bg-gray-100"
-                  }`}
+                  className={`flex items-center gap-3 p-3 rounded-xl transition-all duration-200 ${isSelected
+                    ? "bg-indigo-50 border-2 border-indigo-300 shadow-sm"
+                    : "bg-gray-50 border-2 border-transparent hover:bg-gray-100"
+                    }`}
                 >
                   <div
                     className="w-4 h-4 rounded-full shadow-sm shrink-0"
-                    style={{ 
+                    style={{
                       backgroundColor: color,
                       boxShadow: `0 0 8px ${color}40`
                     }}
