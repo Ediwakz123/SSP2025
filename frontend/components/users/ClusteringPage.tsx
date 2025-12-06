@@ -1513,10 +1513,18 @@ ${result?.competitorAnalysis.recommendedStrategy}
 
                     <Button
                       className="mt-4 w-full h-12 bg-linear-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white rounded-xl shadow-lg shadow-blue-200 transition-all hover:scale-[1.02]"
-                      onClick={() => navigate("/user/dashboard/opportunities")}
+                      onClick={() => navigate("/user/opportunities", {
+                        state: {
+                          fromClustering: true,
+                          selectedCategory: selectedCategory,
+                          businessIdea: businessIdea,
+                          clusterCount: result?.clusters.length || 0,
+                          zoneType: result?.zoneType || "Unknown"
+                        }
+                      })}
                     >
                       <TrendingUp className="w-4 h-4 mr-2" />
-                      View in Opportunities
+                      View Opportunities
                     </Button>
 
                   </div>

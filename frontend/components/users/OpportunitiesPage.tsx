@@ -1,7 +1,7 @@
-import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useEffect, useState, useMemo } from "react";
+import { useNavigate, useLocation } from "react-router-dom";
 import { supabase } from "../../lib/supabase";
-import {toast} from "sonner";
+import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
@@ -18,12 +18,28 @@ import {
   MapPin,
   Store,
   TrendingDown,
+  Zap,
 } from "lucide-react";
 
 import Papa from "papaparse";
 import * as XLSX from "xlsx";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
+
+// New imports for enhanced features
+import {
+  determineBestZone,
+  evaluateZoneSuitability,
+  evaluateTimeWorkFeasibility,
+  estimateRequiredCapital,
+  estimateProfitability,
+  assessRiskLevel,
+  suggestBusinessModel,
+  generateZoneInsights,
+} from "../../utils/zoneAnalysis";
+import { BusinessOpportunityCard, type EnhancedOpportunityData } from "./BusinessOpportunityCard";
+import { InsightsPanel, generateInsightsPanelData } from "./InsightsPanel";
+import { ZoneAnalysis } from "./ZoneAnalysis";
 
 // -----------------------------------------------------------------------------
 // Types
@@ -119,8 +135,8 @@ function computeOpportunityScore(
     zone?.toLowerCase() === "commercial"
       ? 20
       : zone?.toLowerCase() === "mixed"
-      ? 10
-      : 5;
+        ? 10
+        : 5;
 
   return Math.min(
     Math.round(
@@ -181,7 +197,7 @@ function calculateKPIs(opps: Opportunity[]) {
   const commercialZones = Math.round(
     (opps.filter((o) => o.zone_type === "Commercial").length /
       opps.length) *
-      100
+    100
   );
 
   return {
@@ -320,6 +336,17 @@ function buildMarketGaps(
 export function OpportunitiesPage() {
   useActivity();
   const navigate = useNavigate();
+  const location = useLocation();
+
+  // Navigation state from ClusteringPage
+  const navigationState = location.state as {
+    fromClustering?: boolean;
+    selectedCategory?: string;
+    businessIdea?: string;
+    clusterCount?: number;
+    zoneType?: string;
+  } | null;
+
   const [clusteringResults, setClusteringResults] =
     useState<ClusteringRow | null>(null);
   const [businesses, setBusinesses] = useState<BusinessRow[]>([]);
@@ -330,18 +357,24 @@ export function OpportunitiesPage() {
   const [_showExportModal, setShowExportModal] = useState(false);
 
 
-  // Load latest clustering result and active businesses
+  // Load clustering result and active businesses
   useEffect(() => {
     const loadData = async () => {
+      // Build query - if coming from ClusteringPage with a category, filter by it
+      let clusterQuery = supabase
+        .from("clustering_opportunities")
+        .select("*")
+        .order("created_at", { ascending: false });
+
+      // Filter by category if passed from ClusteringPage
+      if (navigationState?.fromClustering && navigationState?.selectedCategory) {
+        clusterQuery = clusterQuery.eq("business_category", navigationState.selectedCategory);
+      }
+
       const [clusterRes, bizRes] = await Promise.all([
+        clusterQuery.limit(1).single(),
         supabase
-          .from("clustering_opportunities")
-          .select("*")
-          .order("created_at", { ascending: false })
-          .limit(1)
-          .single(),
-        supabase
-          .from("businesses") // adjust table name if needed
+          .from("businesses")
           .select("*")
           .eq("status", "Active"),
       ]);
@@ -358,29 +391,29 @@ export function OpportunitiesPage() {
     };
 
     loadData();
-  }, []);
+  }, [navigationState?.fromClustering, navigationState?.selectedCategory]);
 
-// ----------------------------------------
-// LOADING SCREEN
-// ----------------------------------------
-if (loading) {
-  return (
-    <div className="min-h-[60vh] flex items-center justify-center">
-      <div className="text-center space-y-4">
-        <div className="relative">
-          <div className="w-16 h-16 rounded-full bg-linear-to-br from-blue-500 to-indigo-600 flex items-center justify-center mx-auto animate-pulse">
-            <Lightbulb className="w-8 h-8 text-white" />
+  // ----------------------------------------
+  // LOADING SCREEN
+  // ----------------------------------------
+  if (loading) {
+    return (
+      <div className="min-h-[60vh] flex items-center justify-center">
+        <div className="text-center space-y-4">
+          <div className="relative">
+            <div className="w-16 h-16 rounded-full bg-linear-to-br from-blue-500 to-indigo-600 flex items-center justify-center mx-auto animate-pulse">
+              <Lightbulb className="w-8 h-8 text-white" />
+            </div>
+            <div className="absolute inset-0 w-16 h-16 mx-auto rounded-full border-4 border-blue-200 border-t-blue-500 animate-spin" />
           </div>
-          <div className="absolute inset-0 w-16 h-16 mx-auto rounded-full border-4 border-blue-200 border-t-blue-500 animate-spin" />
-        </div>
-        <div>
-          <p className="text-lg font-semibold text-gray-900">Loading Opportunities</p>
-          <p className="text-sm text-gray-500">Analyzing business data for insights...</p>
+          <div>
+            <p className="text-lg font-semibold text-gray-900">Loading Opportunities</p>
+            <p className="text-sm text-gray-500">Analyzing business data for insights...</p>
+          </div>
         </div>
       </div>
-    </div>
-  );
-}
+    );
+  }
 
 
   if (!clusteringResults || !clusteringResults.locations) {
@@ -395,7 +428,7 @@ if (loading) {
               <h3 className="text-xl font-semibold text-gray-700">No Opportunities Yet</h3>
               <p className="text-gray-500 mt-1">Run clustering analysis first to discover business opportunities</p>
             </div>
-            <Button 
+            <Button
               onClick={() => navigate("/user/dashboard/clustering")}
               className="mt-4 bg-linear-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700"
             >
@@ -443,7 +476,67 @@ if (loading) {
     }
   );
 
-  const displayedOps = showAll ? opportunities : opportunities.slice(0, 5);
+  // Build enhanced opportunities with new fields
+  const enhancedOpportunities: EnhancedOpportunityData[] = useMemo(() => {
+    return opportunities.map((op) => {
+      const zoneAnalysis = determineBestZone(
+        op.businessDensity,
+        op.competitors,
+        op.zone_type,
+        businessType
+      );
+      const suitability = evaluateZoneSuitability(
+        businessType,
+        op.businessDensity,
+        op.competitors
+      );
+      const timeFeasibility = evaluateTimeWorkFeasibility(businessType, op.zone_type);
+      const capital = estimateRequiredCapital(businessType, op.zone_type);
+      const profitability = estimateProfitability(op.businessDensity, op.competitors, businessType);
+      const risk = assessRiskLevel(op.competitors, businessType);
+      const model = suggestBusinessModel(businessType, op.zone_type, op.competitors);
+      const zoneInsights = generateZoneInsights(op.zone_type, businessType, op.businessDensity, op.competitors);
+
+      return {
+        ...op,
+        requiredCapital: capital,
+        expectedProfitability: profitability,
+        riskLevel: risk,
+        suggestedBusinessModel: model,
+        timeWorkFeasibility: timeFeasibility,
+        zoneSuitability: suitability.suitability,
+        insights: [...op.insights, ...zoneInsights],
+      };
+    });
+  }, [opportunities, businessType]);
+
+  // Compute aggregate zone analysis for all opportunities
+  const aggregateZoneAnalysis = useMemo(() => {
+    const avgDensity = opportunities.reduce((sum, op) => sum + op.businessDensity, 0) / opportunities.length || 0;
+    const avgCompetitors = opportunities.reduce((sum, op) => sum + op.competitors, 0) / opportunities.length || 0;
+    const primaryZone = opportunities[0]?.zone_type || "Mixed";
+
+    return determineBestZone(avgDensity, avgCompetitors, primaryZone, businessType);
+  }, [opportunities, businessType]);
+
+  const aggregateSuitability = useMemo(() => {
+    const avgDensity = opportunities.reduce((sum, op) => sum + op.businessDensity, 0) / opportunities.length || 0;
+    const avgCompetitors = opportunities.reduce((sum, op) => sum + op.competitors, 0) / opportunities.length || 0;
+
+    return evaluateZoneSuitability(businessType, avgDensity, avgCompetitors);
+  }, [opportunities, businessType]);
+
+  // Generate aggregate insights panel data
+  const aggregateInsights = useMemo(() => {
+    const avgDensity = opportunities.reduce((sum, op) => sum + op.businessDensity, 0) / opportunities.length || 0;
+    const avgCompetitors = opportunities.reduce((sum, op) => sum + op.competitors, 0) / opportunities.length || 0;
+    const avgScore = opportunities.reduce((sum, op) => sum + op.score, 0) / opportunities.length || 0;
+    const primaryZone = opportunities[0]?.zone_type || "Mixed";
+
+    return generateInsightsPanelData(businessType, primaryZone, avgDensity, avgCompetitors, avgScore);
+  }, [opportunities, businessType]);
+
+  const displayedOps = showAll ? enhancedOpportunities : enhancedOpportunities.slice(0, 5);
   const kpis = calculateKPIs(opportunities);
 
   // Overview + Market Gap derived data
@@ -485,9 +578,9 @@ if (loading) {
     a.href = url;
     a.download = "opportunities.csv";
     a.click();
-    
-  toast.success("Exported report as CSV");
-  logActivity("Exported Opportunities Report", { format: "CSV" });
+
+    toast.success("Exported report as CSV");
+    logActivity("Exported Opportunities Report", { format: "CSV" });
   };
 
   const exportExcel = () => {
@@ -509,8 +602,8 @@ if (loading) {
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "Opportunities");
     XLSX.writeFile(workbook, "opportunities.xlsx");
-     toast.success("Exported report as Excel");
-  logActivity("Exported Opportunities Report", { format: "Excel" });
+    toast.success("Exported report as Excel");
+    logActivity("Exported Opportunities Report", { format: "Excel" });
   };
 
   const exportPDF = () => {
@@ -551,8 +644,8 @@ if (loading) {
     });
 
     doc.save("opportunities.pdf");
-     toast.success("Exported report as PDF");
-  logActivity("Exported Opportunities Report", { format: "PDF" });
+    toast.success("Exported report as PDF");
+    logActivity("Exported Opportunities Report", { format: "PDF" });
   };
 
   // ---------------------------------------------------------------------------
@@ -664,12 +757,15 @@ if (loading) {
 
       {/* Tabs */}
       <Tabs value={selectedTab} onValueChange={setSelectedTab} className="space-y-6">
-        <TabsList className="grid grid-cols-3 w-full h-14 bg-white/80 backdrop-blur-sm shadow-lg rounded-xl p-1.5">
+        <TabsList className="grid grid-cols-4 w-full h-14 bg-white/80 backdrop-blur-sm shadow-lg rounded-xl p-1.5">
           <TabsTrigger value="overview" className="rounded-lg data-[state=active]:bg-linear-to-r data-[state=active]:from-blue-500 data-[state=active]:to-indigo-600 data-[state=active]:text-white data-[state=active]:shadow-lg font-medium transition-all">
             Overview
           </TabsTrigger>
           <TabsTrigger value="opportunities" className="rounded-lg data-[state=active]:bg-linear-to-r data-[state=active]:from-blue-500 data-[state=active]:to-indigo-600 data-[state=active]:text-white data-[state=active]:shadow-lg font-medium transition-all">
             Opportunities
+          </TabsTrigger>
+          <TabsTrigger value="zone-analysis" className="rounded-lg data-[state=active]:bg-linear-to-r data-[state=active]:from-emerald-500 data-[state=active]:to-teal-600 data-[state=active]:text-white data-[state=active]:shadow-lg font-medium transition-all">
+            Zone Analysis
           </TabsTrigger>
           <TabsTrigger value="market-gaps" className="rounded-lg data-[state=active]:bg-linear-to-r data-[state=active]:from-blue-500 data-[state=active]:to-indigo-600 data-[state=active]:text-white data-[state=active]:shadow-lg font-medium transition-all">
             Market Gaps
@@ -981,13 +1077,26 @@ if (loading) {
           ))}
 
           {opportunities.length > 5 && !showAll && (
-            <Button 
-              className="w-full h-14 mt-4 bg-linear-to-r from-gray-100 to-gray-200 hover:from-gray-200 hover:to-gray-300 text-gray-700 rounded-xl shadow-md transition-all hover:scale-[1.01]" 
+            <Button
+              className="w-full h-14 mt-4 bg-linear-to-r from-gray-100 to-gray-200 hover:from-gray-200 hover:to-gray-300 text-gray-700 rounded-xl shadow-md transition-all hover:scale-[1.01]"
               onClick={() => setShowAll(true)}
             >
               Show More ({opportunities.length - 5} remaining)
             </Button>
           )}
+        </TabsContent>
+
+        {/* ZONE ANALYSIS TAB */}
+        <TabsContent value="zone-analysis" className="space-y-6">
+          {/* Zone Analysis Component */}
+          <ZoneAnalysis
+            analysis={aggregateZoneAnalysis}
+            suitability={aggregateSuitability}
+            category={businessType}
+          />
+
+          {/* Insights Panel */}
+          <InsightsPanel insights={aggregateInsights} />
         </TabsContent>
 
         {/* MARKET GAPS TAB */}
@@ -1032,13 +1141,12 @@ if (loading) {
                             {gap.category}
                           </p>
                           <Badge
-                            className={`border-0 text-white shadow-md ${
-                              gap.gapLevel === "High"
-                                ? "bg-linear-to-r from-rose-500 to-pink-600"
-                                : gap.gapLevel === "Medium"
+                            className={`border-0 text-white shadow-md ${gap.gapLevel === "High"
+                              ? "bg-linear-to-r from-rose-500 to-pink-600"
+                              : gap.gapLevel === "Medium"
                                 ? "bg-linear-to-r from-amber-500 to-orange-600"
                                 : "bg-linear-to-r from-gray-500 to-slate-600"
-                            }`}
+                              }`}
                           >
                             {gap.gapLevel} Gap
                           </Badge>
@@ -1064,7 +1172,7 @@ if (loading) {
                           <span className="font-semibold text-emerald-600">{gap.demand}</span>
                         </div>
                         <div className="h-3 bg-gray-200 rounded-full overflow-hidden">
-                          <div 
+                          <div
                             className="h-full bg-linear-to-r from-emerald-400 to-green-500 rounded-full transition-all"
                             style={{ width: `${demandPercent}%` }}
                           />
@@ -1077,7 +1185,7 @@ if (loading) {
                           <span className="font-semibold text-amber-600">{gap.supply}</span>
                         </div>
                         <div className="h-3 bg-gray-200 rounded-full overflow-hidden">
-                          <div 
+                          <div
                             className="h-full bg-linear-to-r from-amber-400 to-orange-500 rounded-full transition-all"
                             style={{ width: `${supplyPercent}%` }}
                           />
