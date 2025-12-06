@@ -176,6 +176,207 @@ function generateInsights(loc: {
   return insights;
 }
 
+// -----------------------------------------------------------------------------
+// K-means Cluster-Based KPI Calculations
+// -----------------------------------------------------------------------------
+
+interface ClusterStats {
+  clusterId: number;
+  locationCount: number;
+  avgDensity: number;
+  avgCompetition: number;
+  commercialCount: number;
+  residentialCount: number;
+  mixedCount: number;
+  opportunityScore: number;
+  centerLat: number;
+  centerLng: number;
+  categories: Map<string, number>;
+}
+
+interface ClusterKPIs {
+  totalOpportunities: number;
+  numClusters: number;
+  avgBusinessDensity: number;
+  avgCompetition: number;
+  commercialZoneCount: number;
+  residentialZoneCount: number;
+  clusterStats: ClusterStats[];
+  categoryDistribution: { name: string; count: number }[];
+  bestCluster: ClusterStats | null;
+  lowestCompetitionCluster: ClusterStats | null;
+  highestDensityCluster: ClusterStats | null;
+}
+
+function calculateClusterKPIs(locations: LocationData[], numClusters: number): ClusterKPIs {
+  if (locations.length === 0) {
+    return {
+      totalOpportunities: 0,
+      numClusters: 0,
+      avgBusinessDensity: 0,
+      avgCompetition: 0,
+      commercialZoneCount: 0,
+      residentialZoneCount: 0,
+      clusterStats: [],
+      categoryDistribution: [],
+      bestCluster: null,
+      lowestCompetitionCluster: null,
+      highestDensityCluster: null,
+    };
+  }
+
+  // Group locations by cluster
+  const clusterMap = new Map<number, LocationData[]>();
+  locations.forEach(loc => {
+    const cluster = loc.cluster || 0;
+    if (!clusterMap.has(cluster)) clusterMap.set(cluster, []);
+    clusterMap.get(cluster)!.push(loc);
+  });
+
+  // Calculate per-cluster statistics
+  const clusterStats: ClusterStats[] = [];
+  clusterMap.forEach((points, clusterId) => {
+    const avgDensity = points.reduce((s, p) => s + (p.business_density_200m || 0), 0) / points.length;
+    const avgCompetition = points.reduce((s, p) => s + (p.competitor_density_200m || 0), 0) / points.length;
+
+    // Zone counts
+    const commercialCount = points.filter(p => p.zone_type?.toLowerCase() === 'commercial').length;
+    const residentialCount = points.filter(p => p.zone_type?.toLowerCase() === 'residential').length;
+    const mixedCount = points.filter(p => p.zone_type?.toLowerCase() === 'mixed').length;
+
+    // Centroid (average of all point coordinates)
+    const centerLat = points.reduce((s, p) => s + (p.latitude || 0), 0) / points.length;
+    const centerLng = points.reduce((s, p) => s + (p.longitude || 0), 0) / points.length;
+
+    // Category distribution within cluster
+    const categories = new Map<string, number>();
+    points.forEach(p => {
+      const cat = p.general_category || 'Unknown';
+      categories.set(cat, (categories.get(cat) || 0) + 1);
+    });
+
+    // Opportunity score: high density + low competition = high score
+    const opportunityScore = avgDensity / (avgCompetition + 1) * 10;
+
+    clusterStats.push({
+      clusterId,
+      locationCount: points.length,
+      avgDensity: Math.round(avgDensity),
+      avgCompetition: Math.round(avgCompetition * 10) / 10,
+      commercialCount,
+      residentialCount,
+      mixedCount,
+      opportunityScore: Math.round(opportunityScore * 10) / 10,
+      centerLat,
+      centerLng,
+      categories,
+    });
+  });
+
+  // Sort clusters by opportunity score
+  clusterStats.sort((a, b) => b.opportunityScore - a.opportunityScore);
+
+  // Overall averages
+  const totalOpportunities = locations.length;
+  const avgBusinessDensity = Math.round(
+    locations.reduce((s, loc) => s + (loc.business_density_200m || 0), 0) / locations.length
+  );
+  const avgCompetition = Math.round(
+    locations.reduce((s, loc) => s + (loc.competitor_density_200m || 0), 0) / locations.length * 10
+  ) / 10;
+
+  // Zone counts
+  const commercialZoneCount = locations.filter(loc =>
+    loc.zone_type?.toLowerCase() === 'commercial'
+  ).length;
+  const residentialZoneCount = locations.filter(loc =>
+    loc.zone_type?.toLowerCase() === 'residential'
+  ).length;
+
+  // Category distribution across all clusters
+  const catMap = new Map<string, number>();
+  locations.forEach(loc => {
+    const cat = loc.general_category || 'Unknown';
+    catMap.set(cat, (catMap.get(cat) || 0) + 1);
+  });
+  const categoryDistribution = Array.from(catMap)
+    .map(([name, count]) => ({ name, count }))
+    .sort((a, b) => b.count - a.count);
+
+  // Find best clusters
+  const bestCluster = clusterStats[0] || null;
+  const lowestCompetitionCluster = [...clusterStats].sort((a, b) => a.avgCompetition - b.avgCompetition)[0] || null;
+  const highestDensityCluster = [...clusterStats].sort((a, b) => b.avgDensity - a.avgDensity)[0] || null;
+
+  return {
+    totalOpportunities,
+    numClusters: clusterStats.length,
+    avgBusinessDensity,
+    avgCompetition,
+    commercialZoneCount,
+    residentialZoneCount,
+    clusterStats,
+    categoryDistribution,
+    bestCluster,
+    lowestCompetitionCluster,
+    highestDensityCluster,
+  };
+}
+
+// Generate auto-insights from K-means cluster analysis
+function generateClusterInsights(kpis: ClusterKPIs): string[] {
+  const insights: string[] = [];
+
+  if (kpis.totalOpportunities === 0) {
+    return ["No clustering data available. Run a clustering analysis first."];
+  }
+
+  // Best cluster insight
+  if (kpis.bestCluster) {
+    insights.push(`Cluster ${kpis.bestCluster.clusterId} has the highest opportunity score (${kpis.bestCluster.opportunityScore}) with ${kpis.bestCluster.locationCount} locations`);
+  }
+
+  // Lowest competition cluster
+  if (kpis.lowestCompetitionCluster && kpis.lowestCompetitionCluster.avgCompetition < 3) {
+    insights.push(`Cluster ${kpis.lowestCompetitionCluster.clusterId} has lowest competition (${kpis.lowestCompetitionCluster.avgCompetition}) — great for new market entry`);
+  }
+
+  // Highest density cluster
+  if (kpis.highestDensityCluster && kpis.highestDensityCluster.avgDensity > 15) {
+    insights.push(`Cluster ${kpis.highestDensityCluster.clusterId} has highest business density (${kpis.highestDensityCluster.avgDensity}) indicating strong commercial activity`);
+  }
+
+  // High-value opportunity areas (low competition + high density)
+  kpis.clusterStats.forEach(cluster => {
+    if (cluster.avgCompetition < 2 && cluster.avgDensity > 10) {
+      insights.push(`High-value opportunity: Cluster ${cluster.clusterId} has low competition (${cluster.avgCompetition}) with high business activity`);
+    }
+  });
+
+  // Untapped areas
+  kpis.clusterStats.forEach(cluster => {
+    if (cluster.avgDensity < 5 && cluster.avgCompetition === 0) {
+      insights.push(`Untapped market: Cluster ${cluster.clusterId} has minimal business presence — first mover advantage available`);
+    }
+  });
+
+  // Commercial vs Residential balance
+  const commercialPct = Math.round((kpis.commercialZoneCount / kpis.totalOpportunities) * 100);
+  if (commercialPct > 70) {
+    insights.push(`${commercialPct}% of opportunities are in commercial zones — high foot traffic expected`);
+  } else if (commercialPct < 30) {
+    insights.push(`${commercialPct}% of opportunities are in commercial zones — consider community-focused business models`);
+  }
+
+  // Category gaps
+  if (kpis.categoryDistribution.length < 3) {
+    insights.push("Market gap detected: Limited category diversity — opportunity to introduce new business types");
+  }
+
+  return insights.slice(0, 6); // Limit to top 6 insights
+}
+
+// Legacy calculateKPIs for backward compatibility (now uses cluster data)
 function calculateKPIs(opps: Opportunity[]) {
   if (opps.length === 0) {
     return {
@@ -541,6 +742,19 @@ export function OpportunitiesPage() {
   // Derived values
   const displayedOps = showAll ? enhancedOpportunities : enhancedOpportunities.slice(0, 5);
   const kpis = useMemo(() => calculateKPIs(opportunities), [opportunities]);
+
+  // K-means cluster-based KPIs (derived from raw location data)
+  const clusterKPIs = useMemo(() =>
+    calculateClusterKPIs(locations, numClusters),
+    [locations, numClusters]
+  );
+
+  // Auto-generated cluster insights
+  const clusterInsights = useMemo(() =>
+    generateClusterInsights(clusterKPIs),
+    [clusterKPIs]
+  );
+
   const categoryStats = useMemo(() => buildCategoryStats(businesses), [businesses]);
   const zoneStats = useMemo(() => buildZoneStats(businesses), [businesses]);
   const totalBusinesses = businesses.length;
@@ -809,7 +1023,7 @@ export function OpportunitiesPage() {
           <div className="flex flex-wrap gap-3 mt-6">
             <div className="flex items-center gap-2 px-4 py-2 bg-white/10 rounded-lg backdrop-blur-sm">
               <Store className="w-4 h-4" />
-              <span className="text-sm font-medium">{kpis.totalOpportunities} Opportunities</span>
+              <span className="text-sm font-medium">{clusterKPIs.totalOpportunities} Opportunities</span>
             </div>
             <div className="flex items-center gap-2 px-4 py-2 bg-white/10 rounded-lg backdrop-blur-sm">
               <MapPin className="w-4 h-4" />
@@ -835,7 +1049,7 @@ export function OpportunitiesPage() {
             </div>
           </CardHeader>
           <CardContent>
-            <div className="text-4xl font-bold bg-linear-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">{kpis.totalOpportunities}</div>
+            <div className="text-4xl font-bold bg-linear-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">{clusterKPIs.totalOpportunities}</div>
             <p className="text-xs text-gray-500 mt-1">Identified locations</p>
           </CardContent>
         </Card>
@@ -850,7 +1064,7 @@ export function OpportunitiesPage() {
             </div>
           </CardHeader>
           <CardContent>
-            <div className="text-4xl font-bold bg-linear-to-r from-emerald-600 to-green-600 bg-clip-text text-transparent">{kpis.avgBusinessDensity}</div>
+            <div className="text-4xl font-bold bg-linear-to-r from-emerald-600 to-green-600 bg-clip-text text-transparent">{clusterKPIs.avgBusinessDensity}</div>
             <p className="text-xs text-gray-500 mt-1">Nearby businesses</p>
           </CardContent>
         </Card>
@@ -865,7 +1079,7 @@ export function OpportunitiesPage() {
             </div>
           </CardHeader>
           <CardContent>
-            <div className="text-4xl font-bold bg-linear-to-r from-amber-600 to-orange-600 bg-clip-text text-transparent">{kpis.avgCompetition}</div>
+            <div className="text-4xl font-bold bg-linear-to-r from-amber-600 to-orange-600 bg-clip-text text-transparent">{clusterKPIs.avgCompetition}</div>
             <p className="text-xs text-gray-500 mt-1">Competitors nearby</p>
           </CardContent>
         </Card>
@@ -881,12 +1095,66 @@ export function OpportunitiesPage() {
           </CardHeader>
           <CardContent>
             <div className="text-4xl font-bold bg-linear-to-r from-purple-600 to-violet-600 bg-clip-text text-transparent">
-              {zoneStats.find((z) => z.zone === "Commercial")?.count ?? 0}
+              {clusterKPIs.commercialZoneCount}
             </div>
-            <p className="text-xs text-gray-500 mt-1">of {totalBusinesses} total</p>
+            <p className="text-xs text-gray-500 mt-1">of {clusterKPIs.totalOpportunities} cluster locations</p>
           </CardContent>
         </Card>
       </div>
+
+      {/* Quick Insights from K-means Analysis */}
+      <Card className="border-0 shadow-xl bg-white/80 backdrop-blur-sm overflow-hidden">
+        <CardHeader className="bg-linear-to-r from-amber-50 to-orange-50 border-b">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 bg-linear-to-br from-amber-500 to-orange-600 rounded-xl text-white shadow-lg shadow-amber-200">
+              <Zap className="w-5 h-5" />
+            </div>
+            <div>
+              <CardTitle className="text-lg">Quick Insights</CardTitle>
+              <p className="text-sm text-gray-500">Auto-generated from K-means cluster analysis</p>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="p-6">
+          <div className="grid md:grid-cols-2 gap-3">
+            {clusterInsights.length > 0 ? (
+              clusterInsights.map((insight, idx) => (
+                <div
+                  key={idx}
+                  className="flex items-start gap-3 p-4 bg-linear-to-r from-amber-50 to-orange-50 rounded-xl border border-amber-100 hover:shadow-md transition-all"
+                >
+                  <div className="p-1.5 bg-amber-500 rounded-lg text-white flex-shrink-0">
+                    <Lightbulb className="w-4 h-4" />
+                  </div>
+                  <p className="text-sm text-gray-700">{insight}</p>
+                </div>
+              ))
+            ) : (
+              <div className="col-span-2 text-center py-8 text-gray-500">
+                <Lightbulb className="w-12 h-12 mx-auto mb-3 opacity-30" />
+                <p>No insights available. Run a clustering analysis first.</p>
+              </div>
+            )}
+          </div>
+
+          {/* Cluster distribution badges */}
+          {clusterKPIs.clusterStats.length > 0 && (
+            <div className="mt-6 pt-4 border-t">
+              <p className="text-sm font-medium text-gray-600 mb-3">Cluster Overview ({clusterKPIs.numClusters} clusters)</p>
+              <div className="flex flex-wrap gap-2">
+                {clusterKPIs.clusterStats.slice(0, 6).map((cluster) => (
+                  <Badge
+                    key={cluster.clusterId}
+                    className="bg-linear-to-r from-blue-500 to-indigo-600 text-white border-0 px-3 py-1.5"
+                  >
+                    Cluster {cluster.clusterId}: {cluster.locationCount} locations (Score: {cluster.opportunityScore})
+                  </Badge>
+                ))}
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Tabs */}
       <Tabs value={selectedTab} onValueChange={setSelectedTab} className="space-y-6">
