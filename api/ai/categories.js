@@ -130,9 +130,6 @@ Reply with ONLY the JSON object, no markdown formatting.`;
             }
 
             const confidence = parseFloat(data.confidence) || 0;
-            if (confidence < 0.6 && normalizedCategory !== "prohibited" && normalizedCategory !== "no_category") {
-                normalizedCategory = "no_category";
-            }
 
             return res.status(200).json({
                 category: normalizedCategory,
