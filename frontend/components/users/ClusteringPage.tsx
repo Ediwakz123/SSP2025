@@ -374,11 +374,42 @@ export function ClusteringPage() {
 
       const data = await response.json();
       const detected = data.category?.trim() || "";
-      const explanation = data.explanation || null;
+      const explanation = data.explanation || "";
+
+      // 🔍 VALIDATION: Handle Prohibited
+      if (detected === "prohibited") {
+        setBusinessValidation({
+          valid: false,
+          errorType: "prohibited",
+          message: explanation || "This business idea is prohibited."
+        });
+        setAiCategory(null);
+        setAiCategoryExplanation(null);
+
+        // Force the validation UI to update
+        toast.error("Business idea is prohibited.");
+        return;
+      }
+
+      // 🔍 VALIDATION: Handle No Category
+      if (detected === "no_category") {
+        setBusinessValidation({
+          valid: false,
+          errorType: "nonsense",
+          message: explanation || "This does not appear to be a valid business idea."
+        });
+        setAiCategory(null);
+        setAiCategoryExplanation(null);
+        toast.error("Could not categorize this business idea.");
+        return;
+      }
 
       if (detected) {
         setAiCategory(detected);
         setAiCategoryExplanation(explanation);
+
+        // Clear any previous validation errors since we got a good result
+        setBusinessValidation({ valid: true, errorType: "none", message: "" });
 
         if (!categoryLockedByUser) {
           setSelectedCategory(detected);
