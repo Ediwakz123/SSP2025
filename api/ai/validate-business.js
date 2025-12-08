@@ -4,14 +4,14 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 // Prohibited business keywords (checked before AI call for efficiency)
 const PROHIBITED_KEYWORDS = [
     "gambling", "casino", "betting", "lottery",
-    "prostitution", "escort", "adult entertainment", "brothel",
+    "prostitution", "escort", "adult entertainment", "brothel", "spakol", "sexual",
     "drugs", "drug den", "narcotics", "marijuana dispensary", "shabu",
     "firearms", "gun manufacturing", "weapons", "explosives", "ammunition",
     "money laundering", "laundering",
-    "fraud", "scam", "ponzi", "pyramid scheme",
+    "fraud", "scam", "ponzi", "pyramid scheme", "cybercrime",
     "human trafficking", "trafficking",
     "terrorism", "terrorist",
-    "counterfeit", "fake money", "bootleg",
+    "counterfeit", "fake money", "bootleg", "piracy", "fake id",
     "illegal", "black market", "underground",
     "cockfighting", "sabong", "jueteng"
 ];

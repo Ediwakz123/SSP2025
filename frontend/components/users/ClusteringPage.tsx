@@ -290,10 +290,31 @@ export function ClusteringPage() {
 
   // ===== BUSINESS VALIDATION EFFECT =====
   useEffect(() => {
-    if (!businessIdea.trim()) {
+    const trimmedIdea = businessIdea.trim();
+    if (!trimmedIdea) {
       setBusinessValidation(null);
       setIsValidating(false);
       return;
+    }
+
+    // ⚡ INSTANT CLIENT-SIDE SECURITY CHECK
+    const PROHIBITED_KEYWORDS = [
+      "spakol", "prostitution", "escort", "sexual", "trafficking",
+      "drugs", "narcotics", "cannabis", "weed", "marijuana",
+      "gambling", "casino", "betting", "lottery",
+      "weapon", "firearm", "explosive", "bomb",
+      "scam", "fraud", "cybercrime", "piracy", "fake id"
+    ];
+
+    const lowerIdea = trimmedIdea.toLowerCase();
+    if (PROHIBITED_KEYWORDS.some(word => lowerIdea.includes(word))) {
+      setBusinessValidation({
+        valid: false,
+        errorType: "prohibited",
+        message: "This business idea involves restricted or illegal activities (detected by keyword security filter)."
+      });
+      setIsValidating(false);
+      return; // 🛑 STOP HERE - Do not call API
     }
 
     setIsValidating(true);
@@ -305,8 +326,8 @@ export function ClusteringPage() {
         const response = await fetch(`${API_BASE}/api/ai/validate-business`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ businessIdea: businessIdea.trim() }),
-          signal: controller.signal,
+          body: JSON.stringify({ businessIdea: trimmedIdea }),
+          signal: controller.signal
         });
 
         if (response.ok) {
