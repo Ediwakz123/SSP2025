@@ -101,10 +101,6 @@ const CATEGORY_OPTIONS = [
     value: "Entertainment / Leisure",
     label: "Entertainment / Leisure",
   },
-  {
-    value: "Pet Store",
-    label: "Pet Store",
-  },
 ];
 
 // ---------------------------------------------------------------------------
