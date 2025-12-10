@@ -282,71 +282,82 @@ export function UserAnalyticsPage() {
   // EXPORT FUNCTIONS
   // ========================
 
-  // Enhanced Excel Export with multiple sheets containing full datasets
+  // Enhanced Excel Export with 5 sheets matching user requirements
   const exportExcel = () => {
     const workbook = XLSX.utils.book_new();
     const totalBusinesses = stats?.total_businesses || 0;
+    const timestamp = new Date().toLocaleString();
 
     // Sheet 1: Summary
     const summaryData = [
-      { Metric: "Total Businesses", Value: totalBusinesses },
-      { Metric: "Total Categories", Value: categories.length },
-      { Metric: "Total Zone Types", Value: zones.length },
-      { Metric: "Total Streets", Value: streets.length },
-      { Metric: "Avg. Businesses per Street", Value: streets.length ? (totalBusinesses / streets.length).toFixed(2) : "0" },
-      { Metric: "Avg. Businesses per Zone", Value: zones.length ? (totalBusinesses / zones.length).toFixed(2) : "0" },
-      { Metric: "Report Generated", Value: new Date().toLocaleString() },
+      { Metric: "Total Businesses", Value: totalBusinesses.toString() },
+      { Metric: "Total Business Categories", Value: categories.length.toString() },
+      { Metric: "Total Zone Types", Value: zones.length.toString() },
+      { Metric: "Total Streets Covered", Value: streets.length.toString() },
+      { Metric: "Average Businesses per Street", Value: streets.length ? (totalBusinesses / streets.length).toFixed(2) : "0" },
+      { Metric: "Average Businesses per Zone", Value: zones.length ? (totalBusinesses / zones.length).toFixed(2) : "0" },
+      { Metric: "Most Popular Category", Value: categories[0]?.name || "N/A" },
+      { Metric: "Least Popular Category", Value: categories[categories.length - 1]?.name || "N/A" },
+      { Metric: "Report Generated", Value: timestamp },
     ];
     const summarySheet = XLSX.utils.json_to_sheet(summaryData);
     XLSX.utils.book_append_sheet(workbook, summarySheet, "Summary");
 
-    // Sheet 2: Categories (full breakdown)
-    const categorySheetData = categories.map((c) => ({
-      Category: c.name,
-      Count: c.value,
-      Percentage: ((c.value / totalBusinesses) * 100).toFixed(2) + "%",
+    // Sheet 2: Business Count by Category
+    const businessCountData = categories.map((c, idx) => ({
+      "Rank": idx + 1,
+      "Category Name": c.name,
+      "Business Count": c.value,
     }));
-    const categorySheet = XLSX.utils.json_to_sheet(categorySheetData);
-    XLSX.utils.book_append_sheet(workbook, categorySheet, "Categories");
+    const businessCountSheet = XLSX.utils.json_to_sheet(businessCountData);
+    XLSX.utils.book_append_sheet(workbook, businessCountSheet, "Business Count by Category");
 
-    // Sheet 3: Zones (full breakdown)
-    const zoneSheetData = zones.map((z) => ({
+    // Sheet 3: Category Percentage Breakdown
+    const percentageData = categories.map((c, idx) => ({
+      "Rank": idx + 1,
+      "Category Name": c.name,
+      "Count": c.value,
+      "Percentage (%)": ((c.value / totalBusinesses) * 100).toFixed(2),
+      "Cumulative (%)": categories
+        .slice(0, idx + 1)
+        .reduce((acc, cat) => acc + (cat.value / totalBusinesses) * 100, 0)
+        .toFixed(2),
+    }));
+    const percentageSheet = XLSX.utils.json_to_sheet(percentageData);
+    XLSX.utils.book_append_sheet(workbook, percentageSheet, "Category Percentage");
+
+    // Sheet 4: Zone Distribution
+    const zoneDistData = zones.map((z, idx) => ({
+      "Rank": idx + 1,
       "Zone Type": z.name,
-      Count: z.value,
-      Percentage: ((z.value / totalBusinesses) * 100).toFixed(2) + "%",
+      "Business Count": z.value,
+      "Percentage (%)": ((z.value / totalBusinesses) * 100).toFixed(2),
     }));
-    const zoneSheet = XLSX.utils.json_to_sheet(zoneSheetData);
-    XLSX.utils.book_append_sheet(workbook, zoneSheet, "Zones");
+    const zoneSheet = XLSX.utils.json_to_sheet(zoneDistData);
+    XLSX.utils.book_append_sheet(workbook, zoneSheet, "Zone Distribution");
 
-    // Sheet 4: Streets (full breakdown)
-    const streetSheetData = streets
-      .sort((a, b) => b.value - a.value)
-      .map((s) => ({
-        Street: s.name,
-        "Business Count": s.value,
-        Percentage: ((s.value / totalBusinesses) * 100).toFixed(2) + "%",
-      }));
-    const streetSheet = XLSX.utils.json_to_sheet(streetSheetData);
-    XLSX.utils.book_append_sheet(workbook, streetSheet, "Streets");
-
-    // Sheet 5: Raw Data (all business records)
-    const rawData = businesses.map((b) => ({
+    // Sheet 5: Full Raw Dataset
+    const rawData = businesses.map((b, idx) => ({
+      "ID": idx + 1,
       "Business Name": b.business_name || "N/A",
-      Category: b.general_category || "N/A",
+      "Category": b.general_category || "N/A",
       "Zone Type": b.zone_type || "N/A",
-      Street: b.street || "N/A",
-      Status: b.status || "N/A",
-      "Created At": b.created_at || "N/A",
+      "Street": b.street || "N/A",
+      "Latitude": b.latitude || "N/A",
+      "Longitude": b.longitude || "N/A",
+      "Status": b.status || "N/A",
+      "Created At": b.created_at ? new Date(b.created_at).toLocaleDateString() : "N/A",
     }));
     const rawDataSheet = XLSX.utils.json_to_sheet(rawData);
-    XLSX.utils.book_append_sheet(workbook, rawDataSheet, "Raw Data");
+    XLSX.utils.book_append_sheet(workbook, rawDataSheet, "Full Raw Dataset");
 
-    // Save the workbook
-    const fileName = `business_analytics_${new Date().toISOString().split("T")[0]}.xlsx`;
+    // Save the workbook with auto-generated filename
+    const fileName = `SSP_Analytics_Report_${new Date().toISOString().split("T")[0]}.xlsx`;
     XLSX.writeFile(workbook, fileName);
+    toast.success(`Exported ${businesses.length} records to Excel (5 sheets)`);
   };
 
-  // Enhanced PDF Export with full visual content using html2canvas
+  // Enhanced PDF Export with full visual content - FIXED for oklab color support
   const exportPDF = async () => {
     if (!analyticsContentRef.current) {
       toast.error("Unable to capture analytics content");
@@ -362,86 +373,114 @@ export function UserAnalyticsPage() {
       const pageHeight = pdf.internal.pageSize.getHeight();
       const margin = 15;
       let yPos = margin;
+      const totalBusinesses = stats?.total_businesses || 0;
 
+      // ========== PAGE 1: TITLE & SUMMARY ==========
       // Title
-      pdf.setFontSize(22);
+      pdf.setFontSize(24);
       pdf.setFont("helvetica", "bold");
       pdf.setTextColor(59, 130, 246); // Blue
       pdf.text("Business Analytics Report", pageWidth / 2, yPos, { align: "center" });
-      yPos += 10;
+      yPos += 12;
 
       // Subtitle with date
       pdf.setFontSize(11);
       pdf.setFont("helvetica", "normal");
       pdf.setTextColor(100, 100, 100);
       pdf.text(`Generated: ${new Date().toLocaleString()}`, pageWidth / 2, yPos, { align: "center" });
-      yPos += 15;
+      pdf.text("Strategic Store Placement System", pageWidth / 2, yPos + 5, { align: "center" });
+      yPos += 20;
 
-      // Summary Statistics Section
+      // Summary Statistics Box
+      pdf.setFillColor(245, 247, 250);
+      pdf.roundedRect(margin, yPos, pageWidth - margin * 2, 50, 3, 3, "F");
+      yPos += 8;
+
       pdf.setFontSize(14);
       pdf.setFont("helvetica", "bold");
-      pdf.setTextColor(0, 0, 0);
-      pdf.text("Summary Statistics", margin, yPos);
-      yPos += 8;
+      pdf.setTextColor(30, 41, 59);
+      pdf.text("Summary Statistics", margin + 5, yPos);
+      yPos += 10;
 
       pdf.setFontSize(10);
       pdf.setFont("helvetica", "normal");
-      const totalBusinesses = stats?.total_businesses || 0;
       const summaryItems = [
-        `Total Businesses: ${totalBusinesses}`,
-        `Categories: ${categories.length}`,
-        `Zone Types: ${zones.length}`,
-        `Streets Covered: ${streets.length}`,
-        `Avg. per Street: ${streets.length ? (totalBusinesses / streets.length).toFixed(1) : 0}`,
-        `Avg. per Zone: ${zones.length ? (totalBusinesses / zones.length).toFixed(1) : 0}`,
+        [`Total Businesses: ${totalBusinesses}`, `Categories: ${categories.length}`],
+        [`Zone Types: ${zones.length}`, `Streets Covered: ${streets.length}`],
+        [`Avg. per Street: ${streets.length ? (totalBusinesses / streets.length).toFixed(1) : 0}`, `Avg. per Zone: ${zones.length ? (totalBusinesses / zones.length).toFixed(1) : 0}`],
       ];
-      summaryItems.forEach((item) => {
-        pdf.text(`• ${item}`, margin + 5, yPos);
-        yPos += 6;
+      summaryItems.forEach((row) => {
+        pdf.text(`• ${row[0]}`, margin + 10, yPos);
+        pdf.text(`• ${row[1]}`, pageWidth / 2, yPos);
+        yPos += 7;
       });
-      yPos += 10;
+      yPos += 15;
 
-      // Capture the analytics content as image
-      const canvas = await html2canvas(analyticsContentRef.current, {
-        scale: 2, // High quality
+      // ========== CAPTURE CHARTS AS IMAGE ==========
+      // Apply inline styles to avoid oklab color issues
+      const element = analyticsContentRef.current;
+
+      // Capture the analytics content as image with color fallback
+      const canvas = await html2canvas(element, {
+        scale: 2,
         useCORS: true,
         logging: false,
         backgroundColor: "#ffffff",
+        // Remove unsupported color functions by using allowTaint
+        allowTaint: true,
+        // Force standard RGB color space
+        onclone: (clonedDoc) => {
+          // Replace any oklch/oklab colors with fallback RGB
+          const allElements = clonedDoc.querySelectorAll("*");
+          allElements.forEach((el) => {
+            const computed = window.getComputedStyle(el as Element);
+            const bgColor = computed.backgroundColor;
+            const color = computed.color;
+
+            // If color contains oklab/oklch, replace with a safe fallback
+            if (bgColor.includes("oklab") || bgColor.includes("oklch")) {
+              (el as HTMLElement).style.backgroundColor = "#ffffff";
+            }
+            if (color.includes("oklab") || color.includes("oklch")) {
+              (el as HTMLElement).style.color = "#000000";
+            }
+          });
+        }
       });
 
-      const imgData = canvas.toDataURL("image/png");
+      // Convert to JPEG to avoid any color space issues in PNG
+      const imgData = canvas.toDataURL("image/jpeg", 0.95);
       const imgWidth = pageWidth - margin * 2;
       const imgHeight = (canvas.height * imgWidth) / canvas.width;
 
-      // Add new page if needed for the chart image
-      if (yPos + 50 > pageHeight) {
-        pdf.addPage();
-        yPos = margin;
-      }
-
+      // Add Visual Analytics section header
       pdf.setFontSize(14);
       pdf.setFont("helvetica", "bold");
+      pdf.setTextColor(30, 41, 59);
       pdf.text("Visual Analytics", margin, yPos);
       yPos += 8;
 
       // Add the captured image (may span multiple pages)
-      let remainingHeight = imgHeight;
+      let remainingHeight = Math.min(imgHeight, 300); // Cap initial height
       let sourceY = 0;
-      const maxImageHeightPerPage = pageHeight - yPos - margin;
+      let currentY = yPos;
+      const maxImageHeightPerPage = pageHeight - currentY - margin;
 
-      while (remainingHeight > 0) {
+      while (remainingHeight > 0 && sourceY < canvas.height) {
         const heightToDraw = Math.min(remainingHeight, maxImageHeightPerPage);
         const sourceHeight = (heightToDraw / imgHeight) * canvas.height;
 
         // Create a temporary canvas for the slice
         const tempCanvas = document.createElement("canvas");
         tempCanvas.width = canvas.width;
-        tempCanvas.height = sourceHeight;
+        tempCanvas.height = Math.min(sourceHeight, canvas.height - sourceY);
         const tempCtx = tempCanvas.getContext("2d");
         if (tempCtx) {
-          tempCtx.drawImage(canvas, 0, sourceY, canvas.width, sourceHeight, 0, 0, canvas.width, sourceHeight);
-          const sliceData = tempCanvas.toDataURL("image/png");
-          pdf.addImage(sliceData, "PNG", margin, yPos, imgWidth, heightToDraw);
+          tempCtx.fillStyle = "#ffffff";
+          tempCtx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
+          tempCtx.drawImage(canvas, 0, sourceY, canvas.width, tempCanvas.height, 0, 0, canvas.width, tempCanvas.height);
+          const sliceData = tempCanvas.toDataURL("image/jpeg", 0.90);
+          pdf.addImage(sliceData, "JPEG", margin, currentY, imgWidth, heightToDraw);
         }
 
         remainingHeight -= heightToDraw;
@@ -449,82 +488,122 @@ export function UserAnalyticsPage() {
 
         if (remainingHeight > 0) {
           pdf.addPage();
-          yPos = margin;
+          currentY = margin;
         }
       }
 
-      // Add a new page for data tables
+      // ========== PAGE 2+: DATA TABLES ==========
       pdf.addPage();
       yPos = margin;
 
-      // Categories Table
-      pdf.setFontSize(14);
+      // Category Breakdown Header
+      pdf.setFillColor(59, 130, 246);
+      pdf.roundedRect(margin, yPos - 5, pageWidth - margin * 2, 12, 2, 2, "F");
+      pdf.setFontSize(12);
       pdf.setFont("helvetica", "bold");
-      pdf.text("Category Breakdown", margin, yPos);
-      yPos += 8;
+      pdf.setTextColor(255, 255, 255);
+      pdf.text("Category Breakdown", margin + 5, yPos + 3);
+      yPos += 15;
 
       pdf.setFontSize(9);
       pdf.setFont("helvetica", "normal");
+      pdf.setTextColor(0, 0, 0);
+
+      // Table header
+      pdf.setFont("helvetica", "bold");
+      pdf.text("Rank", margin + 5, yPos);
+      pdf.text("Category", margin + 20, yPos);
+      pdf.text("Count", pageWidth - 60, yPos);
+      pdf.text("Percentage", pageWidth - 35, yPos);
+      yPos += 6;
+      pdf.setFont("helvetica", "normal");
+
       categories.forEach((cat, idx) => {
         if (yPos > pageHeight - margin) {
           pdf.addPage();
           yPos = margin;
         }
         const percentage = ((cat.value / totalBusinesses) * 100).toFixed(1);
-        pdf.text(`${idx + 1}. ${cat.name}: ${cat.value} (${percentage}%)`, margin + 5, yPos);
+        pdf.text(`${idx + 1}.`, margin + 5, yPos);
+        pdf.text(cat.name.substring(0, 30), margin + 20, yPos);
+        pdf.text(`${cat.value}`, pageWidth - 60, yPos);
+        pdf.text(`${percentage}%`, pageWidth - 35, yPos);
         yPos += 5;
       });
-      yPos += 10;
+      yPos += 15;
 
-      // Zone Distribution Table
-      if (yPos > pageHeight - 40) {
+      // Zone Distribution
+      if (yPos > pageHeight - 50) {
         pdf.addPage();
         yPos = margin;
       }
-      pdf.setFontSize(14);
+
+      pdf.setFillColor(16, 185, 129);
+      pdf.roundedRect(margin, yPos - 5, pageWidth - margin * 2, 12, 2, 2, "F");
+      pdf.setFontSize(12);
       pdf.setFont("helvetica", "bold");
-      pdf.text("Zone Distribution", margin, yPos);
-      yPos += 8;
+      pdf.setTextColor(255, 255, 255);
+      pdf.text("Zone Distribution", margin + 5, yPos + 3);
+      yPos += 15;
 
       pdf.setFontSize(9);
-      pdf.setFont("helvetica", "normal");
-      zones.forEach((zone) => {
+      pdf.setTextColor(0, 0, 0);
+      zones.forEach((zone, idx) => {
         if (yPos > pageHeight - margin) {
           pdf.addPage();
           yPos = margin;
         }
         const percentage = ((zone.value / totalBusinesses) * 100).toFixed(1);
-        pdf.text(`• ${zone.name}: ${zone.value} businesses (${percentage}%)`, margin + 5, yPos);
+        pdf.setFont("helvetica", "normal");
+        pdf.text(`${idx + 1}. ${zone.name}`, margin + 5, yPos);
+        pdf.text(`${zone.value} businesses (${percentage}%)`, pageWidth - 70, yPos);
         yPos += 5;
       });
-      yPos += 10;
+      yPos += 15;
 
-      // Key Insights Section
-      if (yPos > pageHeight - 60) {
+      // Key Insights
+      if (yPos > pageHeight - 70) {
         pdf.addPage();
         yPos = margin;
       }
-      pdf.setFontSize(14);
+
+      pdf.setFillColor(139, 92, 246);
+      pdf.roundedRect(margin, yPos - 5, pageWidth - margin * 2, 12, 2, 2, "F");
+      pdf.setFontSize(12);
       pdf.setFont("helvetica", "bold");
-      pdf.text("Key Insights", margin, yPos);
-      yPos += 8;
+      pdf.setTextColor(255, 255, 255);
+      pdf.text("Key Insights", margin + 5, yPos + 3);
+      yPos += 15;
 
       pdf.setFontSize(9);
       pdf.setFont("helvetica", "normal");
+      pdf.setTextColor(0, 0, 0);
       const insights = [
-        `Most popular category: ${categories[0]?.name || "N/A"} with ${categories[0]?.value || 0} businesses`,
-        `Commercial zone coverage: ${((zones.find((z) => z.name === "Commercial")?.value || 0) / totalBusinesses * 100).toFixed(1)}%`,
-        `Average business density: ${streets.length ? (totalBusinesses / streets.length).toFixed(1) : 0} per street`,
-        `Top 3 categories account for ${categories.slice(0, 3).reduce((acc, c) => acc + c.value, 0)} businesses (${((categories.slice(0, 3).reduce((acc, c) => acc + c.value, 0) / totalBusinesses) * 100).toFixed(1)}%)`,
+        `✓ Most popular category: ${categories[0]?.name || "N/A"} with ${categories[0]?.value || 0} businesses`,
+        `✓ Commercial zone coverage: ${((zones.find((z) => z.name === "Commercial")?.value || 0) / totalBusinesses * 100).toFixed(1)}%`,
+        `✓ Average business density: ${streets.length ? (totalBusinesses / streets.length).toFixed(1) : 0} businesses per street`,
+        `✓ Top 3 categories account for ${categories.slice(0, 3).reduce((acc, c) => acc + c.value, 0)} businesses (${((categories.slice(0, 3).reduce((acc, c) => acc + c.value, 0) / totalBusinesses) * 100).toFixed(1)}%)`,
+        `✓ Total unique streets: ${streets.length}`,
+        `✓ Least common category: ${categories[categories.length - 1]?.name || "N/A"} with ${categories[categories.length - 1]?.value || 0} businesses`,
       ];
       insights.forEach((insight) => {
-        pdf.text(`• ${insight}`, margin + 5, yPos, { maxWidth: pageWidth - margin * 2 - 10 });
-        yPos += 6;
+        if (yPos > pageHeight - margin) {
+          pdf.addPage();
+          yPos = margin;
+        }
+        pdf.text(insight, margin + 5, yPos, { maxWidth: pageWidth - margin * 2 - 10 });
+        yPos += 7;
       });
 
+      // Footer on last page
+      pdf.setFontSize(8);
+      pdf.setTextColor(150, 150, 150);
+      pdf.text("Generated by Strategic Store Placement System", pageWidth / 2, pageHeight - 10, { align: "center" });
+
       // Save the PDF
-      const fileName = `business_analytics_${new Date().toISOString().split("T")[0]}.pdf`;
+      const fileName = `SSP_Analytics_Report_${new Date().toISOString().split("T")[0]}.pdf`;
       pdf.save(fileName);
+      toast.success("PDF exported successfully with all charts and data!");
     } catch (error) {
       console.error("PDF Export Error:", error);
       toast.error("Failed to generate PDF. Please try again.");
