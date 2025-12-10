@@ -313,16 +313,29 @@ export function validateAddress(address: string): AddressValidationResult {
     return { isValid: false, error: "Address is required" };
   }
 
-  // Check for Sta. Cruz or Santa Cruz
-  const hasStaCruz = trimmed.includes("sta. cruz") ||
-    trimmed.includes("sta cruz") ||
-    trimmed.includes("santa cruz");
+  // Normalize the address: remove extra spaces and common punctuation variations
+  const normalized = trimmed
+    .replace(/\s+/g, ' ')           // Normalize whitespace
+    .replace(/[.,]/g, ' ')          // Remove periods and commas
+    .replace(/\s+/g, ' ');          // Clean up whitespace again
 
-  // Check for Santa Maria
-  const hasSantaMaria = trimmed.includes("santa maria");
+  // Check for Sta. Cruz / Santa Cruz (Barangay)
+  // Accept: "sta cruz", "sta. cruz", "santa cruz", "brgy sta cruz", "brgy. sta. cruz", etc.
+  const hasStaCruz =
+    normalized.includes("sta cruz") ||
+    normalized.includes("santa cruz") ||
+    normalized.includes("stacruz") ||
+    /\bsta\s*\.?\s*cruz\b/.test(trimmed);
 
-  // Check for Bulacan
-  const hasBulacan = trimmed.includes("bulacan");
+  // Check for Santa Maria / Sta. Maria (Municipality)
+  // Accept: "santa maria", "sta maria", "sta. maria", etc.
+  const hasSantaMaria =
+    normalized.includes("santa maria") ||
+    normalized.includes("sta maria") ||
+    /\bsta\s*\.?\s*maria\b/.test(trimmed);
+
+  // Check for Bulacan (Province)
+  const hasBulacan = normalized.includes("bulacan");
 
   if (hasStaCruz && hasSantaMaria && hasBulacan) {
     return { isValid: true, isFlagged: false };
