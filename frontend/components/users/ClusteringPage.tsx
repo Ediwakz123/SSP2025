@@ -386,12 +386,16 @@ export function ClusteringPage() {
   // Auto-switch between local dev and production
   const API_BASE = "";
 
-  // ===== BUSINESS VALIDATION EFFECT =====
+  // ===== BUSINESS VALIDATION EFFECT + AUTO-CATEGORY DETECTION =====
   useEffect(() => {
     const trimmedIdea = businessIdea.trim();
     if (!trimmedIdea) {
       setBusinessValidation(null);
       setIsValidating(false);
+      setAiCategory(null);
+      setAiCategoryExplanation(null);
+      setAllowedCategories([]);
+      setSelectedCategory(""); // Reset category when idea is cleared
       return;
     }
 
@@ -409,41 +413,91 @@ export function ClusteringPage() {
       setBusinessValidation({
         valid: false,
         errorType: "prohibited",
-        message: "This business idea involves restricted or illegal activities (detected by keyword security filter)."
+        message: "This business idea involves restricted or illegal activities."
       });
       setIsValidating(false);
+      setAiCategory(null);
+      setSelectedCategory("");
       return; // 🛑 STOP HERE - Do not call API
     }
 
     setIsValidating(true);
 
     const controller = new AbortController();
-    let isCurrent = true; // 🔒 Lock to prevent race conditions
+    let isCurrent = true;
 
     const timeoutId = setTimeout(async () => {
       try {
-        const response = await fetch(`${API_BASE}/api/ai/validate-business`, {
+        // First: Validate the business idea
+        const validateResponse = await fetch(`${API_BASE}/api/ai/validate-business`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ businessIdea: trimmedIdea }),
           signal: controller.signal
         });
 
-        if (!isCurrent) return; // 🚫 Ignore if component unmounted or dependency changed
+        if (!isCurrent) return;
 
-        if (response.ok) {
-          const data = await response.json();
-          // Double check current again after await
+        if (validateResponse.ok) {
+          const validateData = await validateResponse.json();
           if (isCurrent) {
             setBusinessValidation({
-              valid: data.valid,
-              errorType: data.errorType || "none",
-              message: data.message || "",
+              valid: validateData.valid,
+              errorType: validateData.errorType || "none",
+              message: validateData.message || "",
             });
+
+            // If validation failed, don't proceed to category detection
+            if (!validateData.valid) {
+              setAiCategory(null);
+              setSelectedCategory("");
+              return;
+            }
           }
-        } else {
-          // On error, be lenient
-          if (isCurrent) setBusinessValidation({ valid: true, errorType: "none", message: "" });
+        }
+
+        // Second: Auto-detect the category using AI
+        if (isCurrent) {
+          const categoryResponse = await fetch(`${API_BASE}/api/ai/categories`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ businessIdea: trimmedIdea }),
+            signal: controller.signal
+          });
+
+          if (!isCurrent) return;
+
+          if (categoryResponse.ok) {
+            const categoryData = await categoryResponse.json();
+            if (isCurrent) {
+              const detected = categoryData.primaryCategory || categoryData.category;
+              const explanation = categoryData.explanation || "";
+              const allowed = categoryData.allowedCategories || [];
+
+              if (detected && detected !== "prohibited" && detected !== "no_category") {
+                setAiCategory(detected);
+                setAiCategoryExplanation(explanation);
+                setAllowedCategories(allowed);
+                setSelectedCategory(detected); // AUTO-SET the category
+              } else if (detected === "prohibited") {
+                setBusinessValidation({
+                  valid: false,
+                  errorType: "prohibited",
+                  message: explanation || "This business idea is prohibited."
+                });
+                setAiCategory(null);
+                setSelectedCategory("");
+              } else if (detected === "no_category") {
+                setBusinessValidation({
+                  valid: false,
+                  errorType: "nonsense",
+                  message: explanation || "Not a recognizable business idea."
+                });
+                setAiCategory(null);
+                setSelectedCategory("");
+              }
+            }
+          }
         }
       } catch (err) {
         if ((err as Error).name !== "AbortError" && isCurrent) {
@@ -453,10 +507,10 @@ export function ClusteringPage() {
       } finally {
         if (isCurrent) setIsValidating(false);
       }
-    }, 400);
+    }, 600); // Slightly longer debounce for both calls
 
     return () => {
-      isCurrent = false; // 🔓 Invalidate this run
+      isCurrent = false;
       clearTimeout(timeoutId);
       controller.abort();
     };
@@ -1424,104 +1478,79 @@ ${result?.competitorAnalysis.recommendedStrategy}
               )}
             </div>
 
-            {/* CATEGORY SELECT */}
+            {/* CATEGORY - AUTO-DETECTED BY AI */}
             <div className="space-y-3">
               <Label className="flex items-center gap-2 font-semibold text-gray-800">
                 <span className="flex items-center justify-center w-6 h-6 rounded-full bg-emerald-100 text-emerald-600 text-xs font-bold">2</span>
-                Business Category
+                AI Business Category (Auto-Detected)
               </Label>
 
-              <Select
-                value={selectedCategory}
-                onValueChange={(v) => {
-                  setSelectedCategory(v);
-                  setCategoryLockedByUser(true);
-                }}
-              >
-                <SelectTrigger className="h-12 bg-white border-gray-200 focus:ring-emerald-500 rounded-xl shadow-sm">
-                  <SelectValue placeholder="Select a category or ask AI to suggest" />
-                </SelectTrigger>
-                <SelectContent className="rounded-xl shadow-xl border-0">
-                  {CATEGORY_OPTIONS.map((cat) => (
-                    <SelectItem key={cat.value} value={cat.value} className="rounded-lg">
-                      {cat.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <p className="text-xs text-gray-500 mb-2">
+                The system automatically classifies your business idea into: Retail, Services, Restaurant, Food & Beverages, Merchandise / Trading, or Entertainment / Leisure.
+              </p>
 
-              <div className="flex flex-wrap items-center gap-3 mt-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={requestAiCategory}
-                  disabled={
-                    aiCategoryLoading ||
-                    isValidating ||
-                    !businessIdea.trim() ||
-                    !!(businessValidation && !businessValidation.valid)
-                  }
-                  className="h-11 rounded-xl border-emerald-200 text-emerald-700 hover:bg-emerald-50 hover:border-emerald-300"
-                >
-                  {aiCategoryLoading ? (
-                    <>
-                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                      Asking AI...
-                    </>
-                  ) : (
-                    <>
-                      <Sparkles className="w-4 h-4 mr-2" />
-                      Suggest with AI
-                    </>
-                  )}
-                </Button>
-                <p className="text-xs text-gray-500">
-                  Optional: use the AI classifier prompt to map your idea to an allowed category.
-                </p>
-              </div>
-
-              {/* AI STATUS + RESULT */}
-              <div className="mt-3">
-                {aiCategoryLoading ? (
-                  <div className="flex items-center gap-3 p-4 bg-emerald-50 rounded-xl border border-emerald-100">
-                    <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center">
-                      <Loader2 className="w-4 h-4 text-emerald-600 animate-spin" />
-                    </div>
-                    <span className="text-sm font-medium text-emerald-700">AI is analyzing your business idea...</span>
+              {/* Show loading state while validating/detecting */}
+              {isValidating ? (
+                <div className="flex items-center gap-3 p-4 bg-emerald-50 rounded-xl border border-emerald-100">
+                  <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center">
+                    <Loader2 className="w-4 h-4 text-emerald-600 animate-spin" />
                   </div>
-                ) : aiCategory ? (
-                  <div className="p-4 rounded-xl border bg-linear-to-r from-emerald-50 to-teal-50 border-emerald-200 shadow-sm">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <div className="w-8 h-8 rounded-full bg-emerald-500 flex items-center justify-center">
-                          <CheckCircle2 className="w-4 h-4 text-white" />
-                        </div>
-                        <span className="font-semibold text-emerald-800">AI Suggestion</span>
+                  <span className="text-sm font-medium text-emerald-700">AI is analyzing your business idea...</span>
+                </div>
+              ) : aiCategory && selectedCategory ? (
+                /* Show detected category */
+                <div className="p-4 rounded-xl border bg-linear-to-r from-emerald-50 to-teal-50 border-emerald-200 shadow-sm">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="w-8 h-8 rounded-full bg-emerald-500 flex items-center justify-center">
+                        <CheckCircle2 className="w-4 h-4 text-white" />
                       </div>
-
-                      <Badge className="bg-linear-to-r from-emerald-500 to-teal-500 text-white border-0 px-3 py-1 shadow-md">
-                        {aiCategory}
-                      </Badge>
+                      <span className="font-semibold text-emerald-800">AI Detected Category</span>
                     </div>
 
-                    {/* WHY THIS CATEGORY (EXPANDABLE) */}
-                    {aiCategoryExplanation && (
-                      <details className="mt-3 text-gray-700">
-                        <summary className="cursor-pointer text-sm font-medium text-emerald-700 hover:text-emerald-800 transition-colors">
-                          ✨ Why this category?
-                        </summary>
-                        <p className="text-sm mt-2 text-gray-600 bg-white/60 p-3 rounded-lg">
-                          {aiCategoryExplanation}
-                        </p>
-                      </details>
-                    )}
+                    <Badge className="bg-linear-to-r from-emerald-500 to-teal-500 text-white border-0 px-4 py-1.5 text-sm shadow-md">
+                      {selectedCategory}
+                    </Badge>
                   </div>
-                ) : (
-                  <p className="text-sm text-gray-500 italic">
-                    Click "Suggest with AI" after typing your business idea to get a suggested category.
-                  </p>
-                )}
-              </div>
+
+                  {/* WHY THIS CATEGORY (EXPANDABLE) */}
+                  {aiCategoryExplanation && (
+                    <details className="mt-3 text-gray-700">
+                      <summary className="cursor-pointer text-sm font-medium text-emerald-700 hover:text-emerald-800 transition-colors">
+                        ✨ Why this category?
+                      </summary>
+                      <p className="text-sm mt-2 text-gray-600 bg-white/60 p-3 rounded-lg">
+                        {aiCategoryExplanation}
+                      </p>
+                    </details>
+                  )}
+
+                  {/* Show allowed categories if multiple */}
+                  {allowedCategories.length > 1 && (
+                    <div className="mt-3 pt-3 border-t border-emerald-200">
+                      <p className="text-xs text-gray-500">
+                        Also valid for this idea: {allowedCategories.filter(c => c !== selectedCategory).join(", ")}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              ) : businessValidation && !businessValidation.valid ? (
+                /* Show error state */
+                <div className="flex items-center gap-3 p-4 bg-red-50 rounded-xl border border-red-200">
+                  <div className="w-8 h-8 rounded-full bg-red-100 flex items-center justify-center">
+                    <XCircle className="w-4 h-4 text-red-600" />
+                  </div>
+                  <span className="text-sm font-medium text-red-700">{businessValidation.message}</span>
+                </div>
+              ) : (
+                /* Prompt to enter business idea */
+                <div className="flex items-center gap-3 p-4 bg-gray-50 rounded-xl border border-gray-200">
+                  <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center">
+                    <Sparkles className="w-4 h-4 text-gray-500" />
+                  </div>
+                  <span className="text-sm text-gray-500">Enter your business idea above to auto-detect the category.</span>
+                </div>
+              )}
             </div>
           </div>
 
