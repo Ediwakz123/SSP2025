@@ -1392,9 +1392,14 @@ export function OpportunitiesPage() {
                 </div>
               ))
             ) : (
-              <div className="col-span-2 text-center py-8 text-gray-500">
-                <Lightbulb className="w-12 h-12 mx-auto mb-3 opacity-30" />
-                <p>No insights available. Run a clustering analysis first.</p>
+              <div className="col-span-2 flex flex-col items-center justify-center py-12 text-center">
+                <div className="w-16 h-16 rounded-full bg-amber-100 flex items-center justify-center mb-4">
+                  <Lightbulb className="w-8 h-8 text-amber-400" />
+                </div>
+                <h4 className="text-lg font-semibold text-gray-700">No insights available yet</h4>
+                <p className="text-sm text-gray-500 mt-1 max-w-md">
+                  Try adjusting your filters or running a clustering analysis to generate insights about your business opportunities.
+                </p>
               </div>
             )}
           </div>
@@ -1452,129 +1457,102 @@ export function OpportunitiesPage() {
                 </div>
               </div>
             </CardHeader>
-            <CardContent className="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              {categoryStats.map((cat, index) => {
-                const colors = [
-                  'from-blue-500 to-indigo-600',
-                  'from-emerald-500 to-green-600',
-                  'from-amber-500 to-orange-600',
-                  'from-purple-500 to-violet-600',
-                  'from-rose-500 to-pink-600',
-                ];
-                const colorClass = colors[index % colors.length];
-                return (
-                  <div
-                    key={cat.category}
-                    className="border rounded-xl p-5 flex flex-col gap-2 bg-linear-to-br from-gray-50 to-white hover:shadow-lg transition-all hover:scale-[1.02] group"
-                  >
-                    <p className="text-sm font-semibold text-gray-700">{cat.category}</p>
-                    <p className={`text-3xl font-bold bg-linear-to-r ${colorClass} bg-clip-text text-transparent`}>{cat.count}</p>
-                    <div className="space-y-1 mt-2">
-                      <p className="text-xs text-gray-500 flex items-center gap-1">
-                        <span className="w-2 h-2 rounded-full bg-blue-400" />
-                        Avg. density: {cat.avgBusinessDensity}
-                      </p>
-                      <p className="text-xs text-gray-500 flex items-center gap-1">
-                        <span className="w-2 h-2 rounded-full bg-amber-400" />
-                        Avg. competitors: {cat.avgCompetitors}
-                      </p>
-                    </div>
+            <CardContent className="p-6">
+              {categoryStats.length > 0 ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                  {categoryStats.map((cat, index) => {
+                    const colors = [
+                      'from-blue-500 to-indigo-600',
+                      'from-emerald-500 to-green-600',
+                      'from-amber-500 to-orange-600',
+                      'from-purple-500 to-violet-600',
+                      'from-rose-500 to-pink-600',
+                    ];
+                    const colorClass = colors[index % colors.length];
+                    return (
+                      <div
+                        key={cat.category}
+                        className="border rounded-xl p-5 flex flex-col gap-2 bg-linear-to-br from-gray-50 to-white hover:shadow-lg transition-all hover:scale-[1.02] group"
+                      >
+                        <p className="text-sm font-semibold text-gray-700">{cat.category}</p>
+                        <p className={`text-3xl font-bold bg-linear-to-r ${colorClass} bg-clip-text text-transparent`}>{cat.count}</p>
+                        <div className="space-y-1 mt-2">
+                          <p className="text-xs text-gray-500 flex items-center gap-1">
+                            <span className="w-2 h-2 rounded-full bg-blue-400" />
+                            Avg. density: {cat.avgBusinessDensity}
+                          </p>
+                          <p className="text-xs text-gray-500 flex items-center gap-1">
+                            <span className="w-2 h-2 rounded-full bg-amber-400" />
+                            Avg. competitors: {cat.avgCompetitors}
+                          </p>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="flex flex-col items-center justify-center py-12 text-center">
+                  <div className="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center mb-4">
+                    <Store className="w-8 h-8 text-gray-400" />
                   </div>
-                );
-              })}
+                  <h4 className="text-lg font-semibold text-gray-700">No data available</h4>
+                  <p className="text-sm text-gray-500 mt-1 max-w-sm">
+                    There are no active businesses in this category yet. Try adjusting your filters or running a clustering analysis.
+                  </p>
+                </div>
+              )}
             </CardContent>
           </Card>
 
-          {/* Zone distribution + quick insights */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <Card className="border-0 shadow-xl bg-white/80 backdrop-blur-sm overflow-hidden">
-              <CardHeader className="bg-linear-to-r from-emerald-50 to-teal-50 border-b">
-                <div className="flex items-center gap-3">
-                  <div className="p-2.5 bg-linear-to-br from-emerald-500 to-teal-600 rounded-xl text-white shadow-lg shadow-emerald-200">
-                    <MapPin className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <CardTitle className="text-lg">Zone Distribution</CardTitle>
-                    <p className="text-sm text-gray-500">
-                      Where most active businesses are located
-                    </p>
-                  </div>
+          {/* Zone Distribution - Full Width */}
+          <Card className="border-0 shadow-xl bg-white/80 backdrop-blur-sm overflow-hidden">
+            <CardHeader className="bg-linear-to-r from-emerald-50 to-teal-50 border-b">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 bg-linear-to-br from-emerald-500 to-teal-600 rounded-xl text-white shadow-lg shadow-emerald-200">
+                  <MapPin className="w-5 h-5" />
                 </div>
-              </CardHeader>
-              <CardContent className="p-6 space-y-4">
-                {zoneStats.map((zone) => {
-                  const percent =
-                    totalBusinesses > 0
-                      ? Math.round((zone.count / totalBusinesses) * 100)
-                      : 0;
-                  return (
-                    <div key={zone.zone} className="space-y-2 p-3 bg-gray-50 rounded-xl">
-                      <div className="flex justify-between text-sm">
-                        <span className="font-medium text-gray-700">{zone.zone}</span>
-                        <span className="font-semibold text-emerald-600">
-                          {zone.count} ({percent}%)
-                        </span>
+                <div>
+                  <CardTitle className="text-lg">Zone Distribution</CardTitle>
+                  <p className="text-sm text-gray-500">
+                    Where most active businesses are located
+                  </p>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="p-6">
+              {zoneStats.length > 0 ? (
+                <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {zoneStats.map((zone) => {
+                    const percent =
+                      totalBusinesses > 0
+                        ? Math.round((zone.count / totalBusinesses) * 100)
+                        : 0;
+                    return (
+                      <div key={zone.zone} className="space-y-2 p-4 bg-gray-50 rounded-xl">
+                        <div className="flex justify-between text-sm">
+                          <span className="font-medium text-gray-700">{zone.zone}</span>
+                          <span className="font-semibold text-emerald-600">
+                            {zone.count} ({percent}%)
+                          </span>
+                        </div>
+                        <Progress value={percent} className="h-2" />
                       </div>
-                      <Progress value={percent} className="h-2" />
-                    </div>
-                  );
-                })}
-              </CardContent>
-            </Card>
-
-            <Card className="border-0 shadow-xl bg-white/80 backdrop-blur-sm overflow-hidden">
-              <CardHeader className="bg-linear-to-r from-amber-50 to-orange-50 border-b">
-                <div className="flex items-center gap-3">
-                  <div className="p-2.5 bg-linear-to-br from-amber-500 to-orange-600 rounded-xl text-white shadow-lg shadow-amber-200">
-                    <Lightbulb className="w-5 h-5" />
-                  </div>
-                  <CardTitle className="text-lg">Quick Insights</CardTitle>
+                    );
+                  })}
                 </div>
-              </CardHeader>
-              <CardContent className="p-6 space-y-4">
-                <div className="flex items-start gap-3 p-4 bg-linear-to-r from-blue-50 to-indigo-50 rounded-xl border border-blue-100">
-                  <div className="p-2 bg-blue-500 rounded-lg text-white">
-                    <Lightbulb className="w-4 h-4" />
+              ) : (
+                <div className="flex flex-col items-center justify-center py-12 text-center">
+                  <div className="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center mb-4">
+                    <MapPin className="w-8 h-8 text-gray-400" />
                   </div>
-                  <div>
-                    <p className="text-sm font-semibold text-blue-900">Top Category</p>
-                    <p className="text-sm text-gray-600 mt-1">
-                      {topCategory
-                        ? `${topCategory.category} has the most active businesses (${topCategory.count}).`
-                        : "No active businesses found."}
-                    </p>
-                  </div>
+                  <h4 className="text-lg font-semibold text-gray-700">No data available</h4>
+                  <p className="text-sm text-gray-500 mt-1 max-w-sm">
+                    There are no zone distribution records to display. Try adjusting your filters or running a clustering analysis.
+                  </p>
                 </div>
-
-                <div className="flex items-start gap-3 p-4 bg-linear-to-r from-emerald-50 to-green-50 rounded-xl border border-emerald-100">
-                  <div className="p-2 bg-emerald-500 rounded-lg text-white">
-                    <Store className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-semibold text-emerald-900">Lowest Competition</p>
-                    <p className="text-sm text-gray-600 mt-1">
-                      {lowestCompetition
-                        ? `${lowestCompetition.category} has relatively low competitor presence — good for new entrants.`
-                        : "Not enough data to compute competition."}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex items-start gap-3 p-4 bg-linear-to-r from-purple-50 to-violet-50 rounded-xl border border-purple-100">
-                  <div className="p-2 bg-purple-500 rounded-lg text-white">
-                    <Activity className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-semibold text-purple-900">Business Density</p>
-                    <p className="text-sm text-gray-600 mt-1">
-                      Average of {kpis.avgBusinessDensity} nearby businesses
-                      around your recommended locations.
-                    </p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
+              )}
+            </CardContent>
+          </Card>
         </TabsContent>
 
         {/* OPPORTUNITIES TAB */}
