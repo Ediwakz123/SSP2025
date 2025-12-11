@@ -70,7 +70,7 @@ export function UserAnalyticsPage() {
 
   // User profile for export header
   const [userName, setUserName] = useState<string>("User");
-  const [userLocation, setUserLocation] = useState<string>("Barangay Sta. Cruz, Guiguinto, Bulacan");
+  const [userLocation, setUserLocation] = useState<string>("");
 
   // Ref for capturing analytics content for PDF export
   const analyticsContentRef = useRef<HTMLDivElement>(null);
@@ -226,8 +226,15 @@ export function UserAnalyticsPage() {
       const streetArr = Array.from(streetMap).map(([name, value]) => ({
         name,
         value,
-      }));
+      })).sort((a, b) => b.value - a.value);
       setStreets(streetArr);
+
+      // Set dynamic location based on most common street
+      if (streetArr.length > 0) {
+        setUserLocation(streetArr[0].name);
+      } else {
+        setUserLocation("Location not specified");
+      }
 
       // STATS
       setStats({
