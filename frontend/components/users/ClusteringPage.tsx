@@ -1226,14 +1226,27 @@ export function ClusteringPage() {
 
         if (aiResponse.ok) {
           const aiData = await aiResponse.json();
+          console.log("AI Response:", aiData); // Debug log
           if (aiData.success && aiData.recommendations) {
             setAiBusinessRecommendations(aiData.recommendations);
             // Save to Zustand store for cross-page persistence
             kmeansStore.setAIRecommendations(aiData.recommendations);
+          } else {
+            console.error("AI response missing data:", aiData);
+            toast.error("AI recommendations unavailable", {
+              description: aiData.error || "Response format issue",
+            });
           }
+        } else {
+          const errorText = await aiResponse.text();
+          console.error("AI API failed:", aiResponse.status, errorText);
+          toast.error("AI recommendations failed", {
+            description: `Status ${aiResponse.status}`,
+          });
         }
       } catch (aiErr) {
         console.error("AI Recommendations Error:", aiErr);
+        toast.error("Failed to get AI recommendations");
         // Non-blocking - clustering still succeeded
       } finally {
         setAiRecommendationsLoading(false);
