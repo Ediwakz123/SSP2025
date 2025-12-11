@@ -31,6 +31,17 @@ export default async function handler(req, res) {
       return "Best Choice";
     };
 
+    // Helper function to get color based on confidence label
+    const getConfidenceColor = (label) => {
+      switch (label) {
+        case "Not Ideal": return "#E63946";
+        case "Could Work": return "#F4A261";
+        case "Good Choice": return "#2A9D8F";
+        case "Best Choice": return "#2ECC71";
+        default: return "#2A9D8F";
+      }
+    };
+
     // Extract density metrics
     const b50 = businessDensity?.density_50m ?? 0;
     const b100 = businessDensity?.density_100m ?? 0;
@@ -178,9 +189,10 @@ Return ONLY valid JSON in this exact format:
       let clean = text.trim().replace(/^```json\n?/, "").replace(/\n?```$/, "");
       data = JSON.parse(clean);
 
-      // Ensure confidenceLabel is always set
+      // Ensure confidenceLabel and color are always set
       if (data.bestCluster && data.bestCluster.confidence) {
         data.bestCluster.confidenceLabel = getConfidenceLabel(data.bestCluster.confidence);
+        data.bestCluster.confidenceColor = getConfidenceColor(data.bestCluster.confidenceLabel);
       }
     } catch {
       // Fallback response if JSON parsing fails
@@ -190,6 +202,7 @@ Return ONLY valid JSON in this exact format:
       const score2 = Math.max(55, score1 - 7);
       const score3 = Math.max(50, score2 - 6);
       const confValue = Math.min(95, Math.max(60, 85 - c50 * 5 + b100 * 2));
+      const confLabel = getConfidenceLabel(confValue);
 
       data = {
         bestCluster: {
@@ -199,7 +212,8 @@ Return ONLY valid JSON in this exact format:
             ? "This area has no direct competitors nearby, making it a great place to start."
             : `This is a ${zoneType.toLowerCase()} zone with ${competitionLevel.toLowerCase()} competition.`,
           confidence: confValue,
-          confidenceLabel: getConfidenceLabel(confValue)
+          confidenceLabel: confLabel,
+          confidenceColor: getConfidenceColor(confLabel)
         },
         topBusinesses: [
           {

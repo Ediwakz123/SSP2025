@@ -138,6 +138,7 @@ interface AIBusinessRecommendations {
     reason: string;
     confidence: number;
     confidenceLabel: string;
+    confidenceColor: string;
   };
   topBusinesses: TopBusiness[];
   clusterSummary: ClusterSummaryItem[];
