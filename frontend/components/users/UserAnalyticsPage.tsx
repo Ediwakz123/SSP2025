@@ -488,31 +488,63 @@ export function UserAnalyticsPage() {
       // Apply inline styles to avoid oklab color issues
       const element = analyticsContentRef.current;
 
-      // Capture the analytics content as image with color fallback
+      // Capture the analytics content as image with comprehensive color fallback
       const canvas = await html2canvas(element, {
         scale: 2,
         useCORS: true,
         logging: false,
         backgroundColor: "#ffffff",
-        // Remove unsupported color functions by using allowTaint
         allowTaint: true,
-        // Force standard RGB color space
         onclone: (clonedDoc) => {
-          // Replace any oklch/oklab colors with fallback RGB
-          const allElements = clonedDoc.querySelectorAll("*");
-          allElements.forEach((el) => {
-            const computed = window.getComputedStyle(el as Element);
-            const bgColor = computed.backgroundColor;
-            const color = computed.color;
-
-            // If color contains oklab/oklch, replace with a safe fallback
-            if (bgColor.includes("oklab") || bgColor.includes("oklch")) {
-              (el as HTMLElement).style.backgroundColor = "#ffffff";
-            }
-            if (color.includes("oklab") || color.includes("oklch")) {
-              (el as HTMLElement).style.color = "#000000";
+          // Remove all stylesheets that might contain oklch/oklab
+          const stylesheets = clonedDoc.querySelectorAll('style, link[rel="stylesheet"]');
+          stylesheets.forEach((sheet) => {
+            if (sheet instanceof HTMLStyleElement && sheet.textContent) {
+              // Replace oklch/oklab with safe fallbacks in inline styles
+              sheet.textContent = sheet.textContent
+                .replace(/oklch\([^)]+\)/gi, "#3b82f6")
+                .replace(/oklab\([^)]+\)/gi, "#3b82f6")
+                .replace(/color-mix\([^)]+\)/gi, "#3b82f6");
             }
           });
+
+          // Replace all oklch/oklab colors in inline styles
+          const allElements = clonedDoc.querySelectorAll("*");
+          allElements.forEach((el) => {
+            const htmlEl = el as HTMLElement;
+            if (htmlEl.style) {
+              // Get all style properties
+              const styleStr = htmlEl.getAttribute("style") || "";
+              if (styleStr.includes("oklch") || styleStr.includes("oklab") || styleStr.includes("color-mix")) {
+                const newStyle = styleStr
+                  .replace(/oklch\([^)]+\)/gi, "#3b82f6")
+                  .replace(/oklab\([^)]+\)/gi, "#3b82f6")
+                  .replace(/color-mix\([^)]+\)/gi, "#3b82f6");
+                htmlEl.setAttribute("style", newStyle);
+              }
+
+              // Also set explicit safe colors to override any CSS variables
+              const computed = window.getComputedStyle(el as Element);
+              const bgColor = computed.backgroundColor;
+              const textColor = computed.color;
+
+              if (bgColor.includes("oklch") || bgColor.includes("oklab")) {
+                htmlEl.style.backgroundColor = "#ffffff";
+              }
+              if (textColor.includes("oklch") || textColor.includes("oklab")) {
+                htmlEl.style.color = "#1f2937";
+              }
+            }
+          });
+
+          // Remove CSS custom properties that might reference oklch
+          const root = clonedDoc.documentElement;
+          root.style.setProperty("--background", "#ffffff");
+          root.style.setProperty("--foreground", "#1f2937");
+          root.style.setProperty("--primary", "#3b82f6");
+          root.style.setProperty("--secondary", "#f3f4f6");
+          root.style.setProperty("--muted", "#9ca3af");
+          root.style.setProperty("--accent", "#10b981");
         }
       });
 
