@@ -36,6 +36,10 @@ import {
   Zap,
   XCircle,
   AlertOctagon,
+  ChevronRight,
+  DollarSign,
+  Users,
+  Building2,
 } from "lucide-react";
 import { Progress } from "../ui/progress";
 import { Badge } from "../ui/badge";
@@ -114,6 +118,10 @@ interface TopBusiness {
   opportunityLevel: string;
   shortDescription: string;
   fullDetails: string;
+  preferredLocation: string;
+  startupBudget: string;
+  competitorPresence: string;
+  businessDensityInsight: string;
 }
 
 interface ClusterSummaryItem {
@@ -2309,10 +2317,10 @@ ${result?.competitorAnalysis.recommendedStrategy}
                       <div className="text-right">
                         <div className="text-3xl font-bold">{aiBusinessRecommendations.bestCluster?.confidence || 80}%</div>
                         <div className={`text-sm font-semibold px-2 py-0.5 rounded ${aiBusinessRecommendations.bestCluster?.confidenceLabel === "Best Choice"
-                            ? "bg-white/30 text-white"
-                            : aiBusinessRecommendations.bestCluster?.confidenceLabel === "Good Choice"
-                              ? "bg-white/20 text-white/90"
-                              : "bg-white/10 text-white/80"
+                          ? "bg-white/30 text-white"
+                          : aiBusinessRecommendations.bestCluster?.confidenceLabel === "Good Choice"
+                            ? "bg-white/20 text-white/90"
+                            : "bg-white/10 text-white/80"
                           }`}>
                           {aiBusinessRecommendations.bestCluster?.confidenceLabel || "Good Choice"}
                         </div>
@@ -2366,11 +2374,64 @@ ${result?.competitorAnalysis.recommendedStrategy}
                               </Badge>
                             </div>
                           </div>
+                          {/* Expandable View More Details Button */}
+                          <details className="mt-3 group/details">
+                            <summary className="cursor-pointer flex items-center gap-2 text-indigo-600 hover:text-indigo-800 font-medium text-sm transition-colors">
+                              <ChevronRight className="w-4 h-4 group-open/details:rotate-90 transition-transform" />
+                              View More Details
+                            </summary>
+                            <div className="bg-gradient-to-br from-gray-50 to-slate-50 p-5 rounded-xl mt-3 space-y-4 border border-gray-100">
+                              {/* Preferred Location */}
+                              <div className="flex items-start gap-3">
+                                <div className="p-2 bg-blue-100 rounded-lg">
+                                  <MapPin className="w-4 h-4 text-blue-600" />
+                                </div>
+                                <div>
+                                  <h6 className="font-semibold text-gray-800 text-sm">Preferred Location</h6>
+                                  <p className="text-gray-600 text-sm">{biz.preferredLocation || "Near main road for visibility"}</p>
+                                </div>
+                              </div>
 
-                          {/* Full Details */}
-                          <div className="bg-gray-50 p-4 rounded-xl mt-3">
-                            <p className="text-gray-700 text-sm leading-relaxed">{biz.fullDetails}</p>
-                          </div>
+                              {/* Startup Budget */}
+                              <div className="flex items-start gap-3">
+                                <div className="p-2 bg-green-100 rounded-lg">
+                                  <DollarSign className="w-4 h-4 text-green-600" />
+                                </div>
+                                <div>
+                                  <h6 className="font-semibold text-gray-800 text-sm">Startup Budget</h6>
+                                  <p className="text-gray-600 text-sm">{biz.startupBudget || "₱50,000–₱150,000"}</p>
+                                </div>
+                              </div>
+
+                              {/* Competitor Presence */}
+                              <div className="flex items-start gap-3">
+                                <div className="p-2 bg-amber-100 rounded-lg">
+                                  <Users className="w-4 h-4 text-amber-600" />
+                                </div>
+                                <div>
+                                  <h6 className="font-semibold text-gray-800 text-sm">Competitor Presence</h6>
+                                  <p className="text-gray-600 text-sm">{biz.competitorPresence || "Low competition in area"}</p>
+                                </div>
+                              </div>
+
+                              {/* Business Density Insight */}
+                              <div className="flex items-start gap-3">
+                                <div className="p-2 bg-purple-100 rounded-lg">
+                                  <Building2 className="w-4 h-4 text-purple-600" />
+                                </div>
+                                <div>
+                                  <h6 className="font-semibold text-gray-800 text-sm">Business Density</h6>
+                                  <p className="text-gray-600 text-sm">{biz.businessDensityInsight || "Moderate activity area"}</p>
+                                </div>
+                              </div>
+
+                              {/* Full Details */}
+                              <div className="pt-3 border-t border-gray-200">
+                                <h6 className="font-semibold text-gray-800 text-sm mb-2">Why This Business Fits</h6>
+                                <p className="text-gray-700 text-sm leading-relaxed">{biz.fullDetails}</p>
+                              </div>
+                            </div>
+                          </details>
                         </div>
                       ))}
                     </div>

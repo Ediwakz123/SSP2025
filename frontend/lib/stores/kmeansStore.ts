@@ -38,6 +38,10 @@ interface TopBusiness {
     opportunityLevel: string;
     shortDescription: string;
     fullDetails: string;
+    preferredLocation: string;
+    startupBudget: string;
+    competitorPresence: string;
+    businessDensityInsight: string;
 }
 
 interface ClusterSummaryItem {

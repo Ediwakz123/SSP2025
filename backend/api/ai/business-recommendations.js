@@ -57,34 +57,33 @@ export default async function handler(req, res) {
     // Build comprehensive system prompt
     const systemPrompt = `You are an AI Business Recommendation Engine.
 
-Use ONLY the provided data:
+Use ONLY the provided clustering data:
 - User's business idea and category
-- Cluster information: clusterId, centroid (lat/lng), number of businesses in each cluster
+- Cluster information: clusterId, centroid (lat/lng), number of businesses per cluster
 
 Your tasks:
-1. Identify the best cluster and give it a friendly, easy-to-understand name.
-   Examples: "Service Area", "Shopping Area", "Quiet Area", "Growing Area", "Mixed Business Area"
-
-2. Recommend the Top 3 additional business ideas that fit well in that cluster.
-
+1. Identify the best cluster and give it a friendly name.
+2. Recommend the Top 3 additional business ideas suitable for that cluster.
 3. For each recommended business, include:
    - name
    - score (0–100)
    - fitPercentage (0–100)
    - opportunityLevel (High/Medium/Low)
    - shortDescription (1–2 simple sentences)
-   - fullDetails: write clearly using simple words. Explain why this business fits here, what is missing in the area, what benefits it brings, and any small risk explained simply.
+   - fullDetails: a clear explanation using simple language
+   - preferredLocation: suggest where inside the cluster the business fits best
+       (e.g., near main road, beside residential area, close to other services)
+   - startupBudget: give a suggested budget range in PHP
+       (e.g., "₱80,000–₱150,000")
+   - competitorPresence: short explanation of how many similar shops exist in the area
+   - businessDensityInsight: brief description of how crowded or open the area is
 
-4. Rename clusters using friendly names:
-   - High business count → "Busy Area"
-   - Medium count → "Active Area"
-   - Low count → "Growing Area"
-
-5. The FINAL SUGGESTION must be written in very simple language. Avoid jargon. Avoid technical terms. Speak like you are giving helpful advice to a regular person.
-
-Examples of simple final suggestions:
-- "This area is a good place for your business because there are not many similar shops yet."
-- "This spot is promising because people nearby may need this service."
+4. Confidence Level:
+Convert the confidence % into this label:
+1–25% = "Not Ideal"
+26–50% = "Could Work"
+51–75% = "Good Choice"
+76–100% = "Best Choice"
 
 Output ONLY valid JSON.`;
 
@@ -121,7 +120,8 @@ Return ONLY valid JSON in this exact format:
     "clusterId": 1,
     "friendlyName": "Service Area",
     "reason": "Simple reason why this cluster is best",
-    "confidence": 85
+    "confidence": 85,
+    "confidenceLabel": "Best Choice"
   },
   "topBusinesses": [
     {
@@ -130,7 +130,11 @@ Return ONLY valid JSON in this exact format:
       "fitPercentage": 88,
       "opportunityLevel": "High",
       "shortDescription": "1-2 simple sentences about this business.",
-      "fullDetails": "Clear explanation using simple words about why this business fits, what is missing, benefits, and any small risks."
+      "fullDetails": "Clear explanation using simple words about why this business fits, what is missing, benefits, and any small risks.",
+      "preferredLocation": "Near the main road or community entrance for easy access.",
+      "startupBudget": "₱80,000–₱150,000",
+      "competitorPresence": "Only 1 similar shop nearby, leaving strong room for demand.",
+      "businessDensityInsight": "Moderately busy area with service-focused businesses."
     },
     {
       "name": "Business Name 2",
@@ -138,7 +142,11 @@ Return ONLY valid JSON in this exact format:
       "fitPercentage": 82,
       "opportunityLevel": "Medium",
       "shortDescription": "Short description.",
-      "fullDetails": "Full explanation in simple words."
+      "fullDetails": "Full explanation in simple words.",
+      "preferredLocation": "Suggested location.",
+      "startupBudget": "₱50,000–₱100,000",
+      "competitorPresence": "Competition info.",
+      "businessDensityInsight": "Density insight."
     },
     {
       "name": "Business Name 3",
@@ -146,7 +154,11 @@ Return ONLY valid JSON in this exact format:
       "fitPercentage": 77,
       "opportunityLevel": "Medium",
       "shortDescription": "Short description.",
-      "fullDetails": "Full explanation in simple words."
+      "fullDetails": "Full explanation in simple words.",
+      "preferredLocation": "Suggested location.",
+      "startupBudget": "₱30,000–₱80,000",
+      "competitorPresence": "Competition info.",
+      "businessDensityInsight": "Density insight."
     }
   ],
   "clusterSummary": [
@@ -200,7 +212,17 @@ Return ONLY valid JSON in this exact format:
               : "Some competition exists, but you can stand out with good service.",
             fullDetails: c50 === 0
               ? "This business fits well here because there are no direct competitors within 50 meters. People in this area may need this service but currently have to go elsewhere. Being the first gives you an advantage."
-              : `There are ${c50} similar businesses nearby. To succeed, focus on what makes your business different - better quality, price, or service.`
+              : `There are ${c50} similar businesses nearby. To succeed, focus on what makes your business different - better quality, price, or service.`,
+            preferredLocation: `Near the main road or central area of this ${zoneType.toLowerCase()} zone for maximum visibility.`,
+            startupBudget: "₱80,000–₱150,000",
+            competitorPresence: c50 === 0
+              ? "No direct competitors found within 50 meters. Excellent opportunity."
+              : `${c50} similar businesses within 50 meters. Moderate competition.`,
+            businessDensityInsight: b100 >= 10
+              ? "Busy area with many businesses. High foot traffic expected."
+              : b100 >= 5
+                ? "Moderately active area with steady customer flow."
+                : "Quiet area with room for growth. Building customer base may take time."
           },
           {
             name: `${generalCategory || "Retail"} Services`,
@@ -208,7 +230,11 @@ Return ONLY valid JSON in this exact format:
             fitPercentage: score2 - 3,
             opportunityLevel: score2 >= 80 ? "High" : score2 >= 65 ? "Medium" : "Low",
             shortDescription: `Works well with the ${b100} businesses already here.`,
-            fullDetails: `This area already has ${b100} businesses within 100 meters. Adding a service business can complement them and benefit from the foot traffic they bring.`
+            fullDetails: `This area already has ${b100} businesses within 100 meters. Adding a service business can complement them and benefit from the foot traffic they bring.`,
+            preferredLocation: "Close to existing service businesses for customer convenience.",
+            startupBudget: "₱50,000–₱120,000",
+            competitorPresence: `Complementary to ${b100} nearby businesses. Low direct competition.`,
+            businessDensityInsight: `${b100} businesses nearby provide a steady stream of potential customers.`
           },
           {
             name: "Convenience Store",
@@ -216,7 +242,11 @@ Return ONLY valid JSON in this exact format:
             fitPercentage: score3 - 2,
             opportunityLevel: score3 >= 80 ? "High" : score3 >= 65 ? "Medium" : "Low",
             shortDescription: "Basic needs store that most areas can benefit from.",
-            fullDetails: `A convenience store provides daily essentials that people need. In a ${zoneType.toLowerCase()} zone like this, there is usually steady demand for quick purchases.`
+            fullDetails: `A convenience store provides daily essentials that people need. In a ${zoneType.toLowerCase()} zone like this, there is usually steady demand for quick purchases.`,
+            preferredLocation: "Near residential areas or along main walkways for easy access.",
+            startupBudget: "₱100,000–₱250,000",
+            competitorPresence: "Essential services are always needed. Some competition acceptable.",
+            businessDensityInsight: `${zoneType} area with ${b200} businesses within 200m. Consistent demand expected.`
           }
         ],
         clusterSummary: [
