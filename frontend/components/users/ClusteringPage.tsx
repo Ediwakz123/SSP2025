@@ -129,6 +129,7 @@ interface AIBusinessRecommendations {
     friendlyName: string;
     reason: string;
     confidence: number;
+    confidenceLabel: string;
   };
   topBusinesses: TopBusiness[];
   clusterSummary: ClusterSummaryItem[];
@@ -2307,7 +2308,14 @@ ${result?.competitorAnalysis.recommendedStrategy}
                       </div>
                       <div className="text-right">
                         <div className="text-3xl font-bold">{aiBusinessRecommendations.bestCluster?.confidence || 80}%</div>
-                        <div className="text-white/80 text-sm">Confidence</div>
+                        <div className={`text-sm font-semibold px-2 py-0.5 rounded ${aiBusinessRecommendations.bestCluster?.confidenceLabel === "Best Choice"
+                            ? "bg-white/30 text-white"
+                            : aiBusinessRecommendations.bestCluster?.confidenceLabel === "Good Choice"
+                              ? "bg-white/20 text-white/90"
+                              : "bg-white/10 text-white/80"
+                          }`}>
+                          {aiBusinessRecommendations.bestCluster?.confidenceLabel || "Good Choice"}
+                        </div>
                       </div>
                     </div>
                     <div className="absolute -top-16 -right-16 w-48 h-48 bg-white/10 rounded-full blur-2xl" />

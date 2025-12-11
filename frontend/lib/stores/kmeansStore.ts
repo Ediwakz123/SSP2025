@@ -53,6 +53,7 @@ interface AIBusinessRecommendations {
         friendlyName: string;
         reason: string;
         confidence: number;
+        confidenceLabel: string;
     };
     topBusinesses: TopBusiness[];
     clusterSummary: ClusterSummaryItem[];

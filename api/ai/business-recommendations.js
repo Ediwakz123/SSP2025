@@ -23,6 +23,14 @@ export default async function handler(req, res) {
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
     const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
+    // Helper function to convert percentage to user-friendly label
+    const getConfidenceLabel = (confidence) => {
+      if (confidence <= 25) return "Not Ideal";
+      if (confidence <= 50) return "Could Work";
+      if (confidence <= 75) return "Good Choice";
+      return "Best Choice";
+    };
+
     // Extract density metrics
     const b50 = businessDensity?.density_50m ?? 0;
     const b100 = businessDensity?.density_100m ?? 0;
@@ -157,6 +165,11 @@ Return ONLY valid JSON in this exact format:
     try {
       let clean = text.trim().replace(/^```json\n?/, "").replace(/\n?```$/, "");
       data = JSON.parse(clean);
+
+      // Ensure confidenceLabel is always set
+      if (data.bestCluster && data.bestCluster.confidence) {
+        data.bestCluster.confidenceLabel = getConfidenceLabel(data.bestCluster.confidence);
+      }
     } catch {
       // Fallback response if JSON parsing fails
       const competitionLevel = c50 >= 3 ? "High" : c100 >= 5 ? "Medium" : "Low";
@@ -164,6 +177,7 @@ Return ONLY valid JSON in this exact format:
       const score1 = Math.max(60, 90 - c50 * 5);
       const score2 = Math.max(55, score1 - 7);
       const score3 = Math.max(50, score2 - 6);
+      const confValue = Math.min(95, Math.max(60, 85 - c50 * 5 + b100 * 2));
 
       data = {
         bestCluster: {
@@ -172,7 +186,8 @@ Return ONLY valid JSON in this exact format:
           reason: c50 === 0
             ? "This area has no direct competitors nearby, making it a great place to start."
             : `This is a ${zoneType.toLowerCase()} zone with ${competitionLevel.toLowerCase()} competition.`,
-          confidence: Math.min(95, Math.max(60, 85 - c50 * 5 + b100 * 2))
+          confidence: confValue,
+          confidenceLabel: getConfidenceLabel(confValue)
         },
         topBusinesses: [
           {
