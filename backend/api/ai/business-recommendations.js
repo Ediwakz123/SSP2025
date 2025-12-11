@@ -96,12 +96,12 @@ Each recommended business must receive a unique score based on:
 - Gap in supply vs demand
 
 Scoring Range:
-- All scores MUST be between 70 and 100
+- All scores MUST be between **70 and 100**
 - No two recommended businesses may have the same score
 - No reused scoring patterns (avoid 92/88/85 repetition)
 
 Fit Percentage:
-- Must be between 70% and 100%
+- Must be between **70% and 100%**
 - Cannot be identical to the score
 - Should logically correlate with the score
 
@@ -110,37 +110,74 @@ OPPORTUNITY LEVEL LABEL (BUSINESS-FRIENDLY):
 -----------------------------------
 Assign opportunityLevel based on SCORE:
 
-Score 90-100  = "Excellent Potential"
-Score 80-89   = "Strong Potential"
-Score 70-79   = "Moderate Potential"
-Score below 70 = "Limited Potential"
+Score 90–100   → "Excellent Potential"
+Score 80–89    → "Strong Potential"
+Score 70–79    → "Moderate Potential"
+Score below 70 → "Limited Potential" (rare; avoid unless competition extremely high)
 
 -----------------------------------
 CONFIDENCE LABEL:
 -----------------------------------
 Convert confidence % to a user-friendly label:
 
-1-25%   = "Not Ideal"
-26-50%  = "Could Work"
-51-75%  = "Good Choice"
-76-100% = "Best Choice"
+1–25%   = "Not Ideal"
+26–50%  = "Could Work"
+51–75%  = "Good Choice"
+76–100% = "Best Choice"
 
 -----------------------------------
 TOP 3 BUSINESS RECOMMENDATIONS:
 -----------------------------------
 For EACH recommended business include:
+
 - name
-- score (unique, 70-100)
-- fitPercentage (unique, 70-100)
+- score (unique, 70–100)
+- fitPercentage (unique, 70–100)
 - opportunityLevel (from scoring rules above)
-- shortDescription (1-2 simple sentences)
+- shortDescription (1–2 simple sentences)
 - fullDetails (simple, friendly explanation)
 - preferredLocation (best spot inside cluster)
 - startupBudget ("PHP xx,xxx - PHP xx,xxx")
 - competitorPresence (simple explanation)
 - businessDensityInsight (how crowded or open the area is)
 
-Return ONLY valid JSON.`;
+-----------------------------------
+JSON OUTPUT FORMAT (REQUIRED):
+-----------------------------------
+Return ONLY valid JSON:
+
+{
+  "bestCluster": {
+    "clusterId": number,
+    "zoneType": "Commercial Zone" | "Residential Zone" | "Mixed Zone",
+    "reason": "string",
+    "confidence": number,
+    "confidenceLabel": "Not Ideal" | "Could Work" | "Good Choice" | "Best Choice"
+  },
+  "topBusinesses": [
+    {
+      "name": "string",
+      "score": number,
+      "fitPercentage": number,
+      "opportunityLevel": "Excellent Potential" | "Strong Potential" | "Moderate Potential" | "Limited Potential",
+      "shortDescription": "string",
+      "fullDetails": "string",
+      "preferredLocation": "string",
+      "startupBudget": "string",
+      "competitorPresence": "string",
+      "businessDensityInsight": "string"
+    }
+  ],
+  "clusterSummary": [
+    {
+      "clusterId": number,
+      "zoneType": "Commercial Zone" | "Residential Zone" | "Mixed Zone",
+      "businessCount": number,
+      "competitionLevel": "High" | "Medium" | "Low"
+    }
+  ],
+  "finalSuggestion": "string"
+}`;
 
     const userPrompt = `Business Idea: "${businessIdea || "General " + (generalCategory || "Business")}"
 Detected Category: ${generalCategory || "Not specified"}
