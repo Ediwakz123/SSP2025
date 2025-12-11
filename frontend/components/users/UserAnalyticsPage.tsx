@@ -946,25 +946,10 @@ export function UserAnalyticsPage() {
                 </CardHeader>
                 <CardContent className="p-6">
                   <ResponsiveContainer width="100%" height={300}>
-                    <PieChart>
-                      <Pie
-                        data={categoryData}
-                        cx="50%"
-                        cy="50%"
-                        labelLine={false}
-                        label={({ name, percent }) =>
-                          `${name}: ${(percent * 100).toFixed(0)}%`
-                        }
-                        outerRadius={80}
-                        dataKey="value"
-                      >
-                        {categoryData.map((entry, index) => (
-                          <Cell
-                            key={index}
-                            fill={COLORS[index % COLORS.length]}
-                          />
-                        ))}
-                      </Pie>
+                    <BarChart data={categoryData} layout="vertical" margin={{ left: 80 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                      <XAxis type="number" />
+                      <YAxis type="category" dataKey="name" width={75} tick={{ fontSize: 12 }} />
                       <Tooltip
                         contentStyle={{
                           backgroundColor: 'white',
@@ -972,8 +957,14 @@ export function UserAnalyticsPage() {
                           border: 'none',
                           boxShadow: '0 10px 40px rgba(0,0,0,0.1)'
                         }}
+                        formatter={(value: number) => [`${value} businesses`, 'Count']}
                       />
-                    </PieChart>
+                      <Bar dataKey="value" radius={[0, 8, 8, 0]}>
+                        {categoryData.map((entry, index) => (
+                          <Cell key={index} fill={COLORS[index % COLORS.length]} />
+                        ))}
+                      </Bar>
+                    </BarChart>
                   </ResponsiveContainer>
                 </CardContent>
               </Card>
@@ -1030,26 +1021,11 @@ export function UserAnalyticsPage() {
               </div>
             </CardHeader>
             <CardContent className="p-6">
-              <ResponsiveContainer width="100%" height={400}>
-                <PieChart>
-                  <Pie
-                    data={zoneData}
-                    cx="50%"
-                    cy="50%"
-                    labelLine={false}
-                    label={({ name, value }) =>
-                      `${name}: ${value}`
-                    }
-                    outerRadius={120}
-                    dataKey="value"
-                  >
-                    {zoneData.map((entry, index) => (
-                      <Cell
-                        key={index}
-                        fill={COLORS[index % COLORS.length]}
-                      />
-                    ))}
-                  </Pie>
+              <ResponsiveContainer width="100%" height={300}>
+                <BarChart data={zoneData} margin={{ left: 20, right: 20 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                  <XAxis dataKey="name" tick={{ fontSize: 12 }} />
+                  <YAxis />
                   <Tooltip
                     contentStyle={{
                       backgroundColor: 'white',
@@ -1057,9 +1033,15 @@ export function UserAnalyticsPage() {
                       border: 'none',
                       boxShadow: '0 10px 40px rgba(0,0,0,0.1)'
                     }}
+                    formatter={(value: number) => [`${value} businesses`, 'Count']}
                   />
                   <Legend />
-                </PieChart>
+                  <Bar dataKey="value" name="Businesses" radius={[8, 8, 0, 0]}>
+                    {zoneData.map((entry, index) => (
+                      <Cell key={index} fill={COLORS[index % COLORS.length]} />
+                    ))}
+                  </Bar>
+                </BarChart>
               </ResponsiveContainer>
             </CardContent>
           </Card>
