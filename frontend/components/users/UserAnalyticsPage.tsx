@@ -68,6 +68,10 @@ export function UserAnalyticsPage() {
   const [showExportModal, setShowExportModal] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
 
+  // User profile for export header
+  const [userName, setUserName] = useState<string>("User");
+  const [userLocation, setUserLocation] = useState<string>("Barangay Sta. Cruz, Guiguinto, Bulacan");
+
   // Ref for capturing analytics content for PDF export
   const analyticsContentRef = useRef<HTMLDivElement>(null);
 
@@ -244,6 +248,22 @@ export function UserAnalyticsPage() {
 
   useEffect(() => {
     loadAnalytics();
+
+    // Fetch user profile for export header
+    const fetchUserProfile = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("full_name")
+          .eq("id", user.id)
+          .single();
+        if (profile?.full_name) {
+          setUserName(profile.full_name);
+        }
+      }
+    };
+    fetchUserProfile();
   }, [loadAnalytics]);
 
   if (loading || !stats) {
@@ -286,57 +306,54 @@ export function UserAnalyticsPage() {
   const exportExcel = () => {
     const workbook = XLSX.utils.book_new();
     const totalBusinesses = stats?.total_businesses || 0;
-    const timestamp = new Date().toLocaleString();
+    const timestamp = new Date().toLocaleDateString("en-PH", { year: "numeric", month: "long", day: "numeric" });
+    const timeRange = startDate && endDate ? `${startDate} to ${endDate}` : "All Time";
 
-    // Sheet 1: Summary
-    const summaryData = [
-      { Metric: "Total Businesses", Value: totalBusinesses.toString() },
-      { Metric: "Total Business Categories", Value: categories.length.toString() },
-      { Metric: "Total Zone Types", Value: zones.length.toString() },
-      { Metric: "Total Streets Covered", Value: streets.length.toString() },
-      { Metric: "Average Businesses per Street", Value: streets.length ? (totalBusinesses / streets.length).toFixed(2) : "0" },
-      { Metric: "Average Businesses per Zone", Value: zones.length ? (totalBusinesses / zones.length).toFixed(2) : "0" },
-      { Metric: "Most Popular Category", Value: categories[0]?.name || "N/A" },
-      { Metric: "Least Popular Category", Value: categories[categories.length - 1]?.name || "N/A" },
-      { Metric: "Report Generated", Value: timestamp },
+    // Sheet 1: Overview
+    const overviewData = [
+      ["STRATEGIC STORE PLACEMENT SYSTEM - Analytics Report"],
+      [""],
+      ["Prepared for", userName],
+      ["Location", userLocation],
+      ["Date Generated", timestamp],
+      ["Time Range", timeRange],
+      [""],
+      ["OVERVIEW METRICS"],
+      ["Total Businesses", totalBusinesses],
+      ["Average per Street", streets.length ? (totalBusinesses / streets.length).toFixed(2) : "0"],
+      ["Business Categories Count", categories.length],
+      ["Zone Types Count", zones.length],
+      ["Total Streets Covered", streets.length],
+      [""],
+      ["ZONE DISTRIBUTION SUMMARY"],
+      ...zones.map(z => [z.name, `${z.value} businesses (${((z.value / totalBusinesses) * 100).toFixed(1)}%)`]),
     ];
-    const summarySheet = XLSX.utils.json_to_sheet(summaryData);
-    XLSX.utils.book_append_sheet(workbook, summarySheet, "Summary");
+    const overviewSheet = XLSX.utils.aoa_to_sheet(overviewData);
+    overviewSheet["!cols"] = [{ wch: 30 }, { wch: 50 }];
+    XLSX.utils.book_append_sheet(workbook, overviewSheet, "Overview");
 
-    // Sheet 2: Business Count by Category
-    const businessCountData = categories.map((c, idx) => ({
+    // Sheet 2: Businesses by Category
+    const categoryData = categories.map((c, idx) => ({
       "Rank": idx + 1,
       "Category Name": c.name,
       "Business Count": c.value,
-    }));
-    const businessCountSheet = XLSX.utils.json_to_sheet(businessCountData);
-    XLSX.utils.book_append_sheet(workbook, businessCountSheet, "Business Count by Category");
-
-    // Sheet 3: Category Percentage Breakdown
-    const percentageData = categories.map((c, idx) => ({
-      "Rank": idx + 1,
-      "Category Name": c.name,
-      "Count": c.value,
       "Percentage (%)": ((c.value / totalBusinesses) * 100).toFixed(2),
-      "Cumulative (%)": categories
-        .slice(0, idx + 1)
-        .reduce((acc, cat) => acc + (cat.value / totalBusinesses) * 100, 0)
-        .toFixed(2),
     }));
-    const percentageSheet = XLSX.utils.json_to_sheet(percentageData);
-    XLSX.utils.book_append_sheet(workbook, percentageSheet, "Category Percentage");
+    const categorySheet = XLSX.utils.json_to_sheet(categoryData);
+    XLSX.utils.book_append_sheet(workbook, categorySheet, "Businesses by Category");
 
-    // Sheet 4: Zone Distribution
-    const zoneDistData = zones.map((z, idx) => ({
+    // Sheet 3: Businesses by Zone
+    const zoneData = zones.map((z, idx) => ({
       "Rank": idx + 1,
       "Zone Type": z.name,
-      "Business Count": z.value,
+      "Count": z.value,
       "Percentage (%)": ((z.value / totalBusinesses) * 100).toFixed(2),
+      "Relative Density": z.value >= totalBusinesses / zones.length ? "High" : z.value >= totalBusinesses / (zones.length * 2) ? "Medium" : "Low",
     }));
-    const zoneSheet = XLSX.utils.json_to_sheet(zoneDistData);
-    XLSX.utils.book_append_sheet(workbook, zoneSheet, "Zone Distribution");
+    const zoneSheet = XLSX.utils.json_to_sheet(zoneData);
+    XLSX.utils.book_append_sheet(workbook, zoneSheet, "Businesses by Zone");
 
-    // Sheet 5: Full Raw Dataset
+    // Sheet 4: Raw Business Records
     const rawData = businesses.map((b, idx) => ({
       "ID": idx + 1,
       "Business Name": b.business_name || "N/A",
@@ -346,15 +363,54 @@ export function UserAnalyticsPage() {
       "Latitude": b.latitude || "N/A",
       "Longitude": b.longitude || "N/A",
       "Status": b.status || "N/A",
-      "Created At": b.created_at ? new Date(b.created_at).toLocaleDateString() : "N/A",
+      "Date Added": b.created_at ? new Date(b.created_at).toLocaleDateString() : "N/A",
     }));
-    const rawDataSheet = XLSX.utils.json_to_sheet(rawData);
-    XLSX.utils.book_append_sheet(workbook, rawDataSheet, "Full Raw Dataset");
+    const rawSheet = XLSX.utils.json_to_sheet(rawData);
+    XLSX.utils.book_append_sheet(workbook, rawSheet, "Raw Business Records");
 
-    // Save the workbook with auto-generated filename
+    // Sheet 5: Analytical Insights (AI-generated commentary)
+    const topCategory = categories[0];
+    const leastCategory = categories[categories.length - 1];
+    const commercialZone = zones.find(z => z.name.toLowerCase().includes("commercial"));
+    const residentialZone = zones.find(z => z.name.toLowerCase().includes("residential"));
+    const avgPerStreet = streets.length ? (totalBusinesses / streets.length).toFixed(1) : "0";
+
+    const insightsData = [
+      ["ANALYTICAL INSIGHTS - AI-Generated Analysis"],
+      [""],
+      ["DISTRIBUTION BEHAVIOR"],
+      [`The ${userLocation} area has ${totalBusinesses} registered businesses distributed across ${streets.length} streets and ${zones.length} zone types.`],
+      [`Average business density is ${avgPerStreet} businesses per street, indicating ${parseFloat(avgPerStreet) > 5 ? "high commercial activity" : parseFloat(avgPerStreet) > 2 ? "moderate commercial presence" : "low-density development"}.`],
+      [""],
+      ["TOP-PERFORMING CATEGORIES"],
+      [`${topCategory?.name || "N/A"} leads with ${topCategory?.value || 0} businesses (${topCategory ? ((topCategory.value / totalBusinesses) * 100).toFixed(1) : 0}% of total).`],
+      [`The top 3 categories represent ${categories.slice(0, 3).reduce((acc, c) => acc + c.value, 0)} businesses (${((categories.slice(0, 3).reduce((acc, c) => acc + c.value, 0) / totalBusinesses) * 100).toFixed(1)}% of market).`],
+      [""],
+      ["HIGH-DENSITY ZONES"],
+      [commercialZone ? `Commercial zones contain ${commercialZone.value} businesses, making up ${((commercialZone.value / totalBusinesses) * 100).toFixed(1)}% of the total.` : "No commercial zone data available."],
+      [residentialZone ? `Residential zones have ${residentialZone.value} businesses (${((residentialZone.value / totalBusinesses) * 100).toFixed(1)}%).` : "No residential zone data available."],
+      [""],
+      ["MARKET OPPORTUNITIES"],
+      [`${leastCategory?.name || "N/A"} has the lowest presence with only ${leastCategory?.value || 0} businesses - potential market gap.`],
+      [categories.length > 5 ? "Diverse business ecosystem suggests healthy competition and consumer choice." : "Limited category diversity may indicate untapped market segments."],
+      [""],
+      ["GROWTH TREND COMMENTARY"],
+      [startDate && endDate ? `Data filtered from ${startDate} to ${endDate} shows focused time-period analysis.` : "All-time data provides comprehensive historical view."],
+      [`With ${streets.length} streets covered, there is ${streets.length > 20 ? "extensive" : streets.length > 10 ? "moderate" : "limited"} geographic coverage.`],
+      [""],
+      ["RISKS & OPPORTUNITIES"],
+      [parseFloat(avgPerStreet) > 8 ? "⚠️ High density may indicate market saturation in some areas." : "✓ Density levels suggest room for new business entries."],
+      [categories.length >= 6 ? "✓ Well-diversified business ecosystem reduces single-category risk." : "⚠️ Category concentration may pose market vulnerability."],
+    ];
+    const insightsSheet = XLSX.utils.aoa_to_sheet(insightsData);
+    insightsSheet["!cols"] = [{ wch: 120 }];
+    XLSX.utils.book_append_sheet(workbook, insightsSheet, "Analytical Insights");
+
+    // Save the workbook
     const fileName = `SSP_Analytics_Report_${new Date().toISOString().split("T")[0]}.xlsx`;
     XLSX.writeFile(workbook, fileName);
     toast.success(`Exported ${businesses.length} records to Excel (5 sheets)`);
+    logActivity("Exported Analytics Excel", { sheets: 5, records: businesses.length });
   };
 
   // Enhanced PDF Export with full visual content - FIXED for oklab color support
@@ -374,22 +430,34 @@ export function UserAnalyticsPage() {
       const margin = 15;
       let yPos = margin;
       const totalBusinesses = stats?.total_businesses || 0;
+      const timeRange = startDate && endDate ? `${startDate} to ${endDate}` : "All Time";
 
-      // ========== PAGE 1: TITLE & SUMMARY ==========
       // Title
-      pdf.setFontSize(24);
+      pdf.setFontSize(22);
       pdf.setFont("helvetica", "bold");
-      pdf.setTextColor(59, 130, 246); // Blue
-      pdf.text("Business Analytics Report", pageWidth / 2, yPos, { align: "center" });
+      pdf.setTextColor(59, 130, 246);
+      pdf.text("Analytics Report", pageWidth / 2, yPos, { align: "center" });
+      yPos += 8;
+
+      pdf.setFontSize(12);
+      pdf.setTextColor(100, 100, 100);
+      pdf.text("Strategic Store Placement System", pageWidth / 2, yPos, { align: "center" });
       yPos += 12;
 
-      // Subtitle with date
-      pdf.setFontSize(11);
+      // Header info box
+      pdf.setFillColor(249, 250, 251);
+      pdf.roundedRect(margin, yPos, pageWidth - margin * 2, 28, 3, 3, "F");
+      yPos += 7;
+
+      pdf.setFontSize(10);
       pdf.setFont("helvetica", "normal");
-      pdf.setTextColor(100, 100, 100);
-      pdf.text(`Generated: ${new Date().toLocaleString()}`, pageWidth / 2, yPos, { align: "center" });
-      pdf.text("Strategic Store Placement System", pageWidth / 2, yPos + 5, { align: "center" });
-      yPos += 20;
+      pdf.setTextColor(75, 85, 99);
+      pdf.text(`Prepared for: ${userName}`, margin + 5, yPos);
+      pdf.text(`Date: ${new Date().toLocaleDateString("en-PH", { year: "numeric", month: "long", day: "numeric" })}`, pageWidth - margin - 5, yPos, { align: "right" });
+      yPos += 6;
+      pdf.text(`Location: ${userLocation}`, margin + 5, yPos);
+      pdf.text(`Time Range: ${timeRange}`, pageWidth - margin - 5, yPos, { align: "right" });
+      yPos += 15;
 
       // Summary Statistics Box
       pdf.setFillColor(245, 247, 250);
