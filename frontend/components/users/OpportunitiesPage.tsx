@@ -1,6 +1,7 @@
 import { useEffect, useState, useMemo } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { supabase } from "../../lib/supabase";
+import { haversineDistance } from "../../utils/haversine";
 import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { Badge } from "../ui/badge";
@@ -312,6 +313,29 @@ interface ClusterKPIs {
   highestDensityCluster: ClusterStats | null;
 }
 
+// Helper: Compute dynamic density for a location based on all other locations
+function computeDynamicDensity(loc: LocationData, allLocations: LocationData[], radiusKm: number = 0.2): {
+  businessDensity: number;
+  competitorDensity: number;
+} {
+  const point = { latitude: loc.latitude, longitude: loc.longitude };
+
+  // Count all businesses within radius
+  const businessDensity = allLocations.filter(other => {
+    const otherPoint = { latitude: other.latitude, longitude: other.longitude };
+    return haversineDistance(point, otherPoint) <= radiusKm;
+  }).length;
+
+  // Count competitors (same category) within radius
+  const competitorDensity = allLocations.filter(other => {
+    if (other.general_category !== loc.general_category) return false;
+    const otherPoint = { latitude: other.latitude, longitude: other.longitude };
+    return haversineDistance(point, otherPoint) <= radiusKm;
+  }).length;
+
+  return { businessDensity, competitorDensity };
+}
+
 function calculateClusterKPIs(locations: LocationData[], numClusters: number): ClusterKPIs {
   if (locations.length === 0) {
     return {
@@ -329,9 +353,23 @@ function calculateClusterKPIs(locations: LocationData[], numClusters: number): C
     };
   }
 
-  // Group locations by cluster
+  // Pre-compute dynamic densities for all locations (if stored values are 0)
+  const locationsWithDensity = locations.map(loc => {
+    // If stored density is 0 or undefined, compute it dynamically
+    if (!loc.business_density_200m && !loc.competitor_density_200m) {
+      const { businessDensity, competitorDensity } = computeDynamicDensity(loc, locations, 0.2);
+      return {
+        ...loc,
+        business_density_200m: businessDensity,
+        competitor_density_200m: competitorDensity,
+      };
+    }
+    return loc;
+  });
+
+  // Group locations by cluster (use enhanced locations with computed density)
   const clusterMap = new Map<number, LocationData[]>();
-  locations.forEach(loc => {
+  locationsWithDensity.forEach(loc => {
     const cluster = loc.cluster || 0;
     if (!clusterMap.has(cluster)) clusterMap.set(cluster, []);
     clusterMap.get(cluster)!.push(loc);
@@ -380,26 +418,26 @@ function calculateClusterKPIs(locations: LocationData[], numClusters: number): C
   // Sort clusters by opportunity score
   clusterStats.sort((a, b) => b.opportunityScore - a.opportunityScore);
 
-  // Overall averages
-  const totalOpportunities = locations.length;
+  // Overall averages (use enhanced locations with computed density)
+  const totalOpportunities = locationsWithDensity.length;
   const avgBusinessDensity = Math.round(
-    locations.reduce((s, loc) => s + (loc.business_density_200m || 0), 0) / locations.length
+    locationsWithDensity.reduce((s, loc) => s + (loc.business_density_200m || 0), 0) / locationsWithDensity.length
   );
   const avgCompetition = Math.round(
-    locations.reduce((s, loc) => s + (loc.competitor_density_200m || 0), 0) / locations.length * 10
+    locationsWithDensity.reduce((s, loc) => s + (loc.competitor_density_200m || 0), 0) / locationsWithDensity.length * 10
   ) / 10;
 
   // Zone counts
-  const commercialZoneCount = locations.filter(loc =>
+  const commercialZoneCount = locationsWithDensity.filter(loc =>
     loc.zone_type?.toLowerCase() === 'commercial'
   ).length;
-  const residentialZoneCount = locations.filter(loc =>
+  const residentialZoneCount = locationsWithDensity.filter(loc =>
     loc.zone_type?.toLowerCase() === 'residential'
   ).length;
 
   // Category distribution across all clusters
   const catMap = new Map<string, number>();
-  locations.forEach(loc => {
+  locationsWithDensity.forEach(loc => {
     const cat = loc.general_category || 'Unknown';
     catMap.set(cat, (catMap.get(cat) || 0) + 1);
   });
@@ -1016,17 +1054,31 @@ export function OpportunitiesPage() {
     XLSX.utils.book_append_sheet(workbook, sheet1, "Clusters Summary");
 
     // Sheet 2: Raw K-means Output (all locations with cluster assignment)
-    const rawKmeans = locations.map((loc, idx) => ({
-      "Point ID": idx + 1,
-      "Street": loc.street,
-      "Category": loc.general_category,
-      "Latitude": loc.latitude,
-      "Longitude": loc.longitude,
-      "Assigned Cluster": loc.cluster || 0,
-      "Business Density": loc.business_density_200m,
-      "Competitor Density": loc.competitor_density_200m,
-      "Zone Type": loc.zone_type,
-    }));
+    // Compute dynamic density for locations with 0 values
+    const rawKmeans = locations.map((loc, idx) => {
+      // Calculate density dynamically if stored value is 0
+      const hasDensity = loc.business_density_200m > 0 || loc.competitor_density_200m > 0;
+      let businessDensity = loc.business_density_200m || 0;
+      let competitorDensity = loc.competitor_density_200m || 0;
+
+      if (!hasDensity) {
+        const dynamic = computeDynamicDensity(loc, locations, 0.2);
+        businessDensity = dynamic.businessDensity;
+        competitorDensity = dynamic.competitorDensity;
+      }
+
+      return {
+        "Point ID": idx + 1,
+        "Street": loc.street,
+        "Category": loc.general_category,
+        "Latitude": loc.latitude,
+        "Longitude": loc.longitude,
+        "Assigned Cluster": loc.cluster || 0,
+        "Business Density": businessDensity,
+        "Competitor Density": competitorDensity,
+        "Zone Type": loc.zone_type,
+      };
+    });
     const sheet2 = XLSX.utils.json_to_sheet(rawKmeans);
     XLSX.utils.book_append_sheet(workbook, sheet2, "Raw K-means Data");
 
