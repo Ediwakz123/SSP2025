@@ -908,63 +908,19 @@ export function OpportunitiesPage() {
   // ============================================================================
 
   // ----------------------------------------
-  // LOADING SCREEN - Skeleton Cards
+  // LOADING SCREEN - Centered animated loader (matching Map View)
   // ----------------------------------------
   if (loading) {
     return (
-      <div className="space-y-8 p-6">
-        {/* Hero skeleton */}
-        <div className="relative overflow-hidden rounded-2xl bg-linear-to-br from-blue-100 to-indigo-100 p-8 animate-pulse">
-          <div className="h-10 w-64 bg-blue-200 rounded-lg mb-4" />
-          <div className="h-5 w-96 bg-blue-200/70 rounded" />
-        </div>
-
-        {/* KPI Cards skeleton */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          {[1, 2, 3, 4].map((i) => (
-            <Card key={i} className="border-0 shadow-md animate-pulse">
-              <CardContent className="p-6">
-                <div className="h-4 w-24 bg-gray-200 rounded mb-3" />
-                <div className="h-8 w-16 bg-gray-200 rounded" />
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-
-        {/* Opportunity cards skeleton */}
-        <div className="grid gap-6">
-          {[1, 2, 3].map((i) => (
-            <Card key={i} className="border-0 shadow-lg animate-pulse">
-              <CardHeader className="bg-gray-50/50 border-b">
-                <div className="flex gap-2 mb-3">
-                  <div className="h-6 w-20 bg-gray-200 rounded-full" />
-                  <div className="h-6 w-24 bg-gray-200 rounded-full" />
-                  <div className="h-6 w-20 bg-gray-200 rounded-full" />
-                </div>
-                <div className="h-6 w-64 bg-gray-200 rounded" />
-              </CardHeader>
-              <CardContent className="p-6 space-y-4">
-                <div className="grid grid-cols-4 gap-3">
-                  {[1, 2, 3, 4].map((j) => (
-                    <div key={j} className="p-3 bg-gray-100 rounded-xl">
-                      <div className="h-4 w-12 bg-gray-200 rounded mb-2" />
-                      <div className="h-6 w-8 bg-gray-200 rounded" />
-                    </div>
-                  ))}
-                </div>
-                <div className="h-20 bg-gray-100 rounded-xl" />
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-
-        {/* Loading indicator */}
-        <div className="text-center text-gray-500">
-          <div className="flex items-center justify-center gap-2">
-            <RefreshCw className="w-4 h-4 animate-spin" />
-            <span>Analyzing business data for insights...</span>
+      <div className="flex flex-col items-center justify-center h-[60vh] animate-fadeIn">
+        <div className="relative">
+          <div className="w-16 h-16 rounded-2xl bg-linear-to-br from-indigo-500 to-purple-600 animate-pulse flex items-center justify-center">
+            <Zap className="w-8 h-8 text-white animate-pulse" />
           </div>
+          <div className="absolute -inset-4 bg-linear-to-br from-indigo-500/20 to-purple-600/20 rounded-3xl blur-xl animate-pulse" />
         </div>
+        <p className="mt-6 text-gray-600 font-medium">Loading opportunities...</p>
+        <p className="text-sm text-gray-400 mt-1">Analyzing business data for insights</p>
       </div>
     );
   }
