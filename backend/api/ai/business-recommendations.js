@@ -49,23 +49,36 @@ export default async function handler(req, res) {
     // Build comprehensive system prompt
     const systemPrompt = `You are an AI Business Recommendation Engine.
 
-Use ONLY the provided clustering data:
-- User's business idea + category
-- Clusters (ID, centroid, business count)
-- Nearby businesses and competitors
+Use ONLY the provided data:
+- User's business idea and category
+- Cluster information: clusterId, centroid (lat/lng), number of businesses in each cluster
 
 Your tasks:
-1. Recommend the best cluster for the user's business based on business counts and opportunity gaps.
-2. Generate the Top 3 additional business ideas that fit well in the same cluster.
-3. For each recommended business, provide:
-   - Score (0–100)
-   - Fit Percentage
-   - Opportunity Level (High/Medium/Low)
-   - Short reason (use density + gap patterns only)
+1. Identify the best cluster and give it a friendly, easy-to-understand name.
+   Examples: "Service Area", "Shopping Area", "Quiet Area", "Growing Area", "Mixed Business Area"
 
-Do NOT use external data like population or foot traffic.
-If data is incomplete, still provide recommendations based on available data.
-Output must be formatted for UI display.`;
+2. Recommend the Top 3 additional business ideas that fit well in that cluster.
+
+3. For each recommended business, include:
+   - name
+   - score (0–100)
+   - fitPercentage (0–100)
+   - opportunityLevel (High/Medium/Low)
+   - shortDescription (1–2 simple sentences)
+   - fullDetails: write clearly using simple words. Explain why this business fits here, what is missing in the area, what benefits it brings, and any small risk explained simply.
+
+4. Rename clusters using friendly names:
+   - High business count → "Busy Area"
+   - Medium count → "Active Area"
+   - Low count → "Growing Area"
+
+5. The FINAL SUGGESTION must be written in very simple language. Avoid jargon. Avoid technical terms. Speak like you are giving helpful advice to a regular person.
+
+Examples of simple final suggestions:
+- "This area is a good place for your business because there are not many similar shops yet."
+- "This spot is promising because people nearby may need this service."
+
+Output ONLY valid JSON.`;
 
     const userPrompt = `Business Idea: "${businessIdea || "General " + (generalCategory || "Business")}"
 Detected Category: ${generalCategory || "Not specified"}
@@ -96,40 +109,44 @@ OPPORTUNITY LEVEL: ${opportunity || "Moderate"}
 
 Return ONLY valid JSON in this exact format:
 {
-  "best_cluster": {
-    "cluster_id": "Cluster X",
-    "reason": "One sentence why this cluster is best"
+  "bestCluster": {
+    "clusterId": 1,
+    "friendlyName": "Service Area",
+    "reason": "Simple reason why this cluster is best",
+    "confidence": 85
   },
-  "top_3_businesses": [
+  "topBusinesses": [
     {
       "name": "Business Name",
       "score": 92,
-      "fit_percentage": 88,
-      "opportunity_level": "High",
-      "reason": "Short reason based on density and gaps"
+      "fitPercentage": 88,
+      "opportunityLevel": "High",
+      "shortDescription": "1-2 simple sentences about this business.",
+      "fullDetails": "Clear explanation using simple words about why this business fits, what is missing, benefits, and any small risks."
     },
     {
       "name": "Business Name 2",
       "score": 85,
-      "fit_percentage": 82,
-      "opportunity_level": "Medium-High",
-      "reason": "Short reason"
+      "fitPercentage": 82,
+      "opportunityLevel": "Medium",
+      "shortDescription": "Short description.",
+      "fullDetails": "Full explanation in simple words."
     },
     {
       "name": "Business Name 3",
       "score": 79,
-      "fit_percentage": 77,
-      "opportunity_level": "Medium",
-      "reason": "Short reason"
+      "fitPercentage": 77,
+      "opportunityLevel": "Medium",
+      "shortDescription": "Short description.",
+      "fullDetails": "Full explanation in simple words."
     }
   ],
-  "cluster_summary": [
-    { "cluster_id": 1, "business_count": ${b50 + b100}, "competition": "High/Medium/Low" },
-    { "cluster_id": 2, "business_count": ${b100}, "competition": "Medium" },
-    { "cluster_id": 3, "business_count": ${b200 - b100}, "competition": "Low" }
+  "clusterSummary": [
+    { "clusterId": 1, "friendlyName": "Busy Area", "businessCount": ${b50 + b100}, "competitionLevel": "High" },
+    { "clusterId": 2, "friendlyName": "Active Area", "businessCount": ${b100}, "competitionLevel": "Medium" },
+    { "clusterId": 3, "friendlyName": "Growing Area", "businessCount": ${Math.max(0, b200 - b100)}, "competitionLevel": "Low" }
   ],
-  "final_suggestion": "One clear sentence recommendation",
-  "confidence": ${Math.min(95, Math.max(60, 85 - c50 * 5 + b100 * 2))}
+  "finalSuggestion": "This cluster looks like a good place for your business because people in the area need these kinds of services, and there are still not many shops offering them."
 }`;
 
 
@@ -143,49 +160,58 @@ Return ONLY valid JSON in this exact format:
     } catch {
       // Fallback response if JSON parsing fails
       const competitionLevel = c50 >= 3 ? "High" : c100 >= 5 ? "Medium" : "Low";
+      const friendlyName = b50 + b100 >= 10 ? "Busy Area" : b50 + b100 >= 5 ? "Active Area" : "Growing Area";
       const score1 = Math.max(60, 90 - c50 * 5);
       const score2 = Math.max(55, score1 - 7);
       const score3 = Math.max(50, score2 - 6);
 
       data = {
-        best_cluster: {
-          cluster_id: "Cluster 1",
+        bestCluster: {
+          clusterId: 1,
+          friendlyName: friendlyName,
           reason: c50 === 0
-            ? "No direct competitors nearby - excellent entry opportunity."
-            : `${zoneType} zone with ${competitionLevel.toLowerCase()} competition.`
+            ? "This area has no direct competitors nearby, making it a great place to start."
+            : `This is a ${zoneType.toLowerCase()} zone with ${competitionLevel.toLowerCase()} competition.`,
+          confidence: Math.min(95, Math.max(60, 85 - c50 * 5 + b100 * 2))
         },
-        top_3_businesses: [
+        topBusinesses: [
           {
             name: businessIdea || `${generalCategory || "General"} Business`,
             score: score1,
-            fit_percentage: score1 - 4,
-            opportunity_level: score1 >= 80 ? "High" : score1 >= 65 ? "Medium-High" : "Medium",
-            reason: c50 === 0 ? "No direct competitors within 50m." : `${competitionLevel} competition, differentiation needed.`
+            fitPercentage: score1 - 4,
+            opportunityLevel: score1 >= 80 ? "High" : score1 >= 65 ? "Medium" : "Low",
+            shortDescription: c50 === 0
+              ? "No similar shops nearby. Good chance to be the first."
+              : "Some competition exists, but you can stand out with good service.",
+            fullDetails: c50 === 0
+              ? "This business fits well here because there are no direct competitors within 50 meters. People in this area may need this service but currently have to go elsewhere. Being the first gives you an advantage."
+              : `There are ${c50} similar businesses nearby. To succeed, focus on what makes your business different - better quality, price, or service.`
           },
           {
             name: `${generalCategory || "Retail"} Services`,
             score: score2,
-            fit_percentage: score2 - 3,
-            opportunity_level: score2 >= 80 ? "High" : score2 >= 65 ? "Medium-High" : "Medium",
-            reason: `Complements existing ${b100} businesses nearby.`
+            fitPercentage: score2 - 3,
+            opportunityLevel: score2 >= 80 ? "High" : score2 >= 65 ? "Medium" : "Low",
+            shortDescription: `Works well with the ${b100} businesses already here.`,
+            fullDetails: `This area already has ${b100} businesses within 100 meters. Adding a service business can complement them and benefit from the foot traffic they bring.`
           },
           {
             name: "Convenience Store",
             score: score3,
-            fit_percentage: score3 - 2,
-            opportunity_level: score3 >= 80 ? "High" : score3 >= 65 ? "Medium" : "Low-Medium",
-            reason: `Essential services always in demand in ${zoneType} zones.`
+            fitPercentage: score3 - 2,
+            opportunityLevel: score3 >= 80 ? "High" : score3 >= 65 ? "Medium" : "Low",
+            shortDescription: "Basic needs store that most areas can benefit from.",
+            fullDetails: `A convenience store provides daily essentials that people need. In a ${zoneType.toLowerCase()} zone like this, there is usually steady demand for quick purchases.`
           }
         ],
-        cluster_summary: [
-          { cluster_id: 1, business_count: b50, competition: c50 >= 3 ? "High" : c50 >= 1 ? "Medium" : "Low" },
-          { cluster_id: 2, business_count: b100 - b50, competition: "Medium" },
-          { cluster_id: 3, business_count: b200 - b100, competition: "Low" }
+        clusterSummary: [
+          { clusterId: 1, friendlyName: friendlyName, businessCount: b50, competitionLevel: c50 >= 3 ? "High" : c50 >= 1 ? "Medium" : "Low" },
+          { clusterId: 2, friendlyName: "Active Area", businessCount: Math.max(0, b100 - b50), competitionLevel: "Medium" },
+          { clusterId: 3, friendlyName: "Growing Area", businessCount: Math.max(0, b200 - b100), competitionLevel: "Low" }
         ],
-        final_suggestion: c50 === 0
-          ? "Excellent opportunity - proceed with your business plan."
-          : "Focus on differentiation to stand out from competitors.",
-        confidence: Math.min(95, Math.max(60, 85 - c50 * 5 + b100 * 2))
+        finalSuggestion: c50 === 0
+          ? "This looks like a good place for your business because there are not many similar shops yet. You could be one of the first here."
+          : "This area has some competition, but there is still room for a new business if you offer something unique or better service."
       };
     }
 

@@ -31,29 +31,32 @@ interface NearbyBusiness {
     distance: number;
 }
 
-interface Top3Business {
+interface TopBusiness {
     name: string;
     score: number;
-    fit_percentage: number;
-    opportunity_level: string;
-    reason: string;
+    fitPercentage: number;
+    opportunityLevel: string;
+    shortDescription: string;
+    fullDetails: string;
 }
 
 interface ClusterSummaryItem {
-    cluster_id: number;
-    business_count: number;
-    competition: string;
+    clusterId: number;
+    friendlyName: string;
+    businessCount: number;
+    competitionLevel: string;
 }
 
 interface AIBusinessRecommendations {
-    best_cluster: {
-        cluster_id: string;
+    bestCluster: {
+        clusterId: number;
+        friendlyName: string;
         reason: string;
+        confidence: number;
     };
-    top_3_businesses: Top3Business[];
-    cluster_summary: ClusterSummaryItem[];
-    final_suggestion: string;
-    confidence: number;
+    topBusinesses: TopBusiness[];
+    clusterSummary: ClusterSummaryItem[];
+    finalSuggestion: string;
 }
 
 interface ClusteringAnalysis {

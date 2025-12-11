@@ -105,31 +105,34 @@ const CATEGORY_OPTIONS = [
 ];
 
 // ---------------------------------------------------------------------------
-// AI RECOMMENDATION TYPES (New Compact Format)
+// AI RECOMMENDATION TYPES (New Detailed Format)
 // ---------------------------------------------------------------------------
-interface Top3Business {
+interface TopBusiness {
   name: string;
   score: number;
-  fit_percentage: number;
-  opportunity_level: string;
-  reason: string;
+  fitPercentage: number;
+  opportunityLevel: string;
+  shortDescription: string;
+  fullDetails: string;
 }
 
-interface ClusterSummary {
-  cluster_id: number;
-  business_count: number;
-  competition: string;
+interface ClusterSummaryItem {
+  clusterId: number;
+  friendlyName: string;
+  businessCount: number;
+  competitionLevel: string;
 }
 
 interface AIBusinessRecommendations {
-  best_cluster: {
-    cluster_id: string;
+  bestCluster: {
+    clusterId: number;
+    friendlyName: string;
     reason: string;
+    confidence: number;
   };
-  top_3_businesses: Top3Business[];
-  cluster_summary: ClusterSummary[];
-  final_suggestion: string;
-  confidence: number;
+  topBusinesses: TopBusiness[];
+  clusterSummary: ClusterSummaryItem[];
+  finalSuggestion: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -2296,14 +2299,14 @@ ${result?.competitorAnalysis.recommendedStrategy}
                       </div>
                       <div className="flex-1">
                         <h3 className="text-xl font-bold mb-1">
-                          Best Cluster: {aiBusinessRecommendations.best_cluster?.cluster_id || "Cluster 1"}
+                          {aiBusinessRecommendations.bestCluster?.friendlyName || "Best Cluster"}
                         </h3>
                         <p className="text-white/90">
-                          {aiBusinessRecommendations.best_cluster?.reason || "Recommended based on analysis"}
+                          {aiBusinessRecommendations.bestCluster?.reason || "Recommended based on analysis"}
                         </p>
                       </div>
                       <div className="text-right">
-                        <div className="text-3xl font-bold">{aiBusinessRecommendations.confidence || 80}%</div>
+                        <div className="text-3xl font-bold">{aiBusinessRecommendations.bestCluster?.confidence || 80}%</div>
                         <div className="text-white/80 text-sm">Confidence</div>
                       </div>
                     </div>
@@ -2318,7 +2321,7 @@ ${result?.competitorAnalysis.recommendedStrategy}
                     </h4>
 
                     <div className="space-y-4">
-                      {(aiBusinessRecommendations.top_3_businesses || []).map((biz, index) => (
+                      {(aiBusinessRecommendations.topBusinesses || []).map((biz: TopBusiness, index: number) => (
                         <div
                           key={index}
                           className="bg-white rounded-2xl border-2 border-gray-100 p-5 hover:border-amber-300 hover:shadow-lg transition-all group"
@@ -2332,7 +2335,7 @@ ${result?.competitorAnalysis.recommendedStrategy}
                                 <h5 className="font-bold text-gray-900 text-lg group-hover:text-amber-700 transition-colors">
                                   {biz.name}
                                 </h5>
-                                <p className="text-gray-500 text-sm">{biz.reason}</p>
+                                <p className="text-gray-500 text-sm">{biz.shortDescription}</p>
                               </div>
                             </div>
 
@@ -2342,18 +2345,23 @@ ${result?.competitorAnalysis.recommendedStrategy}
                                 <div className="text-xs text-gray-500">Score</div>
                               </div>
                               <div className="text-center">
-                                <div className="text-2xl font-bold text-blue-600">{biz.fit_percentage}%</div>
+                                <div className="text-2xl font-bold text-blue-600">{biz.fitPercentage}%</div>
                                 <div className="text-xs text-gray-500">Fit</div>
                               </div>
-                              <Badge className={`border-0 px-3 py-1 ${biz.opportunity_level?.includes("High")
+                              <Badge className={`border-0 px-3 py-1 ${biz.opportunityLevel?.includes("High")
                                 ? "bg-green-500 text-white"
-                                : biz.opportunity_level?.includes("Medium")
+                                : biz.opportunityLevel?.includes("Medium")
                                   ? "bg-amber-500 text-white"
                                   : "bg-gray-500 text-white"
                                 }`}>
-                                {biz.opportunity_level || "Medium"}
+                                {biz.opportunityLevel || "Medium"}
                               </Badge>
                             </div>
+                          </div>
+
+                          {/* Full Details */}
+                          <div className="bg-gray-50 p-4 rounded-xl mt-3">
+                            <p className="text-gray-700 text-sm leading-relaxed">{biz.fullDetails}</p>
                           </div>
                         </div>
                       ))}
@@ -2367,23 +2375,23 @@ ${result?.competitorAnalysis.recommendedStrategy}
                       Cluster Summary
                     </h4>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                      {(aiBusinessRecommendations.cluster_summary || []).map((cluster, index) => (
+                      {(aiBusinessRecommendations.clusterSummary || []).map((cluster: ClusterSummaryItem, index: number) => (
                         <div key={index} className="bg-white p-4 rounded-xl border">
                           <div className="flex items-center justify-between">
                             <span className="font-semibold text-gray-800">
-                              Cluster {cluster.cluster_id}
+                              {cluster.friendlyName || `Cluster ${cluster.clusterId}`}
                             </span>
-                            <Badge className={`border-0 ${cluster.competition === "Low"
+                            <Badge className={`border-0 ${cluster.competitionLevel === "Low"
                               ? "bg-green-100 text-green-700"
-                              : cluster.competition === "Medium"
+                              : cluster.competitionLevel === "Medium"
                                 ? "bg-amber-100 text-amber-700"
                                 : "bg-red-100 text-red-700"
                               }`}>
-                              {cluster.competition}
+                              {cluster.competitionLevel}
                             </Badge>
                           </div>
                           <p className="text-2xl font-bold text-gray-900 mt-2">
-                            {cluster.business_count}
+                            {cluster.businessCount}
                             <span className="text-sm font-normal text-gray-500 ml-1">businesses</span>
                           </p>
                         </div>
@@ -2400,7 +2408,7 @@ ${result?.competitorAnalysis.recommendedStrategy}
                       <div>
                         <h4 className="font-semibold text-indigo-900 mb-1">Final Suggestion</h4>
                         <p className="text-gray-700">
-                          {aiBusinessRecommendations.final_suggestion || "Proceed with your business plan."}
+                          {aiBusinessRecommendations.finalSuggestion || "Proceed with your business plan."}
                         </p>
                       </div>
                     </div>
