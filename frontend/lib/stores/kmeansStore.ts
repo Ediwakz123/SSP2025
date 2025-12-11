@@ -46,7 +46,8 @@ interface TopBusiness {
 
 interface ClusterSummaryItem {
     clusterId: number;
-    friendlyName: string;
+    zoneType: string; // "Commercial Zone" | "Residential Zone" | "Mixed Zone"
+    friendlyName?: string; // deprecated, use zoneType
     businessCount: number;
     competitionLevel: string;
 }
