@@ -47,6 +47,7 @@ import {
 } from "../../utils/zoneAnalysis";
 import { InsightsPanel, generateInsightsPanelData } from "./InsightsPanel";
 import { ZoneAnalysis } from "./ZoneAnalysis";
+import { RecommendedForYou } from "./RecommendedForYou";
 
 // -----------------------------------------------------------------------------
 // Types
@@ -167,7 +168,7 @@ function normalize(value: number, min: number, max: number): number {
 function determineOperatingTime(category: string, zoneType: string): "Day" | "Evening" | "Both" {
   const cat = (category || "").toLowerCase();
   const zone = (zoneType || "").toLowerCase();
-  
+
   // Evening-focused businesses
   if (cat.includes("entertainment") || cat.includes("bar") || cat.includes("nightlife")) {
     return "Evening";
@@ -189,7 +190,7 @@ function determineOperatingTime(category: string, zoneType: string): "Day" | "Ev
 // Determine setup speed based on business type
 function determineSetupSpeed(category: string): "Fast" | "Moderate" | "Slow" {
   const cat = (category || "").toLowerCase();
-  
+
   // Fast setup businesses
   if (cat.includes("retail") || cat.includes("trading") || cat.includes("merchandise")) {
     return "Fast";
@@ -209,28 +210,28 @@ function calculateOpportunityScore(
   confidence?: number
 ): number {
   let score = 50; // Base score
-  
+
   // Zone bonus
   const zone = (zoneType || "").toLowerCase();
   if (zone.includes("commercial")) score += 20;
   else if (zone.includes("mixed")) score += 10;
   else if (zone.includes("residential")) score += 5;
-  
+
   // Density bonus (higher density = more foot traffic)
   if (density >= 15) score += 15;
   else if (density >= 8) score += 10;
   else if (density >= 3) score += 5;
-  
+
   // Competition penalty (inverse relationship)
   if (competitors === 0) score += 15;
   else if (competitors <= 2) score += 10;
   else if (competitors <= 5) score += 0;
   else score -= 10;
-  
+
   // Confidence bonus
   if (confidence && confidence > 0.7) score += 10;
   else if (confidence && confidence > 0.5) score += 5;
-  
+
   return Math.min(100, Math.max(0, score));
 }
 
@@ -1005,10 +1006,10 @@ export function OpportunitiesPage() {
     const avgScore = opportunities.length > 0
       ? Math.round(opportunities.reduce((s, o) => s + o.score, 0) / opportunities.length)
       : 0;
-    
+
     const avgDensity = clusterKPIs.avgBusinessDensity;
     const avgComp = clusterKPIs.avgCompetition;
-    
+
     // Determine best operating time from zone and category analysis
     let operatingTime: "Day" | "Evening" | "Both" = "Both";
     const commercialRatio = clusterKPIs.commercialZoneCount / Math.max(1, clusterKPIs.totalOpportunities);
@@ -1016,13 +1017,13 @@ export function OpportunitiesPage() {
     if (commercialRatio > 0.7) operatingTime = "Both";
     else if (residentialRatio > 0.6) operatingTime = "Day";
     else if (commercialRatio > 0.4 && residentialRatio < 0.3) operatingTime = "Evening";
-    
+
     // Determine setup speed based on category
     const setupSpeed = determineSetupSpeed(businessType);
-    
+
     // Determine competition level
     const competitionLevel = getCompetitionLevel(avgComp);
-    
+
     return {
       category: businessType || "General Business",
       overallScore: avgScore,
@@ -1036,13 +1037,13 @@ export function OpportunitiesPage() {
   // Group opportunities by category for the Opportunities tab
   const opportunitiesByCategory = useMemo(() => {
     const categories = new Map<string, BusinessOpportunity[]>();
-    
+
     // Add AI top businesses if available
     if (aiRecommendations?.topBusinesses) {
       aiRecommendations.topBusinesses.forEach((biz) => {
         const cat = businessType || "General";
         if (!categories.has(cat)) categories.set(cat, []);
-        
+
         const score = biz.score || biz.fitPercentage || 70;
         categories.get(cat)!.push({
           name: biz.name,
@@ -1051,18 +1052,18 @@ export function OpportunitiesPage() {
           status: getStatusFromScore(score),
           operatingTime: determineOperatingTime(biz.name, ""),
           setupSpeed: determineSetupSpeed(biz.name),
-          competitionLevel: biz.opportunityLevel?.includes("High") ? "Low" : 
-                           biz.opportunityLevel?.includes("Low") ? "High" : "Medium",
+          competitionLevel: biz.opportunityLevel?.includes("High") ? "Low" :
+            biz.opportunityLevel?.includes("Low") ? "High" : "Medium",
           description: biz.shortDescription || biz.fullDetails,
         });
       });
     }
-    
+
     // Add opportunities from clustering results
     opportunities.forEach((op) => {
       const cat = op.category || "General";
       if (!categories.has(cat)) categories.set(cat, []);
-      
+
       categories.get(cat)!.push({
         name: op.title,
         category: cat,
@@ -1074,13 +1075,13 @@ export function OpportunitiesPage() {
         description: op.insights[0],
       });
     });
-    
+
     // Sort each category by score
     categories.forEach((opps, cat) => {
       opps.sort((a, b) => b.score - a.score);
       categories.set(cat, opps.slice(0, 10)); // Limit to top 10 per category
     });
-    
+
     return categories;
   }, [opportunities, aiRecommendations, businessType]);
 
@@ -1089,23 +1090,23 @@ export function OpportunitiesPage() {
     const zoneType = aggregateZoneAnalysis.bestZone;
     const commercialRatio = clusterKPIs.commercialZoneCount / Math.max(1, clusterKPIs.totalOpportunities);
     const residentialRatio = clusterKPIs.residentialZoneCount / Math.max(1, clusterKPIs.totalOpportunities);
-    
+
     // Business activity level
     let activityLevel: "High" | "Moderate" | "Low" = "Moderate";
     if (clusterKPIs.avgBusinessDensity >= 15) activityLevel = "High";
     else if (clusterKPIs.avgBusinessDensity < 5) activityLevel = "Low";
-    
+
     // Business activity time
     let activityTime: "Daytime" | "Evening" | "Balanced" = "Balanced";
     if (commercialRatio > 0.6) activityTime = "Balanced";
     else if (residentialRatio > 0.6) activityTime = "Daytime";
     else if (commercialRatio > 0.3 && residentialRatio < 0.3) activityTime = "Evening";
-    
+
     // Ease of opening
     let easeOfOpening: "Easy" | "Moderate" | "Challenging" = "Moderate";
     if (clusterKPIs.avgCompetition < 2 && commercialRatio > 0.3) easeOfOpening = "Easy";
     else if (clusterKPIs.avgCompetition > 5) easeOfOpening = "Challenging";
-    
+
     return {
       zoneType,
       activityLevel,
@@ -1580,8 +1581,8 @@ export function OpportunitiesPage() {
                 </div>
               </div>
               <p className="text-indigo-100 text-sm leading-relaxed">
-                Based on our location analysis, this area shows {overviewSummary.status === "Strong" ? "excellent" : overviewSummary.status === "Good" ? "promising" : "moderate"} potential 
-                for {businessType || "your business"} opportunities. The recommended zones have {overviewSummary.competitionLevel.toLowerCase()} competition 
+                Based on our location analysis, this area shows {overviewSummary.status === "Strong" ? "excellent" : overviewSummary.status === "Good" ? "promising" : "moderate"} potential
+                for {businessType || "your business"} opportunities. The recommended zones have {overviewSummary.competitionLevel.toLowerCase()} competition
                 and are best suited for {overviewSummary.operatingTime === "Both" ? "all-day" : overviewSummary.operatingTime.toLowerCase()} operations.
               </p>
             </div>
@@ -1612,17 +1613,17 @@ export function OpportunitiesPage() {
               <CardContent className="p-5">
                 <div className="flex items-center gap-3 mb-3">
                   <div className="p-2 bg-linear-to-br from-amber-500 to-orange-600 rounded-lg text-white">
-                    {overviewSummary.operatingTime === "Day" ? <Sun className="w-5 h-5" /> : 
-                     overviewSummary.operatingTime === "Evening" ? <Moon className="w-5 h-5" /> : 
-                     <Clock className="w-5 h-5" />}
+                    {overviewSummary.operatingTime === "Day" ? <Sun className="w-5 h-5" /> :
+                      overviewSummary.operatingTime === "Evening" ? <Moon className="w-5 h-5" /> :
+                        <Clock className="w-5 h-5" />}
                   </div>
                   <span className="text-sm font-medium text-gray-600">Best Operating Time</span>
                 </div>
                 <div className="text-2xl font-bold text-gray-800">{overviewSummary.operatingTime}</div>
                 <p className="text-xs text-gray-500 mt-1">
-                  {overviewSummary.operatingTime === "Both" ? "All-day operations recommended" : 
-                   overviewSummary.operatingTime === "Day" ? "Morning to afternoon peak" : 
-                   "Afternoon to night peak"}
+                  {overviewSummary.operatingTime === "Both" ? "All-day operations recommended" :
+                    overviewSummary.operatingTime === "Day" ? "Morning to afternoon peak" :
+                      "Afternoon to night peak"}
                 </p>
               </CardContent>
             </Card>
@@ -1638,9 +1639,9 @@ export function OpportunitiesPage() {
                 </div>
                 <div className="text-2xl font-bold text-gray-800">{overviewSummary.setupSpeed}</div>
                 <p className="text-xs text-gray-500 mt-1">
-                  {overviewSummary.setupSpeed === "Fast" ? "Can open within weeks" : 
-                   overviewSummary.setupSpeed === "Moderate" ? "1-2 months preparation" : 
-                   "3+ months setup time"}
+                  {overviewSummary.setupSpeed === "Fast" ? "Can open within weeks" :
+                    overviewSummary.setupSpeed === "Moderate" ? "1-2 months preparation" :
+                      "3+ months setup time"}
                 </p>
               </CardContent>
             </Card>
@@ -1900,7 +1901,7 @@ export function OpportunitiesPage() {
                             </Badge>
                           </div>
                         </div>
-                        
+
                         {/* Additional details */}
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-4 pt-4 border-t">
                           <div className="flex items-center gap-2 text-sm">
@@ -1927,6 +1928,17 @@ export function OpportunitiesPage() {
               </CardContent>
             </Card>
           )}
+
+          {/* Recommended for You - Personalized Insights */}
+          <RecommendedForYou
+            businessType={businessType}
+            competitionLevel={overviewSummary.competitionLevel}
+            zoneType={zoneAnalysisData.zoneType}
+            activityTime={overviewSummary.operatingTime}
+            avgDensity={clusterKPIs.avgBusinessDensity}
+            avgCompetitors={clusterKPIs.avgCompetition}
+            clusterCount={clusterKPIs.numClusters}
+          />
 
           {/* Grouped by Category */}
           {Array.from(opportunitiesByCategory.entries()).map(([category, opps]) => (
@@ -1963,27 +1975,27 @@ export function OpportunitiesPage() {
                           {op.description && <p className="text-xs text-gray-500 mt-0.5 truncate max-w-md">{op.description}</p>}
                         </div>
                       </div>
-                      
+
                       <div className="flex items-center gap-4">
                         {/* Operating Time */}
                         <div className="hidden md:flex items-center gap-1.5 text-xs text-gray-500">
-                          {op.operatingTime === "Day" ? <Sun className="w-3.5 h-3.5 text-amber-500" /> : 
-                           op.operatingTime === "Evening" ? <Moon className="w-3.5 h-3.5 text-indigo-500" /> : 
-                           <Clock className="w-3.5 h-3.5 text-blue-500" />}
+                          {op.operatingTime === "Day" ? <Sun className="w-3.5 h-3.5 text-amber-500" /> :
+                            op.operatingTime === "Evening" ? <Moon className="w-3.5 h-3.5 text-indigo-500" /> :
+                              <Clock className="w-3.5 h-3.5 text-blue-500" />}
                           <span>{op.operatingTime}</span>
                         </div>
-                        
+
                         {/* Setup Speed */}
                         <Badge variant="outline" className="hidden md:flex text-xs">
                           <Rocket className="w-3 h-3 mr-1" />
                           {op.setupSpeed}
                         </Badge>
-                        
+
                         {/* Competition */}
                         <Badge className={`text-xs ${op.competitionLevel === "Low" ? "bg-emerald-100 text-emerald-700" : op.competitionLevel === "Medium" ? "bg-amber-100 text-amber-700" : "bg-rose-100 text-rose-700"}`}>
                           {op.competitionLevel}
                         </Badge>
-                        
+
                         {/* Score */}
                         <div className="flex items-center gap-2">
                           <div className={`text-lg font-bold ${op.status === "Strong" ? "text-emerald-600" : op.status === "Good" ? "text-blue-600" : "text-amber-600"}`}>
@@ -1997,7 +2009,7 @@ export function OpportunitiesPage() {
                     </div>
                   ))}
                 </div>
-                
+
                 {opps.length > 5 && !showAll && (
                   <Button
                     variant="ghost"
@@ -2058,8 +2070,8 @@ export function OpportunitiesPage() {
                   <div className="text-2xl font-bold text-blue-700">{zoneAnalysisData.zoneType}</div>
                   <p className="text-xs text-gray-500 mt-1">
                     {zoneAnalysisData.zoneType === "Commercial" ? "High visibility business area" :
-                     zoneAnalysisData.zoneType === "Residential" ? "Community-focused neighborhood" :
-                     "Balanced mix of businesses and residences"}
+                      zoneAnalysisData.zoneType === "Residential" ? "Community-focused neighborhood" :
+                        "Balanced mix of businesses and residences"}
                   </p>
                 </div>
 
@@ -2072,8 +2084,8 @@ export function OpportunitiesPage() {
                   <div className="text-2xl font-bold text-emerald-700">{zoneAnalysisData.activityLevel}</div>
                   <p className="text-xs text-gray-500 mt-1">
                     {zoneAnalysisData.activityLevel === "High" ? "Busy area with many businesses" :
-                     zoneAnalysisData.activityLevel === "Low" ? "Quiet area with growth potential" :
-                     "Steady business presence"}
+                      zoneAnalysisData.activityLevel === "Low" ? "Quiet area with growth potential" :
+                        "Steady business presence"}
                   </p>
                 </div>
 
@@ -2081,15 +2093,15 @@ export function OpportunitiesPage() {
                 <div className="p-5 rounded-xl bg-linear-to-br from-amber-50 to-orange-50 border border-amber-100">
                   <div className="flex items-center gap-2 mb-3">
                     {zoneAnalysisData.activityTime === "Daytime" ? <Sun className="w-5 h-5 text-amber-600" /> :
-                     zoneAnalysisData.activityTime === "Evening" ? <Moon className="w-5 h-5 text-amber-600" /> :
-                     <Clock className="w-5 h-5 text-amber-600" />}
+                      zoneAnalysisData.activityTime === "Evening" ? <Moon className="w-5 h-5 text-amber-600" /> :
+                        <Clock className="w-5 h-5 text-amber-600" />}
                     <span className="text-sm font-medium text-gray-600">Strong Business Time</span>
                   </div>
                   <div className="text-2xl font-bold text-amber-700">{zoneAnalysisData.activityTime}</div>
                   <p className="text-xs text-gray-500 mt-1">
                     {zoneAnalysisData.activityTime === "Daytime" ? "Morning to afternoon peak" :
-                     zoneAnalysisData.activityTime === "Evening" ? "Afternoon to night peak" :
-                     "Consistent activity all day"}
+                      zoneAnalysisData.activityTime === "Evening" ? "Afternoon to night peak" :
+                        "Consistent activity all day"}
                   </p>
                 </div>
 
@@ -2102,8 +2114,8 @@ export function OpportunitiesPage() {
                   <div className="text-2xl font-bold text-purple-700">{zoneAnalysisData.easeOfOpening}</div>
                   <p className="text-xs text-gray-500 mt-1">
                     {zoneAnalysisData.easeOfOpening === "Easy" ? "Low barriers to entry" :
-                     zoneAnalysisData.easeOfOpening === "Challenging" ? "May require differentiation" :
-                     "Standard market conditions"}
+                      zoneAnalysisData.easeOfOpening === "Challenging" ? "May require differentiation" :
+                        "Standard market conditions"}
                   </p>
                 </div>
               </div>
@@ -2131,7 +2143,7 @@ export function OpportunitiesPage() {
                     <BarChart3 className="w-4 h-4 text-amber-500" />
                     Activity Pattern
                   </h4>
-                  
+
                   <div className="space-y-3">
                     <div className="flex items-center gap-3">
                       <div className="flex items-center gap-2 w-24">
@@ -2139,7 +2151,7 @@ export function OpportunitiesPage() {
                         <span className="text-sm text-gray-600">Daytime</span>
                       </div>
                       <div className="flex-1 h-4 bg-gray-100 rounded-full overflow-hidden">
-                        <div 
+                        <div
                           className="h-full bg-linear-to-r from-amber-400 to-orange-500 rounded-full transition-all"
                           style={{ width: `${zoneAnalysisData.activityTime === "Daytime" ? 75 : zoneAnalysisData.activityTime === "Balanced" ? 50 : 30}%` }}
                         />
@@ -2155,7 +2167,7 @@ export function OpportunitiesPage() {
                         <span className="text-sm text-gray-600">Evening</span>
                       </div>
                       <div className="flex-1 h-4 bg-gray-100 rounded-full overflow-hidden">
-                        <div 
+                        <div
                           className="h-full bg-linear-to-r from-indigo-400 to-purple-500 rounded-full transition-all"
                           style={{ width: `${zoneAnalysisData.activityTime === "Evening" ? 75 : zoneAnalysisData.activityTime === "Balanced" ? 50 : 30}%` }}
                         />
@@ -2173,7 +2185,7 @@ export function OpportunitiesPage() {
                     <Lightbulb className="w-4 h-4 text-amber-500" />
                     Operating Hour Recommendations
                   </h4>
-                  
+
                   <div className="space-y-3">
                     {zoneAnalysisData.activityTime === "Daytime" ? (
                       <>
@@ -2318,7 +2330,7 @@ export function OpportunitiesPage() {
                     </div>
                   </div>
                   <p className="text-sm text-gray-600">
-                    {zoneAnalysisData.activityTime === "Evening" 
+                    {zoneAnalysisData.activityTime === "Evening"
                       ? "Few businesses cater to early morning customers. Consider breakfast spots or early-open services."
                       : "Good coverage from existing businesses. Competition may be higher."}
                   </p>
