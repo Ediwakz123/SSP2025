@@ -12,7 +12,6 @@ import { useActivity, logActivity } from "../../utils/activity";
 import {
   Activity,
   FileDown,
-  FileSpreadsheet,
   FileText,
   FileType,
   Lightbulb,
@@ -20,6 +19,18 @@ import {
   Store,
   TrendingDown,
   Zap,
+  Clock,
+  Target,
+  Rocket,
+  Users,
+  BarChart3,
+  Sun,
+  Moon,
+  Building2,
+  CheckCircle2,
+  AlertTriangle,
+  Sparkles,
+  TrendingUp,
 } from "lucide-react";
 
 
@@ -27,20 +38,13 @@ import * as XLSX from "xlsx";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { RefreshCw, AlertCircle } from "lucide-react";
-import { Skeleton } from "../shared/ErrorBoundary";
+import { useKMeansStore } from "../../lib/stores/kmeansStore";
 
 // New imports for enhanced features
 import {
   determineBestZone,
   evaluateZoneSuitability,
-  evaluateTimeWorkFeasibility,
-  estimateRequiredCapital,
-  estimateProfitability,
-  assessRiskLevel,
-  suggestBusinessModel,
-  generateZoneInsights,
 } from "../../utils/zoneAnalysis";
-import { BusinessOpportunityCard, type EnhancedOpportunityData } from "./BusinessOpportunityCard";
 import { InsightsPanel, generateInsightsPanelData } from "./InsightsPanel";
 import { ZoneAnalysis } from "./ZoneAnalysis";
 
@@ -116,6 +120,20 @@ interface MarketGap {
   gapScore: number;
   gapLevel: GapLevel;
   recommendedLocations: string[];
+  timeGap?: string;
+  suggestion?: string;
+}
+
+// Business opportunity with enhanced scoring
+interface BusinessOpportunity {
+  name: string;
+  category: string;
+  score: number;
+  status: "Strong" | "Good" | "Moderate";
+  operatingTime: "Day" | "Evening" | "Both";
+  setupSpeed: "Fast" | "Moderate" | "Slow";
+  competitionLevel: "Low" | "Medium" | "High";
+  description?: string;
 }
 
 // User Preferences for personalized scoring
@@ -143,6 +161,91 @@ const DEFAULT_PREFERENCES: UserPreferences = {
 function normalize(value: number, min: number, max: number): number {
   if (max === min) return 0.5;
   return Math.max(0, Math.min(1, (value - min) / (max - min)));
+}
+
+// Determine operating time based on business category and zone
+function determineOperatingTime(category: string, zoneType: string): "Day" | "Evening" | "Both" {
+  const cat = (category || "").toLowerCase();
+  const zone = (zoneType || "").toLowerCase();
+  
+  // Evening-focused businesses
+  if (cat.includes("entertainment") || cat.includes("bar") || cat.includes("nightlife")) {
+    return "Evening";
+  }
+  // Day-focused businesses
+  if (cat.includes("office") || cat.includes("service") || cat.includes("bank")) {
+    return "Day";
+  }
+  // Both - restaurants, retail, food
+  if (cat.includes("restaurant") || cat.includes("food") || cat.includes("retail")) {
+    return "Both";
+  }
+  // Zone-based determination
+  if (zone.includes("commercial")) return "Both";
+  if (zone.includes("residential")) return "Day";
+  return "Both";
+}
+
+// Determine setup speed based on business type
+function determineSetupSpeed(category: string): "Fast" | "Moderate" | "Slow" {
+  const cat = (category || "").toLowerCase();
+  
+  // Fast setup businesses
+  if (cat.includes("retail") || cat.includes("trading") || cat.includes("merchandise")) {
+    return "Fast";
+  }
+  // Slow setup businesses
+  if (cat.includes("restaurant") || cat.includes("manufacturing") || cat.includes("clinic")) {
+    return "Slow";
+  }
+  return "Moderate";
+}
+
+// Calculate comprehensive opportunity score
+function calculateOpportunityScore(
+  density: number,
+  competitors: number,
+  zoneType: string,
+  confidence?: number
+): number {
+  let score = 50; // Base score
+  
+  // Zone bonus
+  const zone = (zoneType || "").toLowerCase();
+  if (zone.includes("commercial")) score += 20;
+  else if (zone.includes("mixed")) score += 10;
+  else if (zone.includes("residential")) score += 5;
+  
+  // Density bonus (higher density = more foot traffic)
+  if (density >= 15) score += 15;
+  else if (density >= 8) score += 10;
+  else if (density >= 3) score += 5;
+  
+  // Competition penalty (inverse relationship)
+  if (competitors === 0) score += 15;
+  else if (competitors <= 2) score += 10;
+  else if (competitors <= 5) score += 0;
+  else score -= 10;
+  
+  // Confidence bonus
+  if (confidence && confidence > 0.7) score += 10;
+  else if (confidence && confidence > 0.5) score += 5;
+  
+  return Math.min(100, Math.max(0, score));
+}
+
+// Get status label from score
+function getStatusFromScore(score: number): "Strong" | "Good" | "Moderate" {
+  if (score >= 80) return "Strong";
+  if (score >= 60) return "Good";
+  return "Moderate";
+}
+
+// Get competition level from competitor count
+function getCompetitionLevel(competitors: number): "Low" | "Medium" | "High" {
+  if (competitors <= 2) return "Low";
+  if (competitors <= 5) return "Medium";
+  return "High";
 }
 
 // Calculate predictive score for each opportunity based on user preferences
@@ -539,41 +642,6 @@ function generateClusterInsights(kpis: ClusterKPIs, locations: LocationData[]): 
   return insights.slice(0, 6); // Limit to top 6 insights
 }
 
-// Legacy calculateKPIs for backward compatibility (now uses cluster data)
-function calculateKPIs(opps: Opportunity[]) {
-  if (opps.length === 0) {
-    return {
-      totalOpportunities: 0,
-      avgBusinessDensity: 0,
-      avgCompetition: 0,
-      commercialZones: 0,
-    };
-  }
-
-  const totalOpportunities = opps.length;
-
-  const avgBusinessDensity = Math.round(
-    opps.reduce((s, o) => s + o.businessDensity, 0) / opps.length
-  );
-
-  const avgCompetition = Math.round(
-    opps.reduce((s, o) => s + o.competitors, 0) / opps.length
-  );
-
-  const commercialZones = Math.round(
-    (opps.filter((o) => o.zone_type === "Commercial").length /
-      opps.length) *
-    100
-  );
-
-  return {
-    totalOpportunities,
-    avgBusinessDensity,
-    avgCompetition,
-    commercialZones,
-  };
-}
-
 function buildCategoryStats(businesses: BusinessRow[]): CategoryStat[] {
   const map = new Map<
     string,
@@ -643,7 +711,7 @@ function buildMarketGaps(
 ): MarketGap[] {
   const map = new Map<
     string,
-    { totalDemand: number; totalSupply: number; count: number }
+    { totalDemand: number; totalSupply: number; count: number; zones: string[] }
   >();
 
   businesses.forEach((b) => {
@@ -652,12 +720,14 @@ function buildMarketGaps(
       totalDemand: 0,
       totalSupply: 0,
       count: 0,
+      zones: [],
     };
 
     map.set(key, {
       totalDemand: prev.totalDemand + (b.business_density_200m || 0),
       totalSupply: prev.totalSupply + (b.competitor_density_200m || 0),
       count: prev.count + 1,
+      zones: [...prev.zones, b.zone_type || "Unknown"],
     });
   });
 
@@ -679,6 +749,34 @@ function buildMarketGaps(
       )
     ).slice(0, 3);
 
+    // Determine time-based gap
+    const cat = key.toLowerCase();
+    let timeGap: string | undefined;
+    let suggestion: string | undefined;
+
+    if (cat.includes("restaurant") || cat.includes("food")) {
+      if (supply < 3) {
+        timeGap = "Evening dining options are limited";
+        suggestion = "Consider opening a restaurant that serves dinner and late-night customers";
+      }
+    } else if (cat.includes("service")) {
+      if (supply < 2) {
+        timeGap = "Daytime service businesses are scarce";
+        suggestion = "A service-oriented business during daytime hours could fill this gap";
+      }
+    } else if (cat.includes("retail")) {
+      if (gapScore > 5) {
+        timeGap = "Limited shopping options for residents";
+        suggestion = "A retail store offering daily essentials could serve the local community well";
+      }
+    }
+
+    if (!suggestion && gapScore >= 10) {
+      suggestion = `This category has limited presence - there's a first-mover opportunity for ${key.toLowerCase()} businesses`;
+    } else if (!suggestion && gapScore >= 5) {
+      suggestion = `Consider a differentiated offering in the ${key.toLowerCase()} space`;
+    }
+
     gaps.push({
       category: key,
       demand,
@@ -686,6 +784,8 @@ function buildMarketGaps(
       gapScore,
       gapLevel: classifyGapLevel(gapScore),
       recommendedLocations: recLocations,
+      timeGap,
+      suggestion,
     });
   });
 
@@ -826,42 +926,6 @@ export function OpportunitiesPage() {
       .sort((a, b) => b.score - a.score);
   }, [locations, businessType, appliedPreferences]);
 
-  // Build enhanced opportunities with new fields
-  const enhancedOpportunities: EnhancedOpportunityData[] = useMemo(() => {
-    if (opportunities.length === 0) return [];
-
-    return opportunities.map((op) => {
-      const zoneAnalysis = determineBestZone(
-        op.businessDensity,
-        op.competitors,
-        op.zone_type,
-        businessType
-      );
-      const suitability = evaluateZoneSuitability(
-        businessType,
-        op.businessDensity,
-        op.competitors
-      );
-      const timeFeasibility = evaluateTimeWorkFeasibility(businessType, op.zone_type);
-      const capital = estimateRequiredCapital(businessType, op.zone_type);
-      const profitability = estimateProfitability(op.businessDensity, op.competitors, businessType);
-      const risk = assessRiskLevel(op.competitors, businessType);
-      const model = suggestBusinessModel(businessType, op.zone_type, op.competitors);
-      const zoneInsights = generateZoneInsights(op.zone_type, businessType, op.businessDensity, op.competitors);
-
-      return {
-        ...op,
-        requiredCapital: capital,
-        expectedProfitability: profitability,
-        riskLevel: risk,
-        suggestedBusinessModel: model,
-        timeWorkFeasibility: timeFeasibility,
-        zoneSuitability: suitability.suitability,
-        insights: [...op.insights, ...zoneInsights],
-      };
-    });
-  }, [opportunities, businessType]);
-
   // Compute aggregate zone analysis for all opportunities
   const aggregateZoneAnalysis = useMemo(() => {
     if (opportunities.length === 0) {
@@ -915,10 +979,6 @@ export function OpportunitiesPage() {
     return generateInsightsPanelData(businessType, primaryZone, avgDensity, avgCompetitors, avgScore);
   }, [opportunities, businessType]);
 
-  // Derived values
-  const displayedOps = showAll ? enhancedOpportunities : enhancedOpportunities.slice(0, 5);
-  const kpis = useMemo(() => calculateKPIs(opportunities), [opportunities]);
-
   // K-means cluster-based KPIs (derived from raw location data)
   const clusterKPIs = useMemo(() =>
     calculateClusterKPIs(locations, numClusters),
@@ -935,11 +995,124 @@ export function OpportunitiesPage() {
   const zoneStats = useMemo(() => buildZoneStats(businesses), [businesses]);
   const totalBusinesses = businesses.length;
   const marketGaps = useMemo(() => buildMarketGaps(businesses, opportunities), [businesses, opportunities]);
-  const topCategory = categoryStats[0];
-  const lowestCompetition = useMemo(() =>
-    [...categoryStats].sort((a, b) => a.avgCompetitors - b.avgCompetitors)[0],
-    [categoryStats]
-  );
+
+  // Get kmeans store data for AI recommendations
+  const kmeansStore = useKMeansStore();
+  const aiRecommendations = kmeansStore.aiRecommendations;
+
+  // Compute overall opportunity summary for Overview tab
+  const overviewSummary = useMemo(() => {
+    const avgScore = opportunities.length > 0
+      ? Math.round(opportunities.reduce((s, o) => s + o.score, 0) / opportunities.length)
+      : 0;
+    
+    const avgDensity = clusterKPIs.avgBusinessDensity;
+    const avgComp = clusterKPIs.avgCompetition;
+    
+    // Determine best operating time from zone and category analysis
+    let operatingTime: "Day" | "Evening" | "Both" = "Both";
+    const commercialRatio = clusterKPIs.commercialZoneCount / Math.max(1, clusterKPIs.totalOpportunities);
+    if (commercialRatio > 0.7) operatingTime = "Both";
+    else if (clusterKPIs.residentialZoneCount > clusterKPIs.commercialZoneCount) operatingTime = "Day";
+    
+    // Determine setup speed based on category
+    const setupSpeed = determineSetupSpeed(businessType);
+    
+    // Determine competition level
+    const competitionLevel = getCompetitionLevel(avgComp);
+    
+    return {
+      category: businessType || "General Business",
+      overallScore: avgScore,
+      operatingTime,
+      setupSpeed,
+      competitionLevel,
+      status: getStatusFromScore(avgScore),
+    };
+  }, [opportunities, clusterKPIs, businessType]);
+
+  // Group opportunities by category for the Opportunities tab
+  const opportunitiesByCategory = useMemo(() => {
+    const categories = new Map<string, BusinessOpportunity[]>();
+    
+    // Add AI top businesses if available
+    if (aiRecommendations?.topBusinesses) {
+      aiRecommendations.topBusinesses.forEach((biz) => {
+        const cat = businessType || "General";
+        if (!categories.has(cat)) categories.set(cat, []);
+        
+        const score = biz.score || biz.fitPercentage || 70;
+        categories.get(cat)!.push({
+          name: biz.name,
+          category: cat,
+          score,
+          status: getStatusFromScore(score),
+          operatingTime: determineOperatingTime(biz.name, ""),
+          setupSpeed: determineSetupSpeed(biz.name),
+          competitionLevel: biz.opportunityLevel?.includes("High") ? "Low" : 
+                           biz.opportunityLevel?.includes("Low") ? "High" : "Medium",
+          description: biz.shortDescription || biz.fullDetails,
+        });
+      });
+    }
+    
+    // Add opportunities from clustering results
+    opportunities.forEach((op) => {
+      const cat = op.category || "General";
+      if (!categories.has(cat)) categories.set(cat, []);
+      
+      categories.get(cat)!.push({
+        name: op.title,
+        category: cat,
+        score: op.score,
+        status: getStatusFromScore(op.score),
+        operatingTime: determineOperatingTime(cat, op.zone_type),
+        setupSpeed: determineSetupSpeed(cat),
+        competitionLevel: getCompetitionLevel(op.competitors),
+        description: op.insights[0],
+      });
+    });
+    
+    // Sort each category by score
+    categories.forEach((opps, cat) => {
+      opps.sort((a, b) => b.score - a.score);
+      categories.set(cat, opps.slice(0, 10)); // Limit to top 10 per category
+    });
+    
+    return categories;
+  }, [opportunities, aiRecommendations, businessType]);
+
+  // Compute zone analysis data for Zone Analysis tab
+  const zoneAnalysisData = useMemo(() => {
+    const zoneType = aggregateZoneAnalysis.bestZone;
+    const commercialRatio = clusterKPIs.commercialZoneCount / Math.max(1, clusterKPIs.totalOpportunities);
+    const residentialRatio = clusterKPIs.residentialZoneCount / Math.max(1, clusterKPIs.totalOpportunities);
+    
+    // Business activity level
+    let activityLevel: "High" | "Moderate" | "Low" = "Moderate";
+    if (clusterKPIs.avgBusinessDensity >= 15) activityLevel = "High";
+    else if (clusterKPIs.avgBusinessDensity < 5) activityLevel = "Low";
+    
+    // Business activity time
+    let activityTime: "Daytime" | "Evening" | "Balanced" = "Balanced";
+    if (commercialRatio > 0.6) activityTime = "Balanced";
+    else if (residentialRatio > 0.6) activityTime = "Daytime";
+    
+    // Ease of opening
+    let easeOfOpening: "Easy" | "Moderate" | "Challenging" = "Moderate";
+    if (clusterKPIs.avgCompetition < 2 && commercialRatio > 0.3) easeOfOpening = "Easy";
+    else if (clusterKPIs.avgCompetition > 5) easeOfOpening = "Challenging";
+    
+    return {
+      zoneType,
+      activityLevel,
+      activityTime,
+      easeOfOpening,
+      commercialPct: Math.round(commercialRatio * 100),
+      residentialPct: Math.round(residentialRatio * 100),
+      mixedPct: 100 - Math.round(commercialRatio * 100) - Math.round(residentialRatio * 100),
+    };
+  }, [aggregateZoneAnalysis, clusterKPIs]);
 
   // ============================================================================
   // EARLY RETURNS - AFTER ALL HOOKS
@@ -1372,65 +1545,6 @@ export function OpportunitiesPage() {
         </Card>
       </div>
 
-      {/* Quick Insights from K-means Analysis */}
-      <Card className="border-0 shadow-xl bg-white/80 backdrop-blur-sm overflow-hidden">
-        <CardHeader className="bg-linear-to-r from-amber-50 to-orange-50 border-b">
-          <div className="flex items-center gap-3">
-            <div className="p-2.5 bg-linear-to-br from-amber-500 to-orange-600 rounded-xl text-white shadow-lg shadow-amber-200">
-              <Zap className="w-5 h-5" />
-            </div>
-            <div>
-              <CardTitle className="text-lg">Quick Insights</CardTitle>
-              <p className="text-sm text-gray-500">Auto-generated from K-means cluster analysis</p>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent className="p-6">
-          <div className="grid md:grid-cols-2 gap-3">
-            {clusterInsights.length > 0 ? (
-              clusterInsights.map((insight, idx) => (
-                <div
-                  key={idx}
-                  className="flex items-start gap-3 p-4 bg-linear-to-r from-amber-50 to-orange-50 rounded-xl border border-amber-100 hover:shadow-md transition-all"
-                >
-                  <div className="p-1.5 bg-amber-500 rounded-lg text-white flex-shrink-0">
-                    <Lightbulb className="w-4 h-4" />
-                  </div>
-                  <p className="text-sm text-gray-700">{insight}</p>
-                </div>
-              ))
-            ) : (
-              <div className="col-span-2 flex flex-col items-center justify-center py-12 text-center">
-                <div className="w-16 h-16 rounded-full bg-amber-100 flex items-center justify-center mb-4">
-                  <Lightbulb className="w-8 h-8 text-amber-400" />
-                </div>
-                <h4 className="text-lg font-semibold text-gray-700">No insights available yet</h4>
-                <p className="text-sm text-gray-500 mt-1 max-w-md">
-                  Try adjusting your filters or running a clustering analysis to generate insights about your business opportunities.
-                </p>
-              </div>
-            )}
-          </div>
-
-          {/* Cluster distribution badges */}
-          {clusterKPIs.clusterStats.length > 0 && (
-            <div className="mt-6 pt-4 border-t">
-              <p className="text-sm font-medium text-gray-600 mb-3">Cluster Overview ({clusterKPIs.numClusters} clusters)</p>
-              <div className="flex flex-wrap gap-2">
-                {clusterKPIs.clusterStats.slice(0, 6).map((cluster) => (
-                  <Badge
-                    key={cluster.clusterId}
-                    className="bg-linear-to-r from-blue-500 to-indigo-600 text-white border-0 px-3 py-1.5"
-                  >
-                    Cluster {cluster.clusterId}: {cluster.locationCount} locations (Score: {cluster.opportunityScore})
-                  </Badge>
-                ))}
-              </div>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
       {/* Tabs */}
       <Tabs value={selectedTab} onValueChange={setSelectedTab} className="space-y-6">
         <TabsList className="grid grid-cols-4 w-full h-14 bg-white/80 backdrop-blur-sm shadow-lg rounded-xl p-1.5">
@@ -1450,6 +1564,115 @@ export function OpportunitiesPage() {
 
         {/* OVERVIEW TAB */}
         <TabsContent value="overview" className="space-y-6">
+          {/* Opportunity Summary Banner */}
+          <Card className="border-0 shadow-xl overflow-hidden">
+            <div className="bg-linear-to-r from-indigo-500 via-purple-500 to-pink-500 p-6 text-white">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="p-3 bg-white/20 rounded-xl backdrop-blur-sm">
+                  <Target className="w-8 h-8" />
+                </div>
+                <div>
+                  <p className="text-indigo-100 text-sm font-medium">Opportunity Summary</p>
+                  <h2 className="text-2xl font-bold tracking-tight">{overviewSummary.category}</h2>
+                </div>
+              </div>
+              <p className="text-indigo-100 text-sm leading-relaxed">
+                Based on our location analysis, this area shows {overviewSummary.status === "Strong" ? "excellent" : overviewSummary.status === "Good" ? "promising" : "moderate"} potential 
+                for {businessType || "your business"} opportunities. The recommended zones have {overviewSummary.competitionLevel.toLowerCase()} competition 
+                and are best suited for {overviewSummary.operatingTime === "Both" ? "all-day" : overviewSummary.operatingTime.toLowerCase()} operations.
+              </p>
+            </div>
+          </Card>
+
+          {/* Summary Cards Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+            {/* Overall Score */}
+            <Card className="border-0 shadow-lg bg-white/80 backdrop-blur-sm hover:shadow-xl transition-all hover:scale-[1.02]">
+              <CardContent className="p-5">
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="p-2 bg-linear-to-br from-indigo-500 to-purple-600 rounded-lg text-white">
+                    <BarChart3 className="w-5 h-5" />
+                  </div>
+                  <span className="text-sm font-medium text-gray-600">Opportunity Score</span>
+                </div>
+                <div className="text-3xl font-bold bg-linear-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
+                  {overviewSummary.overallScore}%
+                </div>
+                <Badge className={`mt-2 ${overviewSummary.status === "Strong" ? "bg-emerald-100 text-emerald-700" : overviewSummary.status === "Good" ? "bg-blue-100 text-blue-700" : "bg-amber-100 text-amber-700"}`}>
+                  {overviewSummary.status} Opportunity
+                </Badge>
+              </CardContent>
+            </Card>
+
+            {/* Operating Time */}
+            <Card className="border-0 shadow-lg bg-white/80 backdrop-blur-sm hover:shadow-xl transition-all hover:scale-[1.02]">
+              <CardContent className="p-5">
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="p-2 bg-linear-to-br from-amber-500 to-orange-600 rounded-lg text-white">
+                    {overviewSummary.operatingTime === "Day" ? <Sun className="w-5 h-5" /> : 
+                     overviewSummary.operatingTime === "Evening" ? <Moon className="w-5 h-5" /> : 
+                     <Clock className="w-5 h-5" />}
+                  </div>
+                  <span className="text-sm font-medium text-gray-600">Best Operating Time</span>
+                </div>
+                <div className="text-2xl font-bold text-gray-800">{overviewSummary.operatingTime}</div>
+                <p className="text-xs text-gray-500 mt-1">
+                  {overviewSummary.operatingTime === "Both" ? "All-day operations recommended" : 
+                   overviewSummary.operatingTime === "Day" ? "Morning to afternoon peak" : 
+                   "Afternoon to night peak"}
+                </p>
+              </CardContent>
+            </Card>
+
+            {/* Setup Speed */}
+            <Card className="border-0 shadow-lg bg-white/80 backdrop-blur-sm hover:shadow-xl transition-all hover:scale-[1.02]">
+              <CardContent className="p-5">
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="p-2 bg-linear-to-br from-emerald-500 to-teal-600 rounded-lg text-white">
+                    <Rocket className="w-5 h-5" />
+                  </div>
+                  <span className="text-sm font-medium text-gray-600">Setup Speed</span>
+                </div>
+                <div className="text-2xl font-bold text-gray-800">{overviewSummary.setupSpeed}</div>
+                <p className="text-xs text-gray-500 mt-1">
+                  {overviewSummary.setupSpeed === "Fast" ? "Can open within weeks" : 
+                   overviewSummary.setupSpeed === "Moderate" ? "1-2 months preparation" : 
+                   "3+ months setup time"}
+                </p>
+              </CardContent>
+            </Card>
+
+            {/* Competition Level */}
+            <Card className="border-0 shadow-lg bg-white/80 backdrop-blur-sm hover:shadow-xl transition-all hover:scale-[1.02]">
+              <CardContent className="p-5">
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="p-2 bg-linear-to-br from-rose-500 to-pink-600 rounded-lg text-white">
+                    <Users className="w-5 h-5" />
+                  </div>
+                  <span className="text-sm font-medium text-gray-600">Competition Level</span>
+                </div>
+                <div className="text-2xl font-bold text-gray-800">{overviewSummary.competitionLevel}</div>
+                <Badge className={`mt-1 ${overviewSummary.competitionLevel === "Low" ? "bg-emerald-100 text-emerald-700" : overviewSummary.competitionLevel === "Medium" ? "bg-amber-100 text-amber-700" : "bg-rose-100 text-rose-700"}`}>
+                  {overviewSummary.competitionLevel === "Low" ? "Easy entry" : overviewSummary.competitionLevel === "Medium" ? "Some rivals" : "Crowded market"}
+                </Badge>
+              </CardContent>
+            </Card>
+
+            {/* Business Category */}
+            <Card className="border-0 shadow-lg bg-white/80 backdrop-blur-sm hover:shadow-xl transition-all hover:scale-[1.02]">
+              <CardContent className="p-5">
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="p-2 bg-linear-to-br from-blue-500 to-indigo-600 rounded-lg text-white">
+                    <Store className="w-5 h-5" />
+                  </div>
+                  <span className="text-sm font-medium text-gray-600">Category</span>
+                </div>
+                <div className="text-lg font-bold text-gray-800 truncate">{overviewSummary.category || "General"}</div>
+                <p className="text-xs text-gray-500 mt-1">{clusterKPIs.totalOpportunities} locations found</p>
+              </CardContent>
+            </Card>
+          </div>
+
           {/* Category distribution */}
           <Card className="border-0 shadow-xl bg-white/80 backdrop-blur-sm overflow-hidden">
             <CardHeader className="bg-linear-to-r from-blue-50 to-indigo-50 border-b">
@@ -1564,16 +1787,21 @@ export function OpportunitiesPage() {
         </TabsContent>
 
         {/* OPPORTUNITIES TAB */}
-        <TabsContent value="opportunities" className="space-y-5">
-          {/* Export button */}
-          <Button
-            onClick={() => setShowExportModal(true)}
-            className="flex items-center gap-2 px-6 py-3 h-12 bg-linear-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white rounded-xl shadow-lg shadow-blue-200 transition-all hover:scale-[1.02]"
-          >
-            <FileDown className="w-5 h-5" />
-            Export Report
-          </Button>
-
+        <TabsContent value="opportunities" className="space-y-6">
+          {/* Header with Export */}
+          <div className="flex items-center justify-between flex-wrap gap-4">
+            <div>
+              <h2 className="text-2xl font-bold text-gray-800">Ranked Business Opportunities</h2>
+              <p className="text-gray-500 mt-1">Business types ranked from highest to lowest opportunity score</p>
+            </div>
+            <Button
+              onClick={() => setShowExportModal(true)}
+              className="flex items-center gap-2 px-6 py-3 h-12 bg-linear-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white rounded-xl shadow-lg shadow-blue-200 transition-all hover:scale-[1.02]"
+            >
+              <FileDown className="w-5 h-5" />
+              Export Report
+            </Button>
+          </div>
 
           {/* Export Modal (PDF and Excel only) */}
           {openExportModal && (
@@ -1625,112 +1853,377 @@ export function OpportunitiesPage() {
             </>
           )}
 
-          {/* Opportunity Cards */}
-          {displayedOps.map((op: Opportunity, index: number) => (
-            <Card key={index} className="overflow-hidden border-0 shadow-xl bg-white/80 backdrop-blur-sm group hover:shadow-2xl transition-all">
-              <CardHeader className="bg-linear-to-r from-blue-50 via-indigo-50 to-purple-50 border-b">
-                <div>
-                  <div className="flex gap-2 mb-2">
-                    <Badge className="bg-linear-to-r from-blue-500 to-indigo-600 text-white border-0 shadow-md">
-                      Cluster {op.cluster}
-                    </Badge>
-                    <Badge className={`border-0 text-white shadow-md ${op.score >= 70 ? 'bg-linear-to-r from-emerald-500 to-green-600' : op.score >= 40 ? 'bg-linear-to-r from-amber-500 to-orange-600' : 'bg-linear-to-r from-gray-500 to-slate-600'}`}>
-                      Score: {op.score}%
-                    </Badge>
+          {/* AI Recommended Businesses (if available) */}
+          {aiRecommendations?.topBusinesses && aiRecommendations.topBusinesses.length > 0 && (
+            <Card className="border-0 shadow-xl bg-white/80 backdrop-blur-sm overflow-hidden">
+              <CardHeader className="bg-linear-to-r from-purple-50 to-pink-50 border-b">
+                <div className="flex items-center gap-3">
+                  <div className="p-2.5 bg-linear-to-br from-purple-500 to-pink-600 rounded-xl text-white shadow-lg shadow-purple-200">
+                    <Sparkles className="w-5 h-5" />
                   </div>
-
-                  <CardTitle className="text-xl group-hover:text-indigo-600 transition-colors">{op.title}</CardTitle>
-                  <div className="flex items-center gap-2 text-sm text-gray-500 mt-2">
-                    <MapPin className="w-4 h-4 text-indigo-500" /> {op.location}
+                  <div>
+                    <CardTitle className="text-xl">Top Recommended for {businessType}</CardTitle>
+                    <p className="text-sm text-gray-500">Best business opportunities based on location analysis</p>
                   </div>
                 </div>
               </CardHeader>
-
-              <CardContent className="p-6 space-y-6">
-                {/* Metrics */}
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  <div className="p-4 bg-linear-to-br from-blue-50 to-indigo-50 rounded-xl border border-blue-100">
-                    <Store className="w-5 h-5 text-blue-600 mb-2" />
-                    <p className="text-xs text-gray-500 font-medium">Business Density</p>
-                    <div className="text-2xl font-bold text-blue-700">{op.businessDensity}</div>
-                  </div>
-
-                  <div className="p-4 bg-linear-to-br from-green-50 to-emerald-50 rounded-xl border border-green-100">
-                    <TrendingDown className="w-5 h-5 text-green-600 mb-2" />
-                    <p className="text-xs text-gray-500 font-medium">Competitors</p>
-                    <div className="text-2xl font-bold text-green-700">{op.competitors}</div>
-                  </div>
-
-                  <div className="p-4 bg-linear-to-br from-purple-50 to-violet-50 rounded-xl border border-purple-100">
-                    <MapPin className="w-5 h-5 text-purple-600 mb-2" />
-                    <p className="text-xs text-gray-500 font-medium">Zone Type</p>
-                    <Badge variant="outline" className="mt-1 font-semibold">{op.zone_type}</Badge>
-                  </div>
-
-                  <div className="p-4 bg-linear-to-br from-orange-50 to-amber-50 rounded-xl border border-orange-100">
-                    <Activity className="w-5 h-5 text-orange-600 mb-2" />
-                    <p className="text-xs text-gray-500 font-medium">Saturation</p>
-                    <div className="text-2xl font-bold text-orange-700">{op.saturation}%</div>
-                  </div>
-                </div>
-
-                {/* Insights */}
-                <div>
-                  <h4 className="text-sm font-semibold mb-3 flex items-center gap-2 text-gray-700">
-                    <Lightbulb className="w-5 h-5 text-amber-500" />
-                    Key Insights & Recommendations
-                  </h4>
-
-                  <div className="grid md:grid-cols-2 gap-3">
-                    {op.insights.map((txt: string, i: number) => (
+              <CardContent className="p-6">
+                <div className="grid gap-4">
+                  {aiRecommendations.topBusinesses.map((biz, index) => {
+                    const score = biz.score || biz.fitPercentage || 70;
+                    const status = getStatusFromScore(score);
+                    return (
                       <div
-                        key={i}
-                        className="p-4 bg-linear-to-r from-gray-50 to-slate-50 rounded-xl text-sm text-gray-700 border hover:border-indigo-200 transition-colors"
+                        key={index}
+                        className="p-5 rounded-xl border-2 bg-white hover:shadow-lg transition-all"
+                        style={{ borderColor: status === "Strong" ? "#10b98130" : status === "Good" ? "#3b82f630" : "#f59e0b30" }}
                       >
-                        {txt}
+                        <div className="flex items-start justify-between flex-wrap gap-4">
+                          <div className="flex items-start gap-4">
+                            <div className={`flex items-center justify-center w-10 h-10 rounded-xl text-white font-bold shadow-lg ${status === "Strong" ? "bg-linear-to-br from-emerald-500 to-green-600" : status === "Good" ? "bg-linear-to-br from-blue-500 to-indigo-600" : "bg-linear-to-br from-amber-500 to-orange-600"}`}>
+                              {index + 1}
+                            </div>
+                            <div>
+                              <h3 className="text-lg font-bold text-gray-800">{biz.name}</h3>
+                              <p className="text-sm text-gray-500 mt-1">{biz.shortDescription || biz.fullDetails}</p>
+                            </div>
+                          </div>
+                          <div className="flex flex-col items-end gap-2">
+                            <div className="text-3xl font-bold bg-linear-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
+                              {score}%
+                            </div>
+                            <Badge className={`${status === "Strong" ? "bg-emerald-100 text-emerald-700" : status === "Good" ? "bg-blue-100 text-blue-700" : "bg-amber-100 text-amber-700"}`}>
+                              {status} Opportunity
+                            </Badge>
+                          </div>
+                        </div>
+                        
+                        {/* Additional details */}
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-4 pt-4 border-t">
+                          <div className="flex items-center gap-2 text-sm">
+                            <Clock className="w-4 h-4 text-amber-500" />
+                            <span className="text-gray-600">{determineOperatingTime(biz.name, "")} hours</span>
+                          </div>
+                          <div className="flex items-center gap-2 text-sm">
+                            <Rocket className="w-4 h-4 text-emerald-500" />
+                            <span className="text-gray-600">{determineSetupSpeed(biz.name)} setup</span>
+                          </div>
+                          <div className="flex items-center gap-2 text-sm">
+                            <Users className="w-4 h-4 text-rose-500" />
+                            <span className="text-gray-600">{biz.opportunityLevel?.includes("High") ? "Low" : biz.opportunityLevel?.includes("Low") ? "High" : "Medium"} competition</span>
+                          </div>
+                          <div className="flex items-center gap-2 text-sm">
+                            <Building2 className="w-4 h-4 text-blue-500" />
+                            <span className="text-gray-600">{biz.startupBudget || "Varies"}</span>
+                          </div>
+                        </div>
                       </div>
-                    ))}
-                  </div>
+                    );
+                  })}
                 </div>
+              </CardContent>
+            </Card>
+          )}
 
-                {/* Footer */}
-                <div className="flex items-center justify-between pt-4 border-t">
-                  <div className="text-sm text-gray-500 font-mono">
-                    📍 {op.coordinates.lat.toFixed(5)}°, {op.coordinates.lng.toFixed(5)}°
+          {/* Grouped by Category */}
+          {Array.from(opportunitiesByCategory.entries()).map(([category, opps]) => (
+            <Card key={category} className="border-0 shadow-xl bg-white/80 backdrop-blur-sm overflow-hidden">
+              <CardHeader className="bg-linear-to-r from-slate-50 to-gray-50 border-b">
+                <div className="flex items-center justify-between flex-wrap gap-3">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2.5 bg-linear-to-br from-slate-600 to-gray-700 rounded-xl text-white shadow-lg">
+                      <Store className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <CardTitle className="text-xl">{category}</CardTitle>
+                      <p className="text-sm text-gray-500">{opps.length} opportunities ranked by score</p>
+                    </div>
                   </div>
-
+                  <Badge className="bg-slate-100 text-slate-700 border-0 px-3 py-1">
+                    Top Score: {opps[0]?.score || 0}%
+                  </Badge>
+                </div>
+              </CardHeader>
+              <CardContent className="p-6">
+                <div className="space-y-3">
+                  {opps.slice(0, showAll ? opps.length : 5).map((op, index) => (
+                    <div
+                      key={index}
+                      className="flex items-center justify-between p-4 rounded-xl border bg-white hover:shadow-md transition-all hover:border-indigo-200"
+                    >
+                      <div className="flex items-center gap-4">
+                        <div className={`flex items-center justify-center w-8 h-8 rounded-lg text-white text-sm font-bold ${op.status === "Strong" ? "bg-emerald-500" : op.status === "Good" ? "bg-blue-500" : "bg-amber-500"}`}>
+                          {index + 1}
+                        </div>
+                        <div>
+                          <h4 className="font-semibold text-gray-800 text-sm">{op.name}</h4>
+                          {op.description && <p className="text-xs text-gray-500 mt-0.5 truncate max-w-md">{op.description}</p>}
+                        </div>
+                      </div>
+                      
+                      <div className="flex items-center gap-4">
+                        {/* Operating Time */}
+                        <div className="hidden md:flex items-center gap-1.5 text-xs text-gray-500">
+                          {op.operatingTime === "Day" ? <Sun className="w-3.5 h-3.5 text-amber-500" /> : 
+                           op.operatingTime === "Evening" ? <Moon className="w-3.5 h-3.5 text-indigo-500" /> : 
+                           <Clock className="w-3.5 h-3.5 text-blue-500" />}
+                          <span>{op.operatingTime}</span>
+                        </div>
+                        
+                        {/* Setup Speed */}
+                        <Badge variant="outline" className="hidden md:flex text-xs">
+                          <Rocket className="w-3 h-3 mr-1" />
+                          {op.setupSpeed}
+                        </Badge>
+                        
+                        {/* Competition */}
+                        <Badge className={`text-xs ${op.competitionLevel === "Low" ? "bg-emerald-100 text-emerald-700" : op.competitionLevel === "Medium" ? "bg-amber-100 text-amber-700" : "bg-rose-100 text-rose-700"}`}>
+                          {op.competitionLevel}
+                        </Badge>
+                        
+                        {/* Score */}
+                        <div className="flex items-center gap-2">
+                          <div className={`text-lg font-bold ${op.status === "Strong" ? "text-emerald-600" : op.status === "Good" ? "text-blue-600" : "text-amber-600"}`}>
+                            {op.score}%
+                          </div>
+                          <Badge className={`${op.status === "Strong" ? "bg-emerald-500" : op.status === "Good" ? "bg-blue-500" : "bg-amber-500"} text-white text-xs`}>
+                            {op.status}
+                          </Badge>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                
+                {opps.length > 5 && !showAll && (
                   <Button
-                    className="bg-[#1e3a5f] hover:bg-[#2d4a6f] text-white rounded-xl shadow-lg shadow-slate-200 transition-all hover:scale-[1.02]"
-                    onClick={() =>
-                      navigate("/user/dashboard/map", {
-                        state: {
-                          lat: op.coordinates.lat,
-                          lng: op.coordinates.lng,
-                          label: op.title,
-                        },
-                      })
-                    }
+                    variant="ghost"
+                    className="w-full mt-4 text-gray-500 hover:text-gray-700"
+                    onClick={() => setShowAll(true)}
                   >
-                    <MapPin className="w-4 h-4 mr-2" />
-                    View on Map
+                    Show all {opps.length} opportunities
                   </Button>
-                </div>
+                )}
               </CardContent>
             </Card>
           ))}
 
-          {opportunities.length > 5 && !showAll && (
-            <Button
-              className="w-full h-14 mt-4 bg-linear-to-r from-gray-100 to-gray-200 hover:from-gray-200 hover:to-gray-300 text-gray-700 rounded-xl shadow-md transition-all hover:scale-[1.01]"
-              onClick={() => setShowAll(true)}
-            >
-              Show More ({opportunities.length - 5} remaining)
-            </Button>
+          {opportunitiesByCategory.size === 0 && (
+            <Card className="border-0 shadow-xl bg-white/80 backdrop-blur-sm p-12">
+              <div className="flex flex-col items-center justify-center text-center">
+                <div className="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center mb-4">
+                  <Lightbulb className="w-8 h-8 text-gray-400" />
+                </div>
+                <h3 className="text-xl font-semibold text-gray-700">No opportunities yet</h3>
+                <p className="text-gray-500 mt-2 max-w-md">
+                  Run a clustering analysis on the Clustering page to discover business opportunities tailored to your preferences.
+                </p>
+                <Button
+                  onClick={() => navigate("/user/dashboard/clustering")}
+                  className="mt-4 bg-linear-to-r from-blue-500 to-indigo-600"
+                >
+                  Go to Clustering
+                </Button>
+              </div>
+            </Card>
           )}
         </TabsContent>
 
         {/* ZONE ANALYSIS TAB */}
         <TabsContent value="zone-analysis" className="space-y-6">
+          {/* Zone Characteristics Summary */}
+          <Card className="border-0 shadow-xl bg-white/80 backdrop-blur-sm overflow-hidden">
+            <CardHeader className="bg-linear-to-r from-emerald-50 to-teal-50 border-b">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 bg-linear-to-br from-emerald-500 to-teal-600 rounded-xl text-white shadow-lg shadow-emerald-200">
+                  <Building2 className="w-5 h-5" />
+                </div>
+                <div>
+                  <CardTitle className="text-xl">Area Characteristics</CardTitle>
+                  <p className="text-sm text-gray-500">Understanding the recommended locations</p>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="p-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                {/* Zone Type */}
+                <div className="p-5 rounded-xl bg-linear-to-br from-blue-50 to-indigo-50 border border-blue-100">
+                  <div className="flex items-center gap-2 mb-3">
+                    <MapPin className="w-5 h-5 text-blue-600" />
+                    <span className="text-sm font-medium text-gray-600">Zone Type</span>
+                  </div>
+                  <div className="text-2xl font-bold text-blue-700">{zoneAnalysisData.zoneType}</div>
+                  <p className="text-xs text-gray-500 mt-1">
+                    {zoneAnalysisData.zoneType === "Commercial" ? "High visibility business area" :
+                     zoneAnalysisData.zoneType === "Residential" ? "Community-focused neighborhood" :
+                     "Balanced mix of businesses and residences"}
+                  </p>
+                </div>
+
+                {/* Activity Level */}
+                <div className="p-5 rounded-xl bg-linear-to-br from-emerald-50 to-green-50 border border-emerald-100">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Activity className="w-5 h-5 text-emerald-600" />
+                    <span className="text-sm font-medium text-gray-600">Business Activity</span>
+                  </div>
+                  <div className="text-2xl font-bold text-emerald-700">{zoneAnalysisData.activityLevel}</div>
+                  <p className="text-xs text-gray-500 mt-1">
+                    {zoneAnalysisData.activityLevel === "High" ? "Busy area with many businesses" :
+                     zoneAnalysisData.activityLevel === "Low" ? "Quiet area with growth potential" :
+                     "Steady business presence"}
+                  </p>
+                </div>
+
+                {/* Best Time */}
+                <div className="p-5 rounded-xl bg-linear-to-br from-amber-50 to-orange-50 border border-amber-100">
+                  <div className="flex items-center gap-2 mb-3">
+                    {zoneAnalysisData.activityTime === "Daytime" ? <Sun className="w-5 h-5 text-amber-600" /> :
+                     zoneAnalysisData.activityTime === "Evening" ? <Moon className="w-5 h-5 text-amber-600" /> :
+                     <Clock className="w-5 h-5 text-amber-600" />}
+                    <span className="text-sm font-medium text-gray-600">Strong Business Time</span>
+                  </div>
+                  <div className="text-2xl font-bold text-amber-700">{zoneAnalysisData.activityTime}</div>
+                  <p className="text-xs text-gray-500 mt-1">
+                    {zoneAnalysisData.activityTime === "Daytime" ? "Morning to afternoon peak" :
+                     zoneAnalysisData.activityTime === "Evening" ? "Afternoon to night peak" :
+                     "Consistent activity all day"}
+                  </p>
+                </div>
+
+                {/* Ease of Opening */}
+                <div className="p-5 rounded-xl bg-linear-to-br from-purple-50 to-violet-50 border border-purple-100">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Rocket className="w-5 h-5 text-purple-600" />
+                    <span className="text-sm font-medium text-gray-600">Ease of Opening</span>
+                  </div>
+                  <div className="text-2xl font-bold text-purple-700">{zoneAnalysisData.easeOfOpening}</div>
+                  <p className="text-xs text-gray-500 mt-1">
+                    {zoneAnalysisData.easeOfOpening === "Easy" ? "Low barriers to entry" :
+                     zoneAnalysisData.easeOfOpening === "Challenging" ? "May require differentiation" :
+                     "Standard market conditions"}
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Business Activity Time Section */}
+          <Card className="border-0 shadow-xl bg-white/80 backdrop-blur-sm overflow-hidden">
+            <CardHeader className="bg-linear-to-r from-amber-50 to-orange-50 border-b">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 bg-linear-to-br from-amber-500 to-orange-600 rounded-xl text-white shadow-lg shadow-amber-200">
+                  <Clock className="w-5 h-5" />
+                </div>
+                <div>
+                  <CardTitle className="text-xl">Business Activity Time</CardTitle>
+                  <p className="text-sm text-gray-500">When businesses in this area are most active</p>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="p-6">
+              <div className="grid md:grid-cols-2 gap-6">
+                {/* Time Distribution Visualization */}
+                <div className="space-y-4">
+                  <h4 className="font-semibold text-gray-700 flex items-center gap-2">
+                    <BarChart3 className="w-4 h-4 text-amber-500" />
+                    Activity Pattern
+                  </h4>
+                  
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-2 w-24">
+                        <Sun className="w-4 h-4 text-amber-500" />
+                        <span className="text-sm text-gray-600">Daytime</span>
+                      </div>
+                      <div className="flex-1 h-4 bg-gray-100 rounded-full overflow-hidden">
+                        <div 
+                          className="h-full bg-linear-to-r from-amber-400 to-orange-500 rounded-full transition-all"
+                          style={{ width: `${zoneAnalysisData.activityTime === "Daytime" ? 75 : zoneAnalysisData.activityTime === "Balanced" ? 50 : 30}%` }}
+                        />
+                      </div>
+                      <span className="text-sm font-medium text-gray-600 w-12 text-right">
+                        {zoneAnalysisData.activityTime === "Daytime" ? "High" : zoneAnalysisData.activityTime === "Balanced" ? "Med" : "Low"}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-2 w-24">
+                        <Moon className="w-4 h-4 text-indigo-500" />
+                        <span className="text-sm text-gray-600">Evening</span>
+                      </div>
+                      <div className="flex-1 h-4 bg-gray-100 rounded-full overflow-hidden">
+                        <div 
+                          className="h-full bg-linear-to-r from-indigo-400 to-purple-500 rounded-full transition-all"
+                          style={{ width: `${zoneAnalysisData.activityTime === "Evening" ? 75 : zoneAnalysisData.activityTime === "Balanced" ? 50 : 30}%` }}
+                        />
+                      </div>
+                      <span className="text-sm font-medium text-gray-600 w-12 text-right">
+                        {zoneAnalysisData.activityTime === "Evening" ? "High" : zoneAnalysisData.activityTime === "Balanced" ? "Med" : "Low"}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Time Recommendations */}
+                <div className="space-y-4">
+                  <h4 className="font-semibold text-gray-700 flex items-center gap-2">
+                    <Lightbulb className="w-4 h-4 text-amber-500" />
+                    Operating Hour Recommendations
+                  </h4>
+                  
+                  <div className="space-y-3">
+                    {zoneAnalysisData.activityTime === "Daytime" ? (
+                      <>
+                        <div className="p-3 bg-amber-50 rounded-lg border border-amber-100">
+                          <p className="text-sm text-gray-700">
+                            <CheckCircle2 className="w-4 h-4 text-emerald-500 inline mr-2" />
+                            Best hours: <span className="font-semibold">8 AM - 6 PM</span>
+                          </p>
+                        </div>
+                        <div className="p-3 bg-gray-50 rounded-lg border border-gray-100">
+                          <p className="text-sm text-gray-700">
+                            <AlertTriangle className="w-4 h-4 text-amber-500 inline mr-2" />
+                            Evening operations may have lower foot traffic
+                          </p>
+                        </div>
+                      </>
+                    ) : zoneAnalysisData.activityTime === "Evening" ? (
+                      <>
+                        <div className="p-3 bg-indigo-50 rounded-lg border border-indigo-100">
+                          <p className="text-sm text-gray-700">
+                            <CheckCircle2 className="w-4 h-4 text-emerald-500 inline mr-2" />
+                            Best hours: <span className="font-semibold">4 PM - 10 PM</span>
+                          </p>
+                        </div>
+                        <div className="p-3 bg-gray-50 rounded-lg border border-gray-100">
+                          <p className="text-sm text-gray-700">
+                            <AlertTriangle className="w-4 h-4 text-amber-500 inline mr-2" />
+                            Morning hours may be slower for customer traffic
+                          </p>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div className="p-3 bg-emerald-50 rounded-lg border border-emerald-100">
+                          <p className="text-sm text-gray-700">
+                            <CheckCircle2 className="w-4 h-4 text-emerald-500 inline mr-2" />
+                            Flexible hours: <span className="font-semibold">8 AM - 9 PM</span>
+                          </p>
+                        </div>
+                        <div className="p-3 bg-gray-50 rounded-lg border border-gray-100">
+                          <p className="text-sm text-gray-700">
+                            <Sparkles className="w-4 h-4 text-purple-500 inline mr-2" />
+                            Area supports both day and evening operations
+                          </p>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
           {/* Zone Analysis Component */}
           <ZoneAnalysis
             analysis={aggregateZoneAnalysis}
@@ -1744,16 +2237,124 @@ export function OpportunitiesPage() {
 
         {/* MARKET GAPS TAB */}
         <TabsContent value="market-gaps" className="space-y-6">
+          {/* First Mover Opportunities */}
+          <Card className="border-0 shadow-xl bg-white/80 backdrop-blur-sm overflow-hidden">
+            <CardHeader className="bg-linear-to-r from-purple-50 to-pink-50 border-b">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 bg-linear-to-br from-purple-500 to-pink-600 rounded-xl text-white shadow-lg shadow-purple-200">
+                  <Sparkles className="w-5 h-5" />
+                </div>
+                <div>
+                  <CardTitle className="text-xl">First-Mover Opportunities</CardTitle>
+                  <p className="text-sm text-gray-500">
+                    Categories with little to no competition — ideal for new entrants
+                  </p>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="p-6">
+              {marketGaps.filter(g => g.gapLevel === "High").length > 0 ? (
+                <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {marketGaps.filter(g => g.gapLevel === "High").slice(0, 6).map((gap, index) => (
+                    <div
+                      key={gap.category}
+                      className="p-5 rounded-xl border-2 border-purple-100 bg-linear-to-br from-purple-50 to-pink-50 hover:shadow-lg transition-all"
+                    >
+                      <div className="flex items-center gap-3 mb-3">
+                        <div className="w-8 h-8 rounded-full bg-linear-to-br from-purple-500 to-pink-600 text-white flex items-center justify-center font-bold text-sm">
+                          {index + 1}
+                        </div>
+                        <h4 className="font-bold text-gray-800">{gap.category}</h4>
+                      </div>
+                      <p className="text-sm text-gray-600 mb-3">
+                        {gap.supply === 0 ? "No competitors in this area" : `Only ${gap.supply} competitors nearby`}
+                      </p>
+                      <Badge className="bg-purple-100 text-purple-700 border-0">
+                        <TrendingUp className="w-3 h-3 mr-1" />
+                        High Potential
+                      </Badge>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-8">
+                  <p className="text-gray-500">No high-gap opportunities identified yet. The market appears balanced.</p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Time-Based Gaps */}
+          <Card className="border-0 shadow-xl bg-white/80 backdrop-blur-sm overflow-hidden">
+            <CardHeader className="bg-linear-to-r from-amber-50 to-orange-50 border-b">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 bg-linear-to-br from-amber-500 to-orange-600 rounded-xl text-white shadow-lg shadow-amber-200">
+                  <Clock className="w-5 h-5" />
+                </div>
+                <div>
+                  <CardTitle className="text-xl">Time-Based Gaps</CardTitle>
+                  <p className="text-sm text-gray-500">
+                    Underserved time periods based on nearby business patterns
+                  </p>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="p-6">
+              <div className="grid md:grid-cols-2 gap-4">
+                {/* Morning Gap */}
+                <div className="p-5 rounded-xl border bg-white hover:shadow-md transition-all">
+                  <div className="flex items-center gap-3 mb-3">
+                    <div className="p-2 bg-amber-100 rounded-lg">
+                      <Sun className="w-5 h-5 text-amber-600" />
+                    </div>
+                    <div>
+                      <h4 className="font-semibold text-gray-800">Morning Hours (6 AM - 11 AM)</h4>
+                      <Badge className={`mt-1 ${zoneAnalysisData.activityTime === "Evening" ? "bg-rose-100 text-rose-700" : "bg-emerald-100 text-emerald-700"}`}>
+                        {zoneAnalysisData.activityTime === "Evening" ? "Underserved" : "Well Covered"}
+                      </Badge>
+                    </div>
+                  </div>
+                  <p className="text-sm text-gray-600">
+                    {zoneAnalysisData.activityTime === "Evening" 
+                      ? "Few businesses cater to early morning customers. Consider breakfast spots or early-open services."
+                      : "Good coverage from existing businesses. Competition may be higher."}
+                  </p>
+                </div>
+
+                {/* Evening Gap */}
+                <div className="p-5 rounded-xl border bg-white hover:shadow-md transition-all">
+                  <div className="flex items-center gap-3 mb-3">
+                    <div className="p-2 bg-indigo-100 rounded-lg">
+                      <Moon className="w-5 h-5 text-indigo-600" />
+                    </div>
+                    <div>
+                      <h4 className="font-semibold text-gray-800">Evening Hours (6 PM - 10 PM)</h4>
+                      <Badge className={`mt-1 ${zoneAnalysisData.activityTime === "Daytime" ? "bg-rose-100 text-rose-700" : "bg-emerald-100 text-emerald-700"}`}>
+                        {zoneAnalysisData.activityTime === "Daytime" ? "Underserved" : "Well Covered"}
+                      </Badge>
+                    </div>
+                  </div>
+                  <p className="text-sm text-gray-600">
+                    {zoneAnalysisData.activityTime === "Daytime"
+                      ? "Limited evening options available. Consider dinner restaurants or entertainment venues."
+                      : "Good coverage for evening customers. Focus on differentiation."}
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Underserved Categories with Suggestions */}
           <Card className="border-0 shadow-xl bg-white/80 backdrop-blur-sm overflow-hidden">
             <CardHeader className="bg-linear-to-r from-rose-50 to-pink-50 border-b">
               <div className="flex items-center gap-3">
                 <div className="p-2.5 bg-linear-to-br from-rose-500 to-pink-600 rounded-xl text-white shadow-lg shadow-rose-200">
-                  <TrendingDown className="w-5 h-5" />
+                  <Target className="w-5 h-5" />
                 </div>
                 <div>
-                  <CardTitle className="text-xl">Underserved Business Categories</CardTitle>
+                  <CardTitle className="text-xl">Market Gap Analysis</CardTitle>
                   <p className="text-sm text-gray-500">
-                    Categories with higher demand than supply based on active businesses
+                    Categories ranked by opportunity with actionable suggestions
                   </p>
                 </div>
               </div>
@@ -1771,10 +2372,10 @@ export function OpportunitiesPage() {
                 return (
                   <div
                     key={gap.category}
-                    className="border-2 rounded-2xl p-6 space-y-4 bg-white hover:shadow-xl transition-all hover:scale-[1.01]"
+                    className="border-2 rounded-2xl p-6 space-y-4 bg-white hover:shadow-xl transition-all hover:scale-[1.005]"
                     style={{ borderColor: gap.gapLevel === 'High' ? '#f43f5e30' : gap.gapLevel === 'Medium' ? '#f59e0b30' : '#6b728030' }}
                   >
-                    <div className="flex items-start justify-between gap-4">
+                    <div className="flex items-start justify-between gap-4 flex-wrap">
                       <div>
                         <div className="flex items-center gap-3 mb-2">
                           <span className="flex items-center justify-center w-8 h-8 rounded-full bg-linear-to-br from-rose-500 to-pink-600 text-white font-bold text-sm shadow-lg">
@@ -1836,6 +2437,31 @@ export function OpportunitiesPage() {
                       </div>
                     </div>
 
+                    {/* Time-based gap info */}
+                    {gap.timeGap && (
+                      <div className="p-4 bg-amber-50 rounded-xl border border-amber-100">
+                        <div className="flex items-start gap-3">
+                          <Clock className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+                          <div>
+                            <p className="text-sm font-medium text-amber-800">{gap.timeGap}</p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Actionable suggestion */}
+                    {gap.suggestion && (
+                      <div className="p-4 bg-linear-to-r from-emerald-50 to-teal-50 rounded-xl border border-emerald-100">
+                        <div className="flex items-start gap-3">
+                          <Lightbulb className="w-5 h-5 text-emerald-600 flex-shrink-0 mt-0.5" />
+                          <div>
+                            <p className="text-sm font-medium text-gray-700 mb-1">Suggestion</p>
+                            <p className="text-sm text-gray-600">{gap.suggestion}</p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
                     <div className="pt-4 border-t">
                       <p className="text-sm font-medium text-gray-700 mb-3 flex items-center gap-2">
                         <MapPin className="w-4 h-4 text-indigo-500" />
@@ -1862,6 +2488,16 @@ export function OpportunitiesPage() {
                   </div>
                 );
               })}
+
+              {marketGaps.length === 0 && (
+                <div className="text-center py-12">
+                  <div className="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center mx-auto mb-4">
+                    <Target className="w-8 h-8 text-gray-400" />
+                  </div>
+                  <h3 className="text-lg font-semibold text-gray-700">No market gaps detected</h3>
+                  <p className="text-gray-500 mt-2">Run a clustering analysis to identify market opportunities.</p>
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
