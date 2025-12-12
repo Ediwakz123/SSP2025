@@ -98,15 +98,21 @@ export function EnterCodePage() {
   };
 
  return (
-  <div className="min-h-screen w-full bg-linear-to-br from-blue-50 via-white to-purple-50 flex items-center justify-center p-4">
-    <Card className="w-full max-w-md shadow-xl bg-white rounded-2xl">
-      <CardHeader className="text-center space-y-4 pb-8">
+  <div className="min-h-screen w-full flex items-center justify-center bg-linear-to-br from-slate-50 via-white to-indigo-50/30 p-4">
+    {/* Background decoration */}
+    <div className="absolute inset-0 overflow-hidden pointer-events-none">
+      <div className="absolute -top-40 -right-40 w-80 h-80 bg-primary/5 rounded-full blur-3xl" />
+      <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-purple-500/5 rounded-full blur-3xl" />
+    </div>
 
+    <div className="relative w-full max-w-md animate-fadeInUp">
+      <Card className="bg-white/90 backdrop-blur-xl border-gray-100/80 shadow-2xl shadow-gray-900/10 rounded-3xl">
+      <CardHeader className="text-center space-y-4 pb-4">
         {/* ICON CONTAINER */}
-        <div className="mx-auto w-16 h-16 bg-gray-200 rounded-2xl flex items-center justify-center">
+        <div className="mx-auto relative w-16 h-16 bg-linear-to-br from-primary to-purple-600 rounded-2xl shadow-lg shadow-primary/30 flex items-center justify-center">
           <svg
             xmlns="http://www.w3.org/2000/svg"
-            className="w-8 h-8 text-black"
+            className="w-8 h-8 text-white"
             fill="none"
             viewBox="0 0 24 24"
             stroke="currentColor"
@@ -115,22 +121,23 @@ export function EnterCodePage() {
             <path
               strokeLinecap="round"
               strokeLinejoin="round"
-              d="M12 11c1.657 0 3-1.567 3-3.5S13.657 4 12 4 9 5.567 9 7.5 10.343 11 12 11zm0 0c-3.866 0-7 2.582-7 6v1h14v-1c0-3.418-3.134-6-7-6z"
+              d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
             />
           </svg>
+          <div className="absolute -inset-1 bg-linear-to-br from-primary to-purple-600 rounded-2xl blur opacity-30 -z-10" />
         </div>
 
-        <CardTitle className="text-2xl font-semibold text-black">
+        <CardTitle className="text-2xl font-bold text-gray-900">
           Enter Verification Code
         </CardTitle>
 
-        <p className="text-gray-600 text-sm">
-          A 6-digit code was sent to <span className="font-medium">{email}</span>
+        <p className="text-gray-500 text-sm">
+          A 6-digit code was sent to <span className="font-medium text-gray-700">{email}</span>
         </p>
 
       </CardHeader>
 
-      <CardContent>
+      <CardContent className="pt-2">
 
         {/* OTP BOXES */}
         <div className="flex justify-between gap-2 mb-6">
@@ -144,9 +151,10 @@ export function EnterCodePage() {
               onChange={(e) => handleChange(e.target.value, index)}
               onKeyDown={(e) => handleKeyDown(e, index)}
               className="
-                w-12 h-14 bg-gray-100 text-black text-center 
-                rounded-xl border border-gray-300 text-xl font-semibold
-                focus:outline-none focus:ring-2 focus:ring-black transition-all
+                w-12 h-14 bg-gray-50 text-gray-900 text-center 
+                rounded-xl border-2 border-gray-200 text-xl font-semibold
+                focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all
+                hover:border-gray-300
               "
             />
           ))}
@@ -154,7 +162,8 @@ export function EnterCodePage() {
 
         {/* VERIFY BUTTON */}
         <Button
-          className="w-full bg-black hover:bg-gray-800 text-white rounded-lg py-2"
+          variant="gradient"
+          className="w-full h-12"
           disabled={loading}
           onClick={() => verifyCode(otp.join(""))}
         >
@@ -166,33 +175,33 @@ export function EnterCodePage() {
           {canResend ? (
             <button
               type="button"
-              className="text-blue-600 underline text-sm"
+              className="text-primary font-semibold hover:text-primary/80 text-sm transition-colors"
               onClick={handleResend}
             >
               Resend Code
             </button>
           ) : (
             <p className="text-gray-500 text-sm">
-              Resend in <span className="font-semibold">{timer}s</span>
+              Resend in <span className="font-semibold text-gray-700">{timer}s</span>
             </p>
           )}
         </div>
 
         {/* CHANGE EMAIL */}
-        <Button
-          variant="ghost"
-          className="w-full mt-6 text-black
-          "
+        <button
+          className="w-full mt-4 text-sm text-gray-500 hover:text-gray-800 transition-colors"
           onClick={() => navigate("/forgot-password")}
         >
-          Back to Email
-        </Button>
+          ← Back to Email
+        </button>
 
-        <p className="text-center text-xs text-gray-500 mt-4 mb-2">
-          Thesis Project © 2025
+        {/* Footer */}
+        <p className="text-center text-xs text-gray-400 pt-6 border-t border-gray-100 mt-6">
+          Strategic Store Placement System © 2025
         </p>
 
       </CardContent>
     </Card>
+    </div>
   </div>
 );}

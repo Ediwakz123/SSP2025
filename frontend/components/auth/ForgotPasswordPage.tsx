@@ -93,25 +93,44 @@ export function ForgotPasswordPage() {
   };
 
   return (
-    <div className="min-h-screen w-full bg-linear-to-br from-blue-50 via-white to-purple-50 flex items-center justify-center p-4">
-      <Card className="w-full max-w-md shadow-xl bg-white">
-        <CardHeader className="space-y-6 text-center pb-8">
-          <div className="mx-auto w-16 h-16 bg-gray-200 rounded-2xl flex items-center justify-center">
-            <MapPin className="w-8 h-8 text-black" />
-          </div>
+    <div className="min-h-screen w-full flex items-center justify-center bg-linear-to-br from-slate-50 via-white to-indigo-50/30 p-4">
+      {/* Background decoration */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute -top-40 -right-40 w-80 h-80 bg-primary/5 rounded-full blur-3xl" />
+        <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-purple-500/5 rounded-full blur-3xl" />
+      </div>
 
-          <div>
-            <CardTitle className="text-2xl font-semibold text-black">
-              Reset Password
-            </CardTitle>
+      <div className="relative w-full max-w-md animate-fadeInUp">
+        <Card className="bg-white/90 backdrop-blur-xl border-gray-100/80 shadow-2xl shadow-gray-900/10 rounded-3xl">
+        <CardHeader className="space-y-4 pb-2">
+          {/* Back button */}
+          <button
+            className="group flex items-center gap-2 text-sm text-gray-500 hover:text-gray-800 transition-colors w-fit"
+            onClick={() => navigate("/user/login")}
+          >
+            <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
+            Back to Login
+          </button>
 
-            <CardDescription className="text-base mt-2 text-gray-600">
-              Enter your email to receive a 6-digit verification code
-            </CardDescription>
+          {/* Logo */}
+          <div className="flex flex-col items-center gap-4">
+            <div className="relative w-16 h-16 bg-linear-to-br from-primary to-purple-600 rounded-2xl shadow-lg shadow-primary/30 flex items-center justify-center">
+              <MapPin className="w-8 h-8 text-white" />
+              <div className="absolute -inset-1 bg-linear-to-br from-primary to-purple-600 rounded-2xl blur opacity-30 -z-10" />
+            </div>
+
+            <div className="text-center">
+              <CardTitle className="text-2xl font-bold text-gray-900">
+                Reset Password
+              </CardTitle>
+              <CardDescription className="text-sm text-gray-500 mt-1">
+                Enter your email to receive a 6-digit verification code
+              </CardDescription>
+            </div>
           </div>
         </CardHeader>
 
-        <CardContent>
+        <CardContent className="pt-2">
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="email">Email Address</Label>
@@ -142,26 +161,21 @@ export function ForgotPasswordPage() {
 
             <Button
               type="submit"
-              className="w-full mt-6 bg-black hover:bg-gray-800 text-white"
+              variant="gradient"
+              className="w-full h-12"
               disabled={loading}
             >
-              {loading ? "Sending..." : "Send Code"}
+              {loading ? "Sending..." : "Send Verification Code"}
             </Button>
           </form>
 
-          <Button
-            variant="ghost"
-            className="w-full mt-6 text-black"
-            onClick={() => navigate("/user/login")}
-          >
-            <ArrowLeft className="w-4 h-4 mr-2" /> Back to Login
-          </Button>
-
-          <p className="text-center text-xs text-gray-500 mt-6">
-            Thesis Project © 2025
+          {/* Footer */}
+          <p className="text-center text-xs text-gray-400 pt-6 border-t border-gray-100 mt-6">
+            Strategic Store Placement System © 2025
           </p>
         </CardContent>
       </Card>
+      </div>
     </div>
   );
 }

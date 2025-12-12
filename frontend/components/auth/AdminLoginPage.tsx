@@ -295,33 +295,44 @@ export function AdminLoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-linear-to-br from-white via-[#f7f8ff] to-[#ece8ff] p-4">
-      <Card className="w-full max-w-md bg-white text-black shadow-xl rounded-2xl">
-        <CardHeader className="space-y-4">
-          <Button
-            variant="ghost"
-            className="w-fit -ml-2 text-gray-600"
+    <div className="min-h-screen w-full flex items-center justify-center bg-linear-to-br from-slate-50 via-white to-purple-50/30 p-4">
+      {/* Background decoration */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute -top-40 -right-40 w-80 h-80 bg-purple-500/5 rounded-full blur-3xl" />
+        <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-fuchsia-500/5 rounded-full blur-3xl" />
+      </div>
+
+      <div className="relative w-full max-w-md animate-fadeInUp">
+        <Card className="bg-white/90 backdrop-blur-xl border-gray-100/80 shadow-2xl shadow-gray-900/10 rounded-3xl">
+        <CardHeader className="space-y-4 pb-2">
+          {/* Back button */}
+          <button
+            className="group flex items-center gap-2 text-sm text-gray-500 hover:text-gray-800 transition-colors w-fit"
             onClick={() => navigate("/")}
           >
-            <ArrowLeft className="size-4 mr-2" />
+            <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
             Back to Home
-          </Button>
+          </button>
 
-          <div className="flex justify-center mt-2">
-            <div className="bg-purple-100 p-4 rounded-full shadow-sm">
-              <Shield className="size-12 text-purple-600" />
+          {/* Logo */}
+          <div className="flex flex-col items-center gap-4">
+            <div className="relative w-20 h-20 bg-linear-to-br from-purple-600 to-fuchsia-600 rounded-2xl shadow-lg shadow-purple-500/30 flex items-center justify-center">
+              <Shield className="w-10 h-10 text-white" />
+              <div className="absolute -inset-1 bg-linear-to-br from-purple-600 to-fuchsia-600 rounded-2xl blur opacity-30 -z-10" />
+            </div>
+
+            <div className="text-center">
+              <CardTitle className="text-2xl font-bold text-gray-900">
+                Admin Portal
+              </CardTitle>
+              <CardDescription className="text-sm text-gray-500 mt-1">
+                Sign in with your administrator credentials
+              </CardDescription>
             </div>
           </div>
-
-          <CardTitle className="text-center text-2xl font-semibold">
-            Admin Portal
-          </CardTitle>
-          <CardDescription className="text-center text-gray-600">
-            Sign in with your administrator credentials
-          </CardDescription>
         </CardHeader>
 
-        <CardContent>
+        <CardContent className="pt-2">
           {/* LOCKOUT MESSAGE */}
           {isLocked && (
             <Alert variant="destructive" className="mb-4">
@@ -400,14 +411,21 @@ export function AdminLoginPage() {
 
             <Button
               type="submit"
-              className="w-full bg-purple-600 hover:bg-purple-700 text-white"
+              variant="gradient"
+              className="w-full h-12 bg-linear-to-r from-purple-600 to-fuchsia-600"
               disabled={loading || isLocked}
             >
               {loading ? "Signing in..." : "Sign In to Admin Portal"}
             </Button>
           </form>
+
+          {/* Footer */}
+          <p className="text-center text-xs text-gray-400 pt-6 border-t border-gray-100 mt-6">
+            Strategic Store Placement System © 2025
+          </p>
         </CardContent>
       </Card>
+      </div>
     </div>
   );
 }
