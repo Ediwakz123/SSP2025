@@ -31,6 +31,8 @@ import {
   AlertTriangle,
   Sparkles,
   TrendingUp,
+  Layers,
+  X,
 } from "lucide-react";
 
 
@@ -125,6 +127,25 @@ interface MarketGap {
   suggestion?: string;
 }
 
+// Opportunity types for differentiation
+type OpportunityType =
+  | "Best for First-Time Owners"
+  | "Best for Low Budget Setup"
+  | "Best for Evening Crowd"
+  | "Best for Families"
+  | "Best for Leisure Activities"
+  | "Best for Daily Essentials"
+  | "Best for Quick Service"
+  | "Best for Premium Market"
+  | "Best for High Traffic"
+  | "Best for Community Focus";
+
+// Demand patterns
+type DemandPattern = "Daily Need" | "Evening Peak" | "Weekend Focus" | "All-Day Steady";
+
+// User fit levels
+type UserFitLevel = "High" | "Medium" | "Low";
+
 // Business opportunity with enhanced scoring
 interface BusinessOpportunity {
   name: string;
@@ -135,6 +156,12 @@ interface BusinessOpportunity {
   setupSpeed: "Fast" | "Moderate" | "Slow";
   competitionLevel: "Low" | "Medium" | "High";
   description?: string;
+  // New fields for distinct opportunities
+  opportunityType: OpportunityType;
+  primaryAdvantage: string;
+  demandPattern: DemandPattern;
+  userFitLevel: UserFitLevel;
+  location?: string;
 }
 
 // User Preferences for personalized scoring
@@ -247,6 +274,306 @@ function getCompetitionLevel(competitors: number): "Low" | "Medium" | "High" {
   if (competitors <= 2) return "Low";
   if (competitors <= 5) return "Medium";
   return "High";
+}
+
+// -----------------------------------------------------------------------------
+// DISTINCT OPPORTUNITY GENERATORS
+// -----------------------------------------------------------------------------
+
+// Calculate score with offsets for natural variation
+function calculateDistinctScore(
+  baseScore: number,
+  density: number,
+  competitors: number,
+  zoneType: string,
+  category: string,
+  index: number
+): number {
+  let score = baseScore;
+  const zone = (zoneType || "").toLowerCase();
+  const cat = (category || "").toLowerCase();
+
+  // Near housing/residential area: +5
+  if (zone.includes("residential") || zone.includes("mixed")) {
+    score += 5;
+  }
+
+  // Near schools/offices/activity hubs: +5
+  if (zone.includes("commercial") || density >= 10) {
+    score += 5;
+  }
+
+  // On main road (inferred from high density): +5
+  if (density >= 15) {
+    score += 5;
+  }
+
+  // Low/no competitors: +5
+  if (competitors <= 2) {
+    score += 5;
+  }
+
+  // Underserved/first-mover area: +5
+  if (competitors === 0 && density >= 5) {
+    score += 5;
+  }
+
+  // All-day demand pattern: +3
+  if (cat.includes("retail") || cat.includes("food")) {
+    score += 3;
+  }
+
+  // Evening/weekend focused: +3
+  if (cat.includes("entertainment") || cat.includes("restaurant")) {
+    score += 3;
+  }
+
+  // Moderate competition: -2
+  if (competitors > 2 && competitors <= 5) {
+    score -= 2;
+  }
+
+  // Limited operating time window: -3
+  if (cat.includes("service") && zone.includes("residential")) {
+    score -= 3;
+  }
+
+  // Add small variation based on index to avoid identical scores
+  const variation = ((index % 5) - 2) * 2; // Range: -4 to +4
+  score += variation;
+
+  return Math.min(100, Math.max(40, Math.round(score)));
+}
+
+// Opportunity type rotation to ensure variety
+const OPPORTUNITY_TYPES: OpportunityType[] = [
+  "Best for First-Time Owners",
+  "Best for Low Budget Setup",
+  "Best for Evening Crowd",
+  "Best for Families",
+  "Best for Leisure Activities",
+  "Best for Daily Essentials",
+  "Best for Quick Service",
+  "Best for Premium Market",
+  "Best for High Traffic",
+  "Best for Community Focus",
+];
+
+// Generate opportunity type based on characteristics and index
+function generateOpportunityType(
+  competitors: number,
+  density: number,
+  zoneType: string,
+  category: string,
+  index: number
+): OpportunityType {
+  const zone = (zoneType || "").toLowerCase();
+  const cat = (category || "").toLowerCase();
+
+  // Use characteristics to suggest ideal type, then rotate through others
+  let baseIndex = 0;
+
+  // Low competition + residential = First-Time Owners
+  if (competitors <= 1 && zone.includes("residential")) {
+    baseIndex = 0;
+  }
+  // Low density + mixed = Low Budget Setup
+  else if (density < 10 && zone.includes("mixed")) {
+    baseIndex = 1;
+  }
+  // Commercial + evening categories = Evening Crowd
+  else if (zone.includes("commercial") && (cat.includes("restaurant") || cat.includes("entertainment"))) {
+    baseIndex = 2;
+  }
+  // Near residential + food = Families
+  else if (zone.includes("residential") && (cat.includes("food") || cat.includes("retail"))) {
+    baseIndex = 3;
+  }
+  // Entertainment category = Leisure Activities
+  else if (cat.includes("entertainment") || cat.includes("leisure")) {
+    baseIndex = 4;
+  }
+  // Retail/food = Daily Essentials
+  else if (cat.includes("retail") || cat.includes("food")) {
+    baseIndex = 5;
+  }
+  // Services = Quick Service
+  else if (cat.includes("service")) {
+    baseIndex = 6;
+  }
+  // High density commercial = Premium Market
+  else if (density >= 15 && zone.includes("commercial")) {
+    baseIndex = 7;
+  }
+  // Very high density = High Traffic
+  else if (density >= 20) {
+    baseIndex = 8;
+  }
+  // Default = Community Focus
+  else {
+    baseIndex = 9;
+  }
+
+  // Rotate based on index to avoid repetition
+  const finalIndex = (baseIndex + index) % OPPORTUNITY_TYPES.length;
+  return OPPORTUNITY_TYPES[finalIndex];
+}
+
+// Primary advantages pool - rotated to avoid repetition
+const PRIMARY_ADVANTAGES = [
+  "Minimal competition means easier market entry",
+  "High foot traffic from nearby businesses",
+  "Strong demand from residential community",
+  "Prime location on busy commercial stretch",
+  "Underserved area with growing population",
+  "Near schools and family activity zones",
+  "Evening crowd brings consistent customers",
+  "Mix of residential and commercial traffic",
+  "First-mover opportunity in developing area",
+  "Established customer base in the vicinity",
+  "Low rental costs with good visibility",
+  "Strategic position near transport routes",
+  "Growing neighborhood with young demographics",
+  "Weekend activity hub with leisure traffic",
+  "Central location accessible from all areas",
+];
+
+// Generate primary advantage based on characteristics and index
+function generatePrimaryAdvantage(
+  competitors: number,
+  density: number,
+  zoneType: string,
+  index: number
+): string {
+  const zone = (zoneType || "").toLowerCase();
+
+  // Select base advantage based on characteristics
+  let baseIndex = 0;
+
+  if (competitors === 0) {
+    baseIndex = 0; // Minimal competition
+  } else if (density >= 15) {
+    baseIndex = 1; // High foot traffic
+  } else if (zone.includes("residential")) {
+    baseIndex = 2; // Residential community
+  } else if (zone.includes("commercial")) {
+    baseIndex = 3; // Commercial stretch
+  } else if (competitors <= 2 && density >= 5) {
+    baseIndex = 4; // Underserved area
+  } else if (zone.includes("mixed")) {
+    baseIndex = 7; // Mixed traffic
+  } else {
+    baseIndex = 9; // Established customer base
+  }
+
+  // Rotate to avoid repetition
+  const finalIndex = (baseIndex + index) % PRIMARY_ADVANTAGES.length;
+  return PRIMARY_ADVANTAGES[finalIndex];
+}
+
+// Generate demand pattern based on zone and category
+function generateDemandPattern(
+  zoneType: string,
+  category: string,
+  index: number
+): DemandPattern {
+  const zone = (zoneType || "").toLowerCase();
+  const cat = (category || "").toLowerCase();
+
+  // Determine base pattern
+  if (cat.includes("entertainment") || cat.includes("restaurant")) {
+    // Rotate between Evening Peak and Weekend Focus
+    return index % 2 === 0 ? "Evening Peak" : "Weekend Focus";
+  }
+
+  if (cat.includes("retail") || cat.includes("food")) {
+    // Rotate between Daily Need and All-Day Steady
+    return index % 2 === 0 ? "Daily Need" : "All-Day Steady";
+  }
+
+  if (cat.includes("service")) {
+    return "Daily Need";
+  }
+
+  // Zone-based fallback
+  if (zone.includes("commercial")) {
+    return index % 3 === 0 ? "All-Day Steady" : index % 3 === 1 ? "Daily Need" : "Evening Peak";
+  }
+
+  if (zone.includes("residential")) {
+    return index % 2 === 0 ? "Daily Need" : "Weekend Focus";
+  }
+
+  // Default rotation
+  const patterns: DemandPattern[] = ["Daily Need", "Evening Peak", "Weekend Focus", "All-Day Steady"];
+  return patterns[index % patterns.length];
+}
+
+// Calculate user fit level based on competition and setup complexity
+function calculateUserFitLevel(
+  competitors: number,
+  setupSpeed: "Fast" | "Moderate" | "Slow",
+  score: number
+): UserFitLevel {
+  // High fit: Low competition + Fast setup + Good score
+  if (competitors <= 2 && setupSpeed === "Fast" && score >= 70) {
+    return "High";
+  }
+
+  // Low fit: High competition OR Slow setup OR Low score
+  if (competitors > 5 || setupSpeed === "Slow" || score < 55) {
+    return "Low";
+  }
+
+  return "Medium";
+}
+
+// Generate purpose-based business name
+function generatePurposeBasedName(
+  category: string,
+  opportunityType: OpportunityType,
+  location: string,
+  index: number
+): string {
+  const cat = (category || "").toLowerCase();
+
+  // Purpose-based prefixes
+  const purposePrefixes: Record<string, string[]> = {
+    "first-time": ["Starter", "Entry-Level", "Beginner-Friendly"],
+    "low budget": ["Budget-Smart", "Affordable", "Cost-Effective"],
+    "evening": ["Night Owl", "After-Hours", "Evening Star"],
+    "families": ["Family Corner", "Kid-Friendly", "Family Hub"],
+    "leisure": ["Leisure Zone", "Fun Spot", "Activity Center"],
+    "daily": ["Everyday", "Daily Stop", "Go-To"],
+    "quick": ["Express", "Quick Stop", "Fast Track"],
+    "premium": ["Premium", "Elite", "Prime"],
+    "traffic": ["High Street", "Busy Corner", "Central"],
+    "community": ["Neighborhood", "Local", "Community"],
+  };
+
+  // Find matching prefix based on opportunity type
+  let prefix = "Business";
+  const typeKey = opportunityType.toLowerCase();
+  for (const [key, prefixes] of Object.entries(purposePrefixes)) {
+    if (typeKey.includes(key)) {
+      prefix = prefixes[index % prefixes.length];
+      break;
+    }
+  }
+
+  // Category-based suffix
+  let suffix = "Spot";
+  if (cat.includes("restaurant")) suffix = "Dining";
+  else if (cat.includes("food")) suffix = "Food Hub";
+  else if (cat.includes("retail")) suffix = "Store";
+  else if (cat.includes("service")) suffix = "Services";
+  else if (cat.includes("entertainment")) suffix = "Entertainment";
+  else if (cat.includes("leisure")) suffix = "Lounge";
+
+  // Use location for uniqueness if available
+  const locationPart = location ? ` near ${location.split(",")[0]}` : "";
+
+  return `${prefix} ${suffix}${locationPart}`;
 }
 
 // Calculate predictive score for each opportunity based on user preferences
@@ -825,6 +1152,24 @@ export function OpportunitiesPage() {
   const [_showExportModal, setShowExportModal] = useState(false);
   const [showTopOpportunityDetails, setShowTopOpportunityDetails] = useState(false);
 
+  // Compare opportunities state
+  const [selectedForCompare, setSelectedForCompare] = useState<BusinessOpportunity[]>([]);
+  const [showCompareModal, setShowCompareModal] = useState(false);
+
+  // Toggle opportunity selection for comparison
+  const toggleCompareSelection = (op: BusinessOpportunity) => {
+    setSelectedForCompare(prev => {
+      const isSelected = prev.some(o => o.name === op.name && o.score === op.score);
+      if (isSelected) {
+        return prev.filter(o => !(o.name === op.name && o.score === op.score));
+      }
+      if (prev.length >= 3) {
+        return prev; // Max 3 selections
+      }
+      return [...prev, op];
+    });
+  };
+
   // Preferences state
   const [showPreferencesModal, setShowPreferencesModal] = useState(false);
   const [preferences, setPreferences] = useState<UserPreferences>(DEFAULT_PREFERENCES);
@@ -1062,43 +1407,86 @@ export function OpportunitiesPage() {
   // Group opportunities by category for the Opportunities tab
   const opportunitiesByCategory = useMemo(() => {
     const categories = new Map<string, BusinessOpportunity[]>();
+    let globalIndex = 0; // Track across all opportunities for rotation
 
     // Add AI top businesses if available
     if (aiRecommendations?.topBusinesses) {
-      aiRecommendations.topBusinesses.forEach((biz) => {
+      aiRecommendations.topBusinesses.forEach((biz, idx) => {
         const cat = businessType || "General";
         if (!categories.has(cat)) categories.set(cat, []);
 
-        const score = biz.score || biz.fitPercentage || 70;
+        const baseScore = biz.score || biz.fitPercentage || 70;
+        const competitionLevel = biz.opportunityLevel?.includes("High") ? "Low" as const :
+          biz.opportunityLevel?.includes("Low") ? "High" as const : "Medium" as const;
+        const competitors = competitionLevel === "Low" ? 1 : competitionLevel === "Medium" ? 4 : 7;
+        const density = 10; // Estimated for AI recommendations
+
+        const score = calculateDistinctScore(baseScore, density, competitors, "", cat, globalIndex);
+        const operatingTime = determineOperatingTime(biz.name, "");
+        const setupSpeed = determineSetupSpeed(biz.name);
+        const opportunityType = generateOpportunityType(competitors, density, "", cat, globalIndex);
+        const primaryAdvantage = generatePrimaryAdvantage(competitors, density, "", globalIndex);
+        const demandPattern = generateDemandPattern("", cat, globalIndex);
+        const userFitLevel = calculateUserFitLevel(competitors, setupSpeed, score);
+        const name = generatePurposeBasedName(cat, opportunityType, biz.preferredLocation || "", globalIndex);
+
         categories.get(cat)!.push({
-          name: biz.name,
+          name,
           category: cat,
           score,
           status: getStatusFromScore(score),
-          operatingTime: determineOperatingTime(biz.name, ""),
-          setupSpeed: determineSetupSpeed(biz.name),
-          competitionLevel: biz.opportunityLevel?.includes("High") ? "Low" :
-            biz.opportunityLevel?.includes("Low") ? "High" : "Medium",
+          operatingTime,
+          setupSpeed,
+          competitionLevel,
           description: biz.shortDescription || biz.fullDetails,
+          opportunityType,
+          primaryAdvantage,
+          demandPattern,
+          userFitLevel,
+          location: biz.preferredLocation,
         });
+
+        globalIndex++;
       });
     }
 
     // Add opportunities from clustering results
-    opportunities.forEach((op) => {
+    opportunities.forEach((op, idx) => {
       const cat = op.category || "General";
       if (!categories.has(cat)) categories.set(cat, []);
 
+      const baseScore = op.score;
+      const competitors = op.competitors;
+      const density = op.businessDensity;
+      const zoneType = op.zone_type;
+
+      const score = calculateDistinctScore(baseScore, density, competitors, zoneType, cat, globalIndex);
+      const operatingTime = determineOperatingTime(cat, zoneType);
+      const setupSpeed = determineSetupSpeed(cat);
+      const competitionLevel = getCompetitionLevel(competitors);
+      const opportunityType = generateOpportunityType(competitors, density, zoneType, cat, globalIndex);
+      const primaryAdvantage = generatePrimaryAdvantage(competitors, density, zoneType, globalIndex);
+      const demandPattern = generateDemandPattern(zoneType, cat, globalIndex);
+      const userFitLevel = calculateUserFitLevel(competitors, setupSpeed, score);
+      const name = generatePurposeBasedName(cat, opportunityType, op.location, globalIndex);
+
       categories.get(cat)!.push({
-        name: op.title,
+        name,
         category: cat,
-        score: op.score,
-        status: getStatusFromScore(op.score),
-        operatingTime: determineOperatingTime(cat, op.zone_type),
-        setupSpeed: determineSetupSpeed(cat),
-        competitionLevel: getCompetitionLevel(op.competitors),
+        score,
+        status: getStatusFromScore(score),
+        operatingTime,
+        setupSpeed,
+        competitionLevel,
         description: op.insights[0],
+        opportunityType,
+        primaryAdvantage,
+        demandPattern,
+        userFitLevel,
+        location: op.location,
       });
+
+      globalIndex++;
     });
 
     // Sort each category by score
@@ -2127,53 +2515,109 @@ export function OpportunitiesPage() {
               </CardHeader>
               <CardContent className="p-6">
                 <div className="space-y-3">
-                  {opps.slice(0, showAll ? opps.length : 5).map((op, index) => (
-                    <div
-                      key={index}
-                      className="flex items-center justify-between p-4 rounded-xl border bg-white hover:shadow-md transition-all hover:border-indigo-200"
-                    >
-                      <div className="flex items-center gap-4">
-                        <div className={`flex items-center justify-center w-8 h-8 rounded-lg text-white text-sm font-bold ${op.status === "Strong" ? "bg-emerald-500" : op.status === "Good" ? "bg-blue-500" : "bg-amber-500"}`}>
-                          {index + 1}
-                        </div>
-                        <div>
-                          <h4 className="font-semibold text-gray-800 text-sm">{op.name}</h4>
-                          {op.description && <p className="text-xs text-gray-500 mt-0.5 truncate max-w-md">{op.description}</p>}
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-4">
-                        {/* Operating Time */}
-                        <div className="hidden md:flex items-center gap-1.5 text-xs text-gray-500">
-                          {op.operatingTime === "Day" ? <Sun className="w-3.5 h-3.5 text-amber-500" /> :
-                            op.operatingTime === "Evening" ? <Moon className="w-3.5 h-3.5 text-indigo-500" /> :
-                              <Clock className="w-3.5 h-3.5 text-blue-500" />}
-                          <span>{op.operatingTime}</span>
-                        </div>
-
-                        {/* Setup Speed */}
-                        <Badge variant="outline" className="hidden md:flex text-xs">
-                          <Rocket className="w-3 h-3 mr-1" />
-                          {op.setupSpeed}
-                        </Badge>
-
-                        {/* Competition */}
-                        <Badge className={`text-xs ${op.competitionLevel === "Low" ? "bg-emerald-100 text-emerald-700" : op.competitionLevel === "Medium" ? "bg-amber-100 text-amber-700" : "bg-rose-100 text-rose-700"}`}>
-                          {op.competitionLevel}
-                        </Badge>
-
-                        {/* Score */}
-                        <div className="flex items-center gap-2">
-                          <div className={`text-lg font-bold ${op.status === "Strong" ? "text-emerald-600" : op.status === "Good" ? "text-blue-600" : "text-amber-600"}`}>
-                            {op.score}%
+                  {opps.slice(0, showAll ? opps.length : 5).map((op, index) => {
+                    const isSelected = selectedForCompare.some(o => o.name === op.name && o.score === op.score);
+                    return (
+                      <div
+                        key={index}
+                        className={`p-5 rounded-xl border-2 bg-white hover:shadow-lg transition-all ${isSelected ? "ring-2 ring-indigo-500" : ""}`}
+                        style={{ borderColor: isSelected ? "#6366f1" : op.status === "Strong" ? "#10b98130" : op.status === "Good" ? "#3b82f630" : "#f59e0b30" }}
+                      >
+                        {/* Top Row: Checkbox, Rank, Name, Score */}
+                        <div className="flex items-start justify-between gap-4 mb-4">
+                          <div className="flex items-start gap-3">
+                            {/* Compare Checkbox */}
+                            <button
+                              onClick={() => toggleCompareSelection(op)}
+                              className={`flex items-center justify-center w-6 h-6 rounded border-2 transition-all flex-shrink-0 mt-2 ${isSelected
+                                ? "bg-indigo-500 border-indigo-500 text-white"
+                                : "border-gray-300 hover:border-indigo-400"
+                                }`}
+                              title={isSelected ? "Remove from comparison" : selectedForCompare.length >= 3 ? "Max 3 items" : "Add to comparison"}
+                            >
+                              {isSelected && <CheckCircle2 className="w-4 h-4" />}
+                            </button>
+                            <div className={`flex items-center justify-center w-10 h-10 rounded-xl text-white font-bold shadow-lg flex-shrink-0 ${op.status === "Strong" ? "bg-linear-to-br from-emerald-500 to-green-600" : op.status === "Good" ? "bg-linear-to-br from-blue-500 to-indigo-600" : "bg-linear-to-br from-amber-500 to-orange-600"}`}>
+                              {index + 1}
+                            </div>
+                            <div>
+                              <h4 className="font-bold text-gray-800">{op.name}</h4>
+                              {op.location && <p className="text-xs text-gray-400 mt-0.5">{op.location}</p>}
+                            </div>
                           </div>
-                          <Badge className={`${op.status === "Strong" ? "bg-emerald-500" : op.status === "Good" ? "bg-blue-500" : "bg-amber-500"} text-white text-xs`}>
-                            {op.status}
+                          <div className="flex flex-col items-end gap-1">
+                            <div className={`text-2xl font-bold ${op.status === "Strong" ? "text-emerald-600" : op.status === "Good" ? "text-blue-600" : "text-amber-600"}`}>
+                              {op.score}%
+                            </div>
+                            <Badge className={`${op.status === "Strong" ? "bg-emerald-100 text-emerald-700" : op.status === "Good" ? "bg-blue-100 text-blue-700" : "bg-amber-100 text-amber-700"}`}>
+                              {op.status}
+                            </Badge>
+                          </div>
+                        </div>
+
+                        {/* Opportunity Type Badge */}
+                        <div className="mb-3">
+                          <Badge className="bg-linear-to-r from-indigo-100 to-purple-100 text-indigo-700 border-0 px-3 py-1.5">
+                            <Target className="w-3.5 h-3.5 mr-1.5" />
+                            {op.opportunityType}
                           </Badge>
                         </div>
+
+                        {/* Primary Advantage */}
+                        <div className="p-3 rounded-lg bg-amber-50 border border-amber-100 mb-4">
+                          <div className="flex items-center gap-2 text-sm">
+                            <Lightbulb className="w-4 h-4 text-amber-500 flex-shrink-0" />
+                            <span className="text-gray-700 font-medium">{op.primaryAdvantage}</span>
+                          </div>
+                        </div>
+
+                        {/* Stats Grid */}
+                        <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+                          {/* Demand Pattern */}
+                          <div className="p-2.5 rounded-lg bg-gray-50 border text-center">
+                            <p className="text-xs text-gray-400 mb-1">Demand</p>
+                            <p className="text-sm font-semibold text-gray-700">{op.demandPattern}</p>
+                          </div>
+
+                          {/* Operating Time */}
+                          <div className="p-2.5 rounded-lg bg-gray-50 border text-center">
+                            <p className="text-xs text-gray-400 mb-1">Best Time</p>
+                            <div className="flex items-center justify-center gap-1">
+                              {op.operatingTime === "Day" ? <Sun className="w-3.5 h-3.5 text-amber-500" /> :
+                                op.operatingTime === "Evening" ? <Moon className="w-3.5 h-3.5 text-indigo-500" /> :
+                                  <Clock className="w-3.5 h-3.5 text-blue-500" />}
+                              <span className="text-sm font-semibold text-gray-700">{op.operatingTime}</span>
+                            </div>
+                          </div>
+
+                          {/* Setup Speed */}
+                          <div className="p-2.5 rounded-lg bg-gray-50 border text-center">
+                            <p className="text-xs text-gray-400 mb-1">Setup</p>
+                            <div className="flex items-center justify-center gap-1">
+                              <Rocket className="w-3.5 h-3.5 text-emerald-500" />
+                              <span className="text-sm font-semibold text-gray-700">{op.setupSpeed}</span>
+                            </div>
+                          </div>
+
+                          {/* Competition */}
+                          <div className="p-2.5 rounded-lg bg-gray-50 border text-center">
+                            <p className="text-xs text-gray-400 mb-1">Competition</p>
+                            <span className={`text-sm font-semibold ${op.competitionLevel === "Low" ? "text-emerald-600" : op.competitionLevel === "Medium" ? "text-amber-600" : "text-rose-600"}`}>
+                              {op.competitionLevel}
+                            </span>
+                          </div>
+
+                          {/* User Fit */}
+                          <div className="p-2.5 rounded-lg bg-gray-50 border text-center">
+                            <p className="text-xs text-gray-400 mb-1">User Fit</p>
+                            <Badge className={`text-xs ${op.userFitLevel === "High" ? "bg-emerald-100 text-emerald-700" : op.userFitLevel === "Medium" ? "bg-blue-100 text-blue-700" : "bg-gray-100 text-gray-600"}`}>
+                              {op.userFitLevel}
+                            </Badge>
+                          </div>
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
 
                 {opps.length > 5 && !showAll && (
@@ -2207,6 +2651,179 @@ export function OpportunitiesPage() {
                 </Button>
               </div>
             </Card>
+          )}
+
+          {/* Floating Compare Button */}
+          {selectedForCompare.length >= 2 && (
+            <div className="fixed bottom-8 right-8 z-30">
+              <Button
+                onClick={() => setShowCompareModal(true)}
+                className="h-14 px-6 bg-linear-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white rounded-full shadow-xl shadow-indigo-200 transition-all hover:scale-105"
+              >
+                <Layers className="w-5 h-5 mr-2" />
+                Compare {selectedForCompare.length} Opportunities
+              </Button>
+              <Button
+                onClick={() => setSelectedForCompare([])}
+                variant="ghost"
+                className="ml-2 h-14 w-14 rounded-full bg-white shadow-lg hover:bg-gray-50"
+              >
+                <X className="w-5 h-5 text-gray-500" />
+              </Button>
+            </div>
+          )}
+
+          {/* Compare Modal */}
+          {showCompareModal && selectedForCompare.length >= 2 && (
+            <>
+              <div
+                className="fixed inset-0 bg-black/50 backdrop-blur-sm z-40"
+                onClick={() => setShowCompareModal(false)}
+              />
+              <div className="fixed z-50 bg-white p-8 rounded-2xl shadow-2xl max-w-4xl w-[95vw] max-h-[90vh] overflow-y-auto top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
+                {/* Modal Header */}
+                <div className="flex items-center justify-between mb-6">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2.5 bg-linear-to-br from-indigo-500 to-purple-600 rounded-xl text-white shadow-lg">
+                      <Layers className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h2 className="text-xl font-bold text-gray-800">Compare Opportunities</h2>
+                      <p className="text-sm text-gray-500">Side-by-side comparison of selected opportunities</p>
+                    </div>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    onClick={() => setShowCompareModal(false)}
+                    className="h-10 w-10 rounded-full"
+                  >
+                    <X className="w-5 h-5" />
+                  </Button>
+                </div>
+
+                {/* Comparison Grid */}
+                <div className="overflow-x-auto">
+                  <table className="w-full border-collapse">
+                    <thead>
+                      <tr>
+                        <th className="text-left p-3 bg-gray-50 rounded-tl-xl font-semibold text-gray-600 w-40">Attribute</th>
+                        {selectedForCompare.map((op, idx) => (
+                          <th key={idx} className={`p-3 bg-gray-50 text-center ${idx === selectedForCompare.length - 1 ? "rounded-tr-xl" : ""}`}>
+                            <div className="flex flex-col items-center gap-2">
+                              <div className={`flex items-center justify-center w-8 h-8 rounded-lg text-white font-bold ${op.status === "Strong" ? "bg-emerald-500" : op.status === "Good" ? "bg-blue-500" : "bg-amber-500"}`}>
+                                {idx + 1}
+                              </div>
+                              <span className="font-semibold text-gray-800 text-sm">{op.name}</span>
+                            </div>
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {/* Score */}
+                      <tr className="border-t">
+                        <td className="p-3 font-medium text-gray-600">Score</td>
+                        {selectedForCompare.map((op, idx) => (
+                          <td key={idx} className="p-3 text-center">
+                            <span className={`text-2xl font-bold ${op.status === "Strong" ? "text-emerald-600" : op.status === "Good" ? "text-blue-600" : "text-amber-600"}`}>
+                              {op.score}%
+                            </span>
+                            <Badge className={`ml-2 ${op.status === "Strong" ? "bg-emerald-100 text-emerald-700" : op.status === "Good" ? "bg-blue-100 text-blue-700" : "bg-amber-100 text-amber-700"}`}>
+                              {op.status}
+                            </Badge>
+                          </td>
+                        ))}
+                      </tr>
+                      {/* Opportunity Type */}
+                      <tr className="border-t bg-gray-50/50">
+                        <td className="p-3 font-medium text-gray-600">Opportunity Type</td>
+                        {selectedForCompare.map((op, idx) => (
+                          <td key={idx} className="p-3 text-center">
+                            <Badge className="bg-indigo-100 text-indigo-700 text-xs">
+                              {op.opportunityType}
+                            </Badge>
+                          </td>
+                        ))}
+                      </tr>
+                      {/* Primary Advantage */}
+                      <tr className="border-t">
+                        <td className="p-3 font-medium text-gray-600">Primary Advantage</td>
+                        {selectedForCompare.map((op, idx) => (
+                          <td key={idx} className="p-3 text-center text-sm text-gray-700">
+                            {op.primaryAdvantage}
+                          </td>
+                        ))}
+                      </tr>
+                      {/* Demand Pattern */}
+                      <tr className="border-t bg-gray-50/50">
+                        <td className="p-3 font-medium text-gray-600">Demand Pattern</td>
+                        {selectedForCompare.map((op, idx) => (
+                          <td key={idx} className="p-3 text-center">
+                            <span className="text-sm font-medium text-gray-700">{op.demandPattern}</span>
+                          </td>
+                        ))}
+                      </tr>
+                      {/* Best Operating Time */}
+                      <tr className="border-t">
+                        <td className="p-3 font-medium text-gray-600">Best Time</td>
+                        {selectedForCompare.map((op, idx) => (
+                          <td key={idx} className="p-3 text-center">
+                            <div className="flex items-center justify-center gap-1">
+                              {op.operatingTime === "Day" ? <Sun className="w-4 h-4 text-amber-500" /> :
+                                op.operatingTime === "Evening" ? <Moon className="w-4 h-4 text-indigo-500" /> :
+                                  <Clock className="w-4 h-4 text-blue-500" />}
+                              <span className="text-sm font-medium">{op.operatingTime}</span>
+                            </div>
+                          </td>
+                        ))}
+                      </tr>
+                      {/* Setup Speed */}
+                      <tr className="border-t bg-gray-50/50">
+                        <td className="p-3 font-medium text-gray-600">Setup Speed</td>
+                        {selectedForCompare.map((op, idx) => (
+                          <td key={idx} className="p-3 text-center">
+                            <div className="flex items-center justify-center gap-1">
+                              <Rocket className="w-4 h-4 text-emerald-500" />
+                              <span className="text-sm font-medium">{op.setupSpeed}</span>
+                            </div>
+                          </td>
+                        ))}
+                      </tr>
+                      {/* Competition Level */}
+                      <tr className="border-t">
+                        <td className="p-3 font-medium text-gray-600">Competition</td>
+                        {selectedForCompare.map((op, idx) => (
+                          <td key={idx} className="p-3 text-center">
+                            <Badge className={`text-xs ${op.competitionLevel === "Low" ? "bg-emerald-100 text-emerald-700" : op.competitionLevel === "Medium" ? "bg-amber-100 text-amber-700" : "bg-rose-100 text-rose-700"}`}>
+                              {op.competitionLevel}
+                            </Badge>
+                          </td>
+                        ))}
+                      </tr>
+                      {/* User Fit Level */}
+                      <tr className="border-t bg-gray-50/50 rounded-b-xl">
+                        <td className="p-3 font-medium text-gray-600 rounded-bl-xl">User Fit</td>
+                        {selectedForCompare.map((op, idx) => (
+                          <td key={idx} className={`p-3 text-center ${idx === selectedForCompare.length - 1 ? "rounded-br-xl" : ""}`}>
+                            <Badge className={`text-xs ${op.userFitLevel === "High" ? "bg-emerald-100 text-emerald-700" : op.userFitLevel === "Medium" ? "bg-blue-100 text-blue-700" : "bg-gray-100 text-gray-600"}`}>
+                              {op.userFitLevel}
+                            </Badge>
+                          </td>
+                        ))}
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Close Button */}
+                <Button
+                  className="w-full mt-6 h-12 bg-linear-to-r from-gray-800 to-gray-900 hover:from-gray-900 hover:to-black text-white rounded-xl"
+                  onClick={() => setShowCompareModal(false)}
+                >
+                  Close Comparison
+                </Button>
+              </div>
+            </>
           )}
         </TabsContent>
 
