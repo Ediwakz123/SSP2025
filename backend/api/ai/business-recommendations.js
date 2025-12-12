@@ -68,12 +68,33 @@ export default async function handler(req, res) {
     // Build comprehensive system prompt
     const systemPrompt = `You are an AI Business Recommendation Engine.
 
+Your task is to recommend the TOP 3 most viable business types across ALL categories, not limited to the user's selected category.
+
+The user's chosen category should be treated as preference context only, NOT a restriction.
+
+DATA USAGE (STRICT)
+
 Use ONLY the provided clustering and business environment data:
-- User's business idea and category
+- User's business idea and category (context only)
 - Cluster information (clusterId, centroid, business count)
 - Business density & competitor counts
 - Nearby business details
 - Opportunity level from analysis
+
+❌ Do NOT assume missing data
+❌ Do NOT invent demand, locations, or competitors
+
+CATEGORY SCOPE RULE (MATCHED TO YOUR INPUT)
+
+Recommendations may come from ANY category:
+- Retail
+- Services
+- Food / Beverages
+- Merchandise / Trading
+- Entertainment / Leisure
+
+The user's category must NOT limit recommendations.
+Mix categories if opportunity is stronger outside the user's category.
 
 -----------------------------------
 ZONE NAMING RULES (STRICT):
@@ -83,63 +104,87 @@ Assign the best cluster EXACTLY ONE of these:
 2. "Residential Zone"
 3. "Mixed Zone"
 
-Do NOT generate new zone names.
+❌ Do NOT generate new zone names.
 
 -----------------------------------
 SCORING RULES (STRICT & DYNAMIC):
 -----------------------------------
-Each recommended business must receive a unique score based on:
-- How well the business matches the zone type
-- Density of businesses within 50m/100m/200m
-- Number of direct competitors nearby
-- Complementary services in the area
-- Gap in supply vs demand
+Each recommended business must receive a UNIQUE score based on:
+- Zone compatibility
+- Business density within 50m / 100m / 200m
+- Number of direct competitors
+- Complementary services nearby
+- Supply vs demand gap
 
-Scoring Range:
-- All scores MUST be between **70 and 100**
-- No two recommended businesses may have the same score
-- No reused scoring patterns (avoid 92/88/85 repetition)
+Score Constraints:
+- Score range: 70–100 ONLY
+- No duplicate scores
+- No repeated scoring patterns
 
-Fit Percentage:
-- Must be between **70% and 100%**
-- Cannot be identical to the score
-- Should logically correlate with the score
+FIT PERCENTAGE RULES:
+- Range: 70–100
+- Must be different from score
+- Must logically correlate with score
 
 -----------------------------------
 OPPORTUNITY LEVEL LABEL (BUSINESS-FRIENDLY):
 -----------------------------------
-Assign opportunityLevel based on SCORE:
+Assign automatically from score:
 
 Score 90–100   → "Excellent Potential"
 Score 80–89    → "Strong Potential"
 Score 70–79    → "Moderate Potential"
-Score below 70 → "Limited Potential" (rare; avoid unless competition extremely high)
+Score below 70 → "Limited Potential" (avoid unless extreme competition)
 
 -----------------------------------
-CONFIDENCE LABEL:
+CONFIDENCE LABEL (CLUSTER LEVEL):
 -----------------------------------
-Convert confidence % to a user-friendly label:
-
-1–25%   = "Not Ideal"
-26–50%  = "Could Work"
-51–75%  = "Good Choice"
-76–100% = "Best Choice"
+Convert confidence % into:
+1–25   → "Not Ideal"
+26–50  → "Could Work"
+51–75  → "Good Choice"
+76–100 → "Best Choice"
 
 -----------------------------------
-TOP 3 BUSINESS RECOMMENDATIONS:
+🆕 RISK LEVEL RULE (NEW):
 -----------------------------------
-For EACH recommended business include:
+Each recommended business MUST include a riskLevel based on:
+- Market saturation
+- Competition density
+- Operational complexity
+- Dependency on foot traffic or timing
+- Capital sensitivity
 
+Allowed Risk Levels (STRICT):
+- "Low Risk"
+- "Medium Risk"
+- "High Risk"
+
+Risk Logic:
+- High score + low competition → Low Risk
+- Moderate competition or execution complexity → Medium Risk
+- High competition or narrow demand window → High Risk
+
+❌ Do NOT invent custom risk labels
+❌ Risk level must logically match score and competition
+
+-----------------------------------
+TOP 3 BUSINESS RECOMMENDATIONS (REQUIRED):
+-----------------------------------
+Each recommendation MUST include:
 - name
 - score (unique, 70–100)
 - fitPercentage (unique, 70–100)
-- opportunityLevel (from scoring rules above)
+- opportunityLevel
+- riskLevel ✅ (NEW)
 - shortDescription (1–2 simple sentences)
 - fullDetails (simple, friendly explanation)
 - preferredLocation (best spot inside cluster)
 - startupBudget ("PHP xx,xxx - PHP xx,xxx")
 - competitorPresence (simple explanation)
-- businessDensityInsight (how crowded or open the area is)
+- businessDensityInsight (crowded vs open)
+
+Businesses may belong to different categories.
 
 -----------------------------------
 JSON OUTPUT FORMAT (REQUIRED):
@@ -160,6 +205,7 @@ Return ONLY valid JSON:
       "score": number,
       "fitPercentage": number,
       "opportunityLevel": "Excellent Potential" | "Strong Potential" | "Moderate Potential" | "Limited Potential",
+      "riskLevel": "Low Risk" | "Medium Risk" | "High Risk",
       "shortDescription": "string",
       "fullDetails": "string",
       "preferredLocation": "string",
@@ -221,6 +267,7 @@ Return ONLY valid JSON in this exact format:
       "score": 94,
       "fitPercentage": 91,
       "opportunityLevel": "Excellent Potential",
+      "riskLevel": "Low Risk",
       "shortDescription": "1-2 simple sentences about this business.",
       "fullDetails": "Clear explanation using simple words.",
       "preferredLocation": "Near the main road or community entrance.",
@@ -233,6 +280,7 @@ Return ONLY valid JSON in this exact format:
       "score": 87,
       "fitPercentage": 84,
       "opportunityLevel": "Strong Potential",
+      "riskLevel": "Medium Risk",
       "shortDescription": "Short description.",
       "fullDetails": "Full explanation in simple words.",
       "preferredLocation": "Suggested location.",
@@ -245,6 +293,7 @@ Return ONLY valid JSON in this exact format:
       "score": 76,
       "fitPercentage": 79,
       "opportunityLevel": "Moderate Potential",
+      "riskLevel": "Medium Risk",
       "shortDescription": "Short description.",
       "fullDetails": "Full explanation in simple words.",
       "preferredLocation": "Suggested location.",
@@ -294,6 +343,13 @@ Return ONLY valid JSON in this exact format:
         return "Limited Potential";
       };
 
+      // Helper to get risk level
+      const getRiskLevel = (score, competitors) => {
+        if (score >= 80 && competitors <= 2) return "Low Risk";
+        if (competitors >= 5) return "High Risk";
+        return "Medium Risk";
+      };
+
       data = {
         bestCluster: {
           clusterId: 1,
@@ -311,6 +367,7 @@ Return ONLY valid JSON in this exact format:
             score: Math.min(100, Math.max(70, score1 + 10)),
             fitPercentage: Math.min(100, Math.max(70, score1 + 6)),
             opportunityLevel: getOpportunityLevel(Math.max(70, score1 + 10)),
+            riskLevel: getRiskLevel(Math.max(70, score1 + 10), c50),
             shortDescription: c50 === 0
               ? "No similar shops nearby. Good chance to be the first."
               : "Some competition exists, but you can stand out with good service.",
@@ -333,6 +390,7 @@ Return ONLY valid JSON in this exact format:
             score: Math.min(100, Math.max(70, score2 + 8)),
             fitPercentage: Math.min(100, Math.max(70, score2 + 5)),
             opportunityLevel: getOpportunityLevel(Math.max(70, score2 + 8)),
+            riskLevel: getRiskLevel(Math.max(70, score2 + 8), c100),
             shortDescription: `Works well with the ${b100} businesses already here.`,
             fullDetails: `This area already has ${b100} businesses within 100 meters. Adding a service business can complement them and benefit from the foot traffic they bring.`,
             preferredLocation: "Close to existing service businesses for customer convenience.",
@@ -345,6 +403,7 @@ Return ONLY valid JSON in this exact format:
             score: Math.min(100, Math.max(70, score3 + 15)),
             fitPercentage: Math.min(100, Math.max(70, score3 + 12)),
             opportunityLevel: getOpportunityLevel(Math.max(70, score3 + 15)),
+            riskLevel: getRiskLevel(Math.max(70, score3 + 15), c200),
             shortDescription: "Basic needs store that most areas can benefit from.",
             fullDetails: `A convenience store provides daily essentials that people need. In this ${zoneTypeName}, there is usually steady demand for quick purchases.`,
             preferredLocation: "Near residential areas or along main walkways for easy access.",

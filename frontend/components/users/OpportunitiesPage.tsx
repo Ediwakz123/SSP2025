@@ -823,6 +823,7 @@ export function OpportunitiesPage() {
   const [showAll, setShowAll] = useState(false);
   const [openExportModal, setOpenExportModal] = useState(false);
   const [_showExportModal, setShowExportModal] = useState(false);
+  const [showTopOpportunityDetails, setShowTopOpportunityDetails] = useState(false);
 
   // Preferences state
   const [showPreferencesModal, setShowPreferencesModal] = useState(false);
@@ -1108,6 +1109,123 @@ export function OpportunitiesPage() {
 
     return categories;
   }, [opportunities, aiRecommendations, businessType]);
+
+  // Compute top opportunity for focused display
+  const topOpportunity = useMemo(() => {
+    // Priority: AI recommendations first, then clustering opportunities
+    const aiTop = aiRecommendations?.topBusinesses?.[0];
+    const clusterTop = opportunities[0];
+
+    if (aiTop) {
+      const score = aiTop.score || aiTop.fitPercentage || 70;
+      const status = getStatusFromScore(score);
+      const competitionLevel = aiTop.opportunityLevel?.includes("High") ? "Low" as const :
+        aiTop.opportunityLevel?.includes("Low") ? "High" as const : "Medium" as const;
+
+      // Determine suggested business size based on density and competition
+      const suggestedSize = competitionLevel === "Low" ? "Small / Medium" :
+        competitionLevel === "Medium" ? "Medium" : "Medium / Large";
+
+      // Why it stands out
+      let whyStandsOut = "";
+      if (competitionLevel === "Low" && score >= 75) {
+        whyStandsOut = "Low competition with high potential for success";
+      } else if (score >= 80) {
+        whyStandsOut = "Excellent opportunity score indicates strong market fit";
+      } else if (competitionLevel === "Low") {
+        whyStandsOut = "Few competitors in this area means easier market entry";
+      } else {
+        whyStandsOut = "Good balance of customer traffic and manageable competition";
+      }
+
+      // Entry strategy based on competition
+      const entryStrategy = competitionLevel === "Low"
+        ? "First-mover advantage – establish your presence early before competitors arrive"
+        : competitionLevel === "Medium"
+          ? "Gradual entry – start small, build reputation, then expand"
+          : "Differentiation focus – offer unique value to stand out from existing businesses";
+
+      // Risk summary
+      const riskSummary = competitionLevel === "Low" && score >= 70
+        ? "Low risk – favorable conditions for new business entry."
+        : competitionLevel === "High"
+          ? "Moderate risk – success depends on strong differentiation."
+          : "Standard risk – typical market conditions apply.";
+
+      // Location fit
+      const locationFit = aiTop.preferredLocation
+        ? `This location suits ${aiTop.name} because ${aiTop.preferredLocation.toLowerCase()}.`
+        : `This area has good foot traffic and visibility for ${aiTop.name}.`;
+
+      return {
+        name: aiTop.name,
+        score,
+        status,
+        operatingTime: determineOperatingTime(aiTop.name, ""),
+        setupSpeed: determineSetupSpeed(aiTop.name),
+        competitionLevel,
+        suggestedSize,
+        whyStandsOut,
+        description: aiTop.shortDescription || aiTop.fullDetails || `A ${aiTop.name.toLowerCase()} business tailored for this location.`,
+        operatingHours: aiTop.name.toLowerCase().includes("restaurant") || aiTop.name.toLowerCase().includes("food")
+          ? "10:00 AM – 10:00 PM (flexible based on customer demand)"
+          : "8:00 AM – 6:00 PM (standard business hours)",
+        entryStrategy,
+        riskSummary,
+        locationFit,
+        startupBudget: aiTop.startupBudget || "Varies based on scale",
+      };
+    }
+
+    if (clusterTop) {
+      const status = getStatusFromScore(clusterTop.score);
+      const competitionLevel = getCompetitionLevel(clusterTop.competitors);
+      const suggestedSize = clusterTop.businessDensity >= 15 ? "Medium / Large" :
+        clusterTop.businessDensity >= 8 ? "Small / Medium" : "Small";
+
+      let whyStandsOut = "";
+      if (clusterTop.competitors === 0) {
+        whyStandsOut = "No direct competitors nearby – great for first movers";
+      } else if (clusterTop.score >= 80) {
+        whyStandsOut = "High opportunity score with balanced market conditions";
+      } else if (clusterTop.businessDensity >= 15) {
+        whyStandsOut = "High foot traffic area with strong customer potential";
+      } else {
+        whyStandsOut = "Good location with room for growth";
+      }
+
+      const entryStrategy = competitionLevel === "Low"
+        ? "First-mover advantage – establish your presence early"
+        : competitionLevel === "Medium"
+          ? "Gradual entry – start small and build your customer base"
+          : "Focus on differentiation to stand out";
+
+      const riskSummary = competitionLevel === "Low" && clusterTop.score >= 70
+        ? "Low risk – favorable conditions for new business entry."
+        : competitionLevel === "High"
+          ? "Moderate risk – requires strong value proposition."
+          : "Standard risk – typical market conditions.";
+
+      return {
+        name: clusterTop.title,
+        score: clusterTop.score,
+        status,
+        operatingTime: determineOperatingTime(clusterTop.category, clusterTop.zone_type),
+        setupSpeed: determineSetupSpeed(clusterTop.category),
+        competitionLevel,
+        suggestedSize,
+        whyStandsOut,
+        description: clusterTop.insights[0] || `Business opportunity in ${clusterTop.location}.`,
+        operatingHours: "8:00 AM – 6:00 PM (adjust based on zone activity)",
+        entryStrategy,
+        riskSummary,
+        locationFit: `Located in a ${clusterTop.zone_type.toLowerCase()} zone with ${clusterTop.businessDensity} nearby businesses.`,
+        startupBudget: "Varies based on business type",
+      };
+    }
+
+    return null;
+  }, [aiRecommendations, opportunities]);
 
   // Compute zone analysis data for Zone Analysis tab
   const zoneAnalysisData = useMemo(() => {
@@ -1786,76 +1904,195 @@ export function OpportunitiesPage() {
             </>
           )}
 
-          {/* AI Recommended Businesses (if available) */}
-          {aiRecommendations?.topBusinesses && aiRecommendations.topBusinesses.length > 0 && (
+          {/* Top Opportunity – Details */}
+          {topOpportunity && (
             <Card className="border-0 shadow-xl bg-white/80 backdrop-blur-sm overflow-hidden">
-              <CardHeader className="bg-linear-to-r from-purple-50 to-pink-50 border-b">
+              <CardHeader className="bg-linear-to-r from-emerald-50 to-teal-50 border-b">
                 <div className="flex items-center gap-3">
-                  <div className="p-2.5 bg-linear-to-br from-purple-500 to-pink-600 rounded-xl text-white shadow-lg shadow-purple-200">
+                  <div className="p-2.5 bg-linear-to-br from-emerald-500 to-teal-600 rounded-xl text-white shadow-lg shadow-emerald-200">
                     <Sparkles className="w-5 h-5" />
                   </div>
                   <div>
-                    <CardTitle className="text-xl">Top Recommended for {businessType}</CardTitle>
-                    <p className="text-sm text-gray-500">Best business opportunities based on location analysis</p>
+                    <CardTitle className="text-xl">Top Opportunity – Details</CardTitle>
+                    <p className="text-sm text-gray-500">Your best business opportunity based on location analysis</p>
                   </div>
                 </div>
               </CardHeader>
               <CardContent className="p-6">
-                <div className="grid gap-4">
-                  {aiRecommendations.topBusinesses.map((biz, index) => {
-                    const score = biz.score || biz.fitPercentage || 70;
-                    const status = getStatusFromScore(score);
-                    return (
-                      <div
-                        key={index}
-                        className="p-5 rounded-xl border-2 bg-white hover:shadow-lg transition-all"
-                        style={{ borderColor: status === "Strong" ? "#10b98130" : status === "Good" ? "#3b82f630" : "#f59e0b30" }}
-                      >
-                        <div className="flex items-start justify-between flex-wrap gap-4">
-                          <div className="flex items-start gap-4">
-                            <div className={`flex items-center justify-center w-10 h-10 rounded-xl text-white font-bold shadow-lg ${status === "Strong" ? "bg-linear-to-br from-emerald-500 to-green-600" : status === "Good" ? "bg-linear-to-br from-blue-500 to-indigo-600" : "bg-linear-to-br from-amber-500 to-orange-600"}`}>
-                              {index + 1}
-                            </div>
-                            <div>
-                              <h3 className="text-lg font-bold text-gray-800">{biz.name}</h3>
-                              <p className="text-sm text-gray-500 mt-1">{biz.shortDescription || biz.fullDetails}</p>
-                            </div>
-                          </div>
-                          <div className="flex flex-col items-end gap-2">
-                            <div className="text-3xl font-bold bg-linear-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
-                              {score}%
-                            </div>
-                            <Badge className={`${status === "Strong" ? "bg-emerald-100 text-emerald-700" : status === "Good" ? "bg-blue-100 text-blue-700" : "bg-amber-100 text-amber-700"}`}>
-                              {status} Opportunity
-                            </Badge>
-                          </div>
-                        </div>
-
-                        {/* Additional details */}
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-4 pt-4 border-t">
-                          <div className="flex items-center gap-2 text-sm">
-                            <Clock className="w-4 h-4 text-amber-500" />
-                            <span className="text-gray-600">{determineOperatingTime(biz.name, "")} hours</span>
-                          </div>
-                          <div className="flex items-center gap-2 text-sm">
-                            <Rocket className="w-4 h-4 text-emerald-500" />
-                            <span className="text-gray-600">{determineSetupSpeed(biz.name)} setup</span>
-                          </div>
-                          <div className="flex items-center gap-2 text-sm">
-                            <Users className="w-4 h-4 text-rose-500" />
-                            <span className="text-gray-600">{biz.opportunityLevel?.includes("High") ? "Low" : biz.opportunityLevel?.includes("Low") ? "High" : "Medium"} competition</span>
-                          </div>
-                          <div className="flex items-center gap-2 text-sm">
-                            <Building2 className="w-4 h-4 text-blue-500" />
-                            <span className="text-gray-600">{biz.startupBudget || "Varies"}</span>
-                          </div>
-                        </div>
+                {/* Main content */}
+                <div className="flex items-start justify-between flex-wrap gap-6">
+                  {/* Left side - Business info */}
+                  <div className="flex-1 min-w-[280px]">
+                    <div className="flex items-center gap-3 mb-4">
+                      <div className={`flex items-center justify-center w-12 h-12 rounded-xl text-white font-bold shadow-lg ${topOpportunity.status === "Strong" ? "bg-linear-to-br from-emerald-500 to-green-600" : topOpportunity.status === "Good" ? "bg-linear-to-br from-blue-500 to-indigo-600" : "bg-linear-to-br from-amber-500 to-orange-600"}`}>
+                        #1
                       </div>
-                    );
-                  })}
+                      <div>
+                        <h3 className="text-xl font-bold text-gray-800">{topOpportunity.name}</h3>
+                        <p className="text-sm text-gray-500">{topOpportunity.description}</p>
+                      </div>
+                    </div>
+
+                    {/* Why It Stands Out */}
+                    <div className="p-4 rounded-xl bg-linear-to-r from-amber-50 to-orange-50 border border-amber-100 mb-4">
+                      <div className="flex items-center gap-2 mb-2">
+                        <Lightbulb className="w-5 h-5 text-amber-600" />
+                        <span className="font-semibold text-gray-700">Why This Stands Out</span>
+                      </div>
+                      <p className="text-gray-600">{topOpportunity.whyStandsOut}</p>
+                    </div>
+
+                    {/* Quick Stats Grid */}
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                      <div className="p-3 rounded-lg bg-gray-50 border">
+                        <div className="flex items-center gap-2 mb-1">
+                          {topOpportunity.operatingTime === "Day" ? <Sun className="w-4 h-4 text-amber-500" /> :
+                            topOpportunity.operatingTime === "Evening" ? <Moon className="w-4 h-4 text-indigo-500" /> :
+                              <Clock className="w-4 h-4 text-blue-500" />}
+                          <span className="text-xs text-gray-500">Best Time</span>
+                        </div>
+                        <span className="font-semibold text-gray-700">{topOpportunity.operatingTime}</span>
+                      </div>
+
+                      <div className="p-3 rounded-lg bg-gray-50 border">
+                        <div className="flex items-center gap-2 mb-1">
+                          <Rocket className="w-4 h-4 text-emerald-500" />
+                          <span className="text-xs text-gray-500">Setup Speed</span>
+                        </div>
+                        <span className="font-semibold text-gray-700">{topOpportunity.setupSpeed}</span>
+                      </div>
+
+                      <div className="p-3 rounded-lg bg-gray-50 border">
+                        <div className="flex items-center gap-2 mb-1">
+                          <Users className="w-4 h-4 text-rose-500" />
+                          <span className="text-xs text-gray-500">Competition</span>
+                        </div>
+                        <span className={`font-semibold ${topOpportunity.competitionLevel === "Low" ? "text-emerald-600" : topOpportunity.competitionLevel === "Medium" ? "text-amber-600" : "text-rose-600"}`}>
+                          {topOpportunity.competitionLevel}
+                        </span>
+                      </div>
+
+                      <div className="p-3 rounded-lg bg-gray-50 border">
+                        <div className="flex items-center gap-2 mb-1">
+                          <Building2 className="w-4 h-4 text-blue-500" />
+                          <span className="text-xs text-gray-500">Suggested Size</span>
+                        </div>
+                        <span className="font-semibold text-gray-700">{topOpportunity.suggestedSize}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Right side - Score and Action */}
+                  <div className="flex flex-col items-center gap-4 min-w-[160px]">
+                    <div className="text-center">
+                      <div className="text-5xl font-bold bg-linear-to-r from-emerald-600 to-teal-600 bg-clip-text text-transparent">
+                        {topOpportunity.score}%
+                      </div>
+                      <p className="text-sm text-gray-500 mt-1">Opportunity Score</p>
+                      <Badge className={`mt-2 ${topOpportunity.status === "Strong" ? "bg-emerald-100 text-emerald-700" : topOpportunity.status === "Good" ? "bg-blue-100 text-blue-700" : "bg-amber-100 text-amber-700"}`}>
+                        {topOpportunity.status} Opportunity
+                      </Badge>
+                    </div>
+
+                    <Button
+                      onClick={() => setShowTopOpportunityDetails(true)}
+                      className="w-full bg-linear-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white shadow-lg shadow-emerald-200 transition-all hover:scale-[1.02]"
+                    >
+                      <Target className="w-4 h-4 mr-2" />
+                      View More Info
+                    </Button>
+                  </div>
                 </div>
               </CardContent>
             </Card>
+          )}
+
+          {/* View More Info Modal */}
+          {showTopOpportunityDetails && topOpportunity && (
+            <>
+              <div
+                className="fixed inset-0 bg-black/50 backdrop-blur-sm z-40"
+                onClick={() => setShowTopOpportunityDetails(false)}
+              />
+              <div className="fixed z-50 bg-white p-8 rounded-2xl shadow-2xl w-[520px] max-h-[85vh] overflow-y-auto top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
+                {/* Modal Header */}
+                <div className="flex items-center gap-3 mb-6">
+                  <div className={`flex items-center justify-center w-12 h-12 rounded-xl text-white font-bold shadow-lg ${topOpportunity.status === "Strong" ? "bg-linear-to-br from-emerald-500 to-green-600" : topOpportunity.status === "Good" ? "bg-linear-to-br from-blue-500 to-indigo-600" : "bg-linear-to-br from-amber-500 to-orange-600"}`}>
+                    <Sparkles className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-bold text-gray-800">{topOpportunity.name}</h2>
+                    <div className="flex items-center gap-2 mt-1">
+                      <span className="text-2xl font-bold text-emerald-600">{topOpportunity.score}%</span>
+                      <Badge className={`${topOpportunity.status === "Strong" ? "bg-emerald-100 text-emerald-700" : topOpportunity.status === "Good" ? "bg-blue-100 text-blue-700" : "bg-amber-100 text-amber-700"}`}>
+                        {topOpportunity.status}
+                      </Badge>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Business Concept */}
+                <div className="mb-5">
+                  <h3 className="font-semibold text-gray-700 mb-2 flex items-center gap-2">
+                    <Store className="w-4 h-4 text-blue-500" />
+                    Business Concept
+                  </h3>
+                  <p className="text-gray-600 bg-gray-50 p-4 rounded-lg">{topOpportunity.description}</p>
+                </div>
+
+                {/* Recommended Operating Hours */}
+                <div className="mb-5">
+                  <h3 className="font-semibold text-gray-700 mb-2 flex items-center gap-2">
+                    <Clock className="w-4 h-4 text-amber-500" />
+                    Recommended Operating Hours
+                  </h3>
+                  <p className="text-gray-600 bg-amber-50 p-4 rounded-lg border border-amber-100">
+                    {topOpportunity.operatingHours}
+                  </p>
+                </div>
+
+                {/* Entry Strategy */}
+                <div className="mb-5">
+                  <h3 className="font-semibold text-gray-700 mb-2 flex items-center gap-2">
+                    <Rocket className="w-4 h-4 text-emerald-500" />
+                    Entry Strategy
+                  </h3>
+                  <p className="text-gray-600 bg-emerald-50 p-4 rounded-lg border border-emerald-100">
+                    {topOpportunity.entryStrategy}
+                  </p>
+                </div>
+
+                {/* Risk Summary */}
+                <div className="mb-5">
+                  <h3 className="font-semibold text-gray-700 mb-2 flex items-center gap-2">
+                    <AlertTriangle className="w-4 h-4 text-rose-500" />
+                    Risk Summary
+                  </h3>
+                  <p className="text-gray-600 bg-rose-50 p-4 rounded-lg border border-rose-100">
+                    {topOpportunity.riskSummary}
+                  </p>
+                </div>
+
+                {/* Why This Location Fits */}
+                <div className="mb-6">
+                  <h3 className="font-semibold text-gray-700 mb-2 flex items-center gap-2">
+                    <MapPin className="w-4 h-4 text-indigo-500" />
+                    Why This Location Fits
+                  </h3>
+                  <p className="text-gray-600 bg-indigo-50 p-4 rounded-lg border border-indigo-100">
+                    {topOpportunity.locationFit}
+                  </p>
+                </div>
+
+                {/* Close Button */}
+                <Button
+                  className="w-full h-12 bg-linear-to-r from-gray-800 to-gray-900 hover:from-gray-900 hover:to-black text-white rounded-xl"
+                  onClick={() => setShowTopOpportunityDetails(false)}
+                >
+                  Close
+                </Button>
+              </div>
+            </>
           )}
 
           {/* Recommended for You - Personalized Insights */}
