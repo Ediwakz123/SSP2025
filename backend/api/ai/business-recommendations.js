@@ -122,7 +122,6 @@ Use ONLY the provided data:
 Assign ONLY ONE of the following:
 - "Commercial Zone"
 - "Residential Zone"
-- "Mixed Zone"
 
 ❌ Do NOT generate new zone names
 
@@ -196,7 +195,7 @@ Return ONLY valid JSON:
     "marketSaturationPercent": number,
     "marketSaturationStatus": "Good Opportunity" | "Needs Strategic Planning" | "Highly Saturated",
     "areaReadiness": "Low" | "Medium" | "High",
-    "zoneType": "Commercial Zone" | "Residential Zone" | "Mixed Zone",
+    "zoneType": "Commercial Zone" | "Residential Zone",
     "summary": "string"
   },
   "ideaFit": {
@@ -209,7 +208,7 @@ Return ONLY valid JSON:
   },
   "bestCluster": {
     "clusterId": number,
-    "zoneType": "Commercial Zone" | "Residential Zone" | "Mixed Zone",
+    "zoneType": "Commercial Zone" | "Residential Zone",
     "reason": "string",
     "confidence": number,
     "confidenceLabel": "Not Ideal" | "Could Work" | "Good Choice" | "Best Choice"
@@ -233,7 +232,7 @@ Return ONLY valid JSON:
   "clusterSummary": [
     {
       "clusterId": number,
-      "zoneType": "Commercial Zone" | "Residential Zone" | "Mixed Zone",
+      "zoneType": "Commercial Zone" | "Residential Zone",
       "businessCount": number,
       "competitionLevel": "High" | "Medium" | "Low"
     }
@@ -341,7 +340,7 @@ Return ONLY valid JSON in this exact format:
   ],
   "clusterSummary": [
     { "clusterId": 1, "zoneType": "Commercial Zone", "businessCount": ${b50 + b100}, "competitionLevel": "High" },
-    { "clusterId": 2, "zoneType": "Mixed Zone", "businessCount": ${b100}, "competitionLevel": "Medium" },
+    { "clusterId": 2, "zoneType": "Commercial Zone", "businessCount": ${b100}, "competitionLevel": "Medium" },
     { "clusterId": 3, "zoneType": "Residential Zone", "businessCount": ${Math.max(0, b200 - b100)}, "competitionLevel": "Low" }
   ],
   "finalSuggestion": "This cluster looks like a good place for your business because people in the area need these kinds of services."
@@ -365,7 +364,7 @@ Return ONLY valid JSON in this exact format:
       // Fallback response if JSON parsing fails
       const competitionLevel = c50 >= 3 ? "High" : c100 >= 5 ? "Medium" : "Low";
       // Zone type based on business count
-      const zoneTypeName = b50 + b100 >= 10 ? "Commercial Zone" : b50 + b100 >= 3 ? "Mixed Zone" : "Residential Zone";
+      const zoneTypeName = b50 + b100 >= 5 ? "Commercial Zone" : "Residential Zone";
       const score1 = Math.max(60, 90 - c50 * 5);
       const score2 = Math.max(55, score1 - 7);
       const score3 = Math.max(50, score2 - 6);
@@ -487,7 +486,7 @@ Return ONLY valid JSON in this exact format:
         ],
         clusterSummary: [
           { clusterId: 1, zoneType: zoneTypeName, businessCount: b50, competitionLevel: c50 >= 3 ? "High" : c50 >= 1 ? "Medium" : "Low" },
-          { clusterId: 2, zoneType: "Mixed Zone", businessCount: Math.max(0, b100 - b50), competitionLevel: "Medium" },
+          { clusterId: 2, zoneType: "Commercial Zone", businessCount: Math.max(0, b100 - b50), competitionLevel: "Medium" },
           { clusterId: 3, zoneType: "Residential Zone", businessCount: Math.max(0, b200 - b100), competitionLevel: "Low" }
         ],
         finalSuggestion: c50 === 0
