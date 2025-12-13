@@ -34,18 +34,29 @@ export function DashboardLayout() {
       ? currentPath.replace("/user/", "").split("/")[0]
       : "dashboard";
 
-  const menuItems = [
-    { id: "dashboard", label: "Dashboard", icon: LayoutDashboard, path: "/user/dashboard" },
-    { id: "clustering", label: "Business Recommendation", icon: GitBranch, path: "/user/clustering" },
-    { id: "analytics", label: "Analytics", icon: BarChart3, path: "/user/analytics" },
-    { id: "map", label: "Map View", icon: Map, path: "/user/map" },
+  // Menu items organized by category
+  const menuCategories = [
     {
-      id: "opportunities",
-      label: "Business Opportunities",
-      icon: TrendingUp,
-      path: "/user/opportunities",
+      category: "Main",
+      items: [
+        { id: "dashboard", label: "Dashboard", icon: LayoutDashboard, path: "/user/dashboard" },
+      ]
     },
-    { id: "profile", label: "My Profile", icon: User, path: "/user/profile" },
+    {
+      category: "Tools",
+      items: [
+        { id: "clustering", label: "Business Recommendation", icon: GitBranch, path: "/user/clustering" },
+        { id: "opportunities", label: "Business Opportunities", icon: TrendingUp, path: "/user/opportunities" },
+        { id: "analytics", label: "Analytics", icon: BarChart3, path: "/user/analytics" },
+        { id: "map", label: "Map View", icon: Map, path: "/user/map" },
+      ]
+    },
+    {
+      category: "Account",
+      items: [
+        { id: "profile", label: "My Profile", icon: User, path: "/user/profile" },
+      ]
+    }
   ];
 
   const handleNavigate = (path: string) => {
@@ -75,7 +86,7 @@ export function DashboardLayout() {
         className={`
           fixed lg:relative z-50 h-full
           ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
-          ${isSidebarOpen ? "w-72" : "w-20"}
+          ${isSidebarOpen ? "w-64" : "w-20"}
           bg-white/95 backdrop-blur-xl border-r border-gray-100
           shadow-xl lg:shadow-lg
           transition-all duration-300 ease-out
@@ -124,34 +135,50 @@ export function DashboardLayout() {
         </div>
 
         {/* Navigation */}
-        <nav className="flex-1 p-4 space-y-1.5 overflow-y-auto">
-          {menuItems.map((item) => {
-            const Icon = item.icon;
-            const isActive = currentPage === item.id;
+        <nav className="flex-1 p-3 overflow-y-auto">
+          {menuCategories.map((category, catIdx) => (
+            <div key={category.category} className={catIdx > 0 ? "mt-4" : ""}>
+              {/* Category Header */}
+              {isSidebarOpen && (
+                <div className="px-3 py-2">
+                  <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">
+                    {category.category}
+                  </span>
+                </div>
+              )}
 
-            return (
-              <button
-                key={item.id}
-                onClick={() => handleNavigate(item.path)}
-                className={`
-                  w-full flex items-center gap-3 px-4 py-3 rounded-xl
-                  transition-all duration-200 group relative
-                  ${isActive
-                    ? "bg-[#1e3a5f] text-white shadow-lg shadow-slate-900/20"
-                    : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
-                  }
-                `}
-              >
-                <Icon className={`w-5 h-5 shrink-0 ${isActive ? '' : 'group-hover:scale-110'} transition-transform`} />
-                {isSidebarOpen && (
-                  <span className="font-medium truncate">{item.label}</span>
-                )}
-                {isActive && isSidebarOpen && (
-                  <div className="absolute right-3 w-2 h-2 rounded-full bg-white/50" />
-                )}
-              </button>
-            );
-          })}
+              {/* Menu Items */}
+              <div className="space-y-1">
+                {category.items.map((item) => {
+                  const Icon = item.icon;
+                  const isActive = currentPage === item.id;
+
+                  return (
+                    <button
+                      key={item.id}
+                      onClick={() => handleNavigate(item.path)}
+                      className={`
+                        w-full flex items-center gap-3 px-3 py-2.5 rounded-xl
+                        transition-all duration-200 group relative
+                        ${isActive
+                          ? "bg-[#1e3a5f] text-white shadow-lg shadow-slate-900/20"
+                          : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
+                        }
+                      `}
+                    >
+                      <Icon className={`w-5 h-5 shrink-0 ${isActive ? '' : 'group-hover:scale-110'} transition-transform`} />
+                      {isSidebarOpen && (
+                        <span className="text-sm font-medium text-left">{item.label}</span>
+                      )}
+                      {isActive && isSidebarOpen && (
+                        <div className="absolute right-3 w-2 h-2 rounded-full bg-white/50" />
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
         </nav>
 
         {/* Logout Button */}
