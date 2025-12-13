@@ -2270,13 +2270,15 @@ export function OpportunitiesPage() {
                 </div>
                 <div>
                   <p className="text-indigo-100 text-sm font-medium">Opportunity Summary</p>
-                  <h2 className="text-2xl font-bold tracking-tight">{overviewSummary.category}</h2>
+                  <h2 className="text-2xl font-bold tracking-tight">
+                    {hasClusteringResults ? overviewSummary.category : "—"}
+                  </h2>
                 </div>
               </div>
               <p className="text-indigo-100 text-sm leading-relaxed">
-                Based on our location analysis, this area shows {overviewSummary.status === "Strong" ? "excellent" : overviewSummary.status === "Good" ? "promising" : "moderate"} potential
-                for {businessType || "your business"} opportunities. The recommended zones have {overviewSummary.competitionLevel.toLowerCase()} competition
-                and are best suited for {overviewSummary.operatingTime === "Both" ? "all-day" : overviewSummary.operatingTime.toLowerCase()} operations.
+                {hasClusteringResults
+                  ? `Based on our location analysis, this area shows ${overviewSummary.status === "Strong" ? "excellent" : overviewSummary.status === "Good" ? "promising" : "moderate"} potential for ${overviewSummary.category} opportunities. The recommended zones have ${overviewSummary.competitionLevel.toLowerCase()} competition and are best suited for ${overviewSummary.operatingTime === "Both" ? "all-day" : overviewSummary.operatingTime.toLowerCase()} operations.`
+                  : "Run clustering to see opportunity insights."}
               </p>
             </div>
           </Card>
@@ -2293,11 +2295,13 @@ export function OpportunitiesPage() {
                   <span className="text-sm font-medium text-gray-600">Opportunity Score</span>
                 </div>
                 <div className="text-3xl font-bold bg-linear-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
-                  {overviewSummary.overallScore}%
+                  {hasClusteringResults ? `${overviewSummary.overallScore}%` : "0%"}
                 </div>
-                <Badge className={`mt-2 ${overviewSummary.status === "Strong" ? "bg-emerald-100 text-emerald-700" : overviewSummary.status === "Good" ? "bg-blue-100 text-blue-700" : "bg-amber-100 text-amber-700"}`}>
-                  {overviewSummary.status} Opportunity
-                </Badge>
+                {hasClusteringResults && (
+                  <Badge className={`mt-2 ${overviewSummary.status === "Strong" ? "bg-emerald-100 text-emerald-700" : overviewSummary.status === "Good" ? "bg-blue-100 text-blue-700" : "bg-amber-100 text-amber-700"}`}>
+                    {overviewSummary.status} Opportunity
+                  </Badge>
+                )}
               </CardContent>
             </Card>
 
@@ -2306,18 +2310,22 @@ export function OpportunitiesPage() {
               <CardContent className="p-5">
                 <div className="flex items-center gap-3 mb-3">
                   <div className="p-2 bg-linear-to-br from-amber-500 to-orange-600 rounded-lg text-white">
-                    {overviewSummary.operatingTime === "Day" ? <Sun className="w-5 h-5" /> :
-                      overviewSummary.operatingTime === "Evening" ? <Moon className="w-5 h-5" /> :
+                    {hasClusteringResults && overviewSummary.operatingTime === "Day" ? <Sun className="w-5 h-5" /> :
+                      hasClusteringResults && overviewSummary.operatingTime === "Evening" ? <Moon className="w-5 h-5" /> :
                         <Clock className="w-5 h-5" />}
                   </div>
                   <span className="text-sm font-medium text-gray-600">Best Operating Time</span>
                 </div>
-                <div className="text-2xl font-bold text-gray-800">{overviewSummary.operatingTime}</div>
-                <p className="text-xs text-gray-500 mt-1">
-                  {overviewSummary.operatingTime === "Both" ? "All-day operations recommended" :
-                    overviewSummary.operatingTime === "Day" ? "Morning to afternoon peak" :
-                      "Afternoon to night peak"}
-                </p>
+                <div className="text-2xl font-bold text-gray-800">
+                  {hasClusteringResults ? overviewSummary.operatingTime : "Run clustering to see results"}
+                </div>
+                {hasClusteringResults && (
+                  <p className="text-xs text-gray-500 mt-1">
+                    {overviewSummary.operatingTime === "Both" ? "All-day operations recommended" :
+                      overviewSummary.operatingTime === "Day" ? "Morning to afternoon peak" :
+                        "Afternoon to night peak"}
+                  </p>
+                )}
               </CardContent>
             </Card>
 
@@ -2330,12 +2338,16 @@ export function OpportunitiesPage() {
                   </div>
                   <span className="text-sm font-medium text-gray-600">Setup Speed</span>
                 </div>
-                <div className="text-2xl font-bold text-gray-800">{overviewSummary.setupSpeed}</div>
-                <p className="text-xs text-gray-500 mt-1">
-                  {overviewSummary.setupSpeed === "Fast" ? "Can open within weeks" :
-                    overviewSummary.setupSpeed === "Moderate" ? "1-2 months preparation" :
-                      "3+ months setup time"}
-                </p>
+                <div className="text-2xl font-bold text-gray-800">
+                  {hasClusteringResults ? overviewSummary.setupSpeed : "Run clustering to see results"}
+                </div>
+                {hasClusteringResults && (
+                  <p className="text-xs text-gray-500 mt-1">
+                    {overviewSummary.setupSpeed === "Fast" ? "Can open within weeks" :
+                      overviewSummary.setupSpeed === "Moderate" ? "1-2 months preparation" :
+                        "3+ months setup time"}
+                  </p>
+                )}
               </CardContent>
             </Card>
 
@@ -2348,10 +2360,14 @@ export function OpportunitiesPage() {
                   </div>
                   <span className="text-sm font-medium text-gray-600">Competition Level</span>
                 </div>
-                <div className="text-2xl font-bold text-gray-800">{overviewSummary.competitionLevel}</div>
-                <Badge className={`mt-1 ${overviewSummary.competitionLevel === "Low" ? "bg-emerald-100 text-emerald-700" : overviewSummary.competitionLevel === "Medium" ? "bg-amber-100 text-amber-700" : "bg-rose-100 text-rose-700"}`}>
-                  {overviewSummary.competitionLevel === "Low" ? "Easy entry" : overviewSummary.competitionLevel === "Medium" ? "Some rivals" : "Crowded market"}
-                </Badge>
+                <div className="text-2xl font-bold text-gray-800">
+                  {hasClusteringResults ? overviewSummary.competitionLevel : "Run clustering to see results"}
+                </div>
+                {hasClusteringResults && (
+                  <Badge className={`mt-1 ${overviewSummary.competitionLevel === "Low" ? "bg-emerald-100 text-emerald-700" : overviewSummary.competitionLevel === "Medium" ? "bg-amber-100 text-amber-700" : "bg-rose-100 text-rose-700"}`}>
+                    {overviewSummary.competitionLevel === "Low" ? "Easy entry" : overviewSummary.competitionLevel === "Medium" ? "Some rivals" : "Crowded market"}
+                  </Badge>
+                )}
               </CardContent>
             </Card>
 
@@ -2364,8 +2380,12 @@ export function OpportunitiesPage() {
                   </div>
                   <span className="text-sm font-medium text-gray-600">Opportunity Focus</span>
                 </div>
-                <div className="text-lg font-bold text-gray-800">{overviewSummary.opportunityFocus}</div>
-                <p className="text-xs text-gray-500 mt-1">Based on local conditions</p>
+                <div className="text-lg font-bold text-gray-800">
+                  {hasClusteringResults ? overviewSummary.opportunityFocus : "Run clustering to see results"}
+                </div>
+                {hasClusteringResults && (
+                  <p className="text-xs text-gray-500 mt-1">Based on local conditions</p>
+                )}
               </CardContent>
             </Card>
 
@@ -2378,10 +2398,14 @@ export function OpportunitiesPage() {
                   </div>
                   <span className="text-sm font-medium text-gray-600">Area Readiness</span>
                 </div>
-                <div className="text-2xl font-bold text-gray-800">{overviewSummary.areaReadiness}</div>
-                <Badge className={`mt-1 ${overviewSummary.areaReadiness === "High" ? "bg-emerald-100 text-emerald-700" : overviewSummary.areaReadiness === "Medium" ? "bg-amber-100 text-amber-700" : "bg-rose-100 text-rose-700"}`}>
-                  {overviewSummary.areaReadiness === "High" ? "Ready for business" : overviewSummary.areaReadiness === "Medium" ? "Some preparation needed" : "Requires development"}
-                </Badge>
+                <div className="text-2xl font-bold text-gray-800">
+                  {hasClusteringResults ? overviewSummary.areaReadiness : "Run clustering to see results"}
+                </div>
+                {hasClusteringResults && (
+                  <Badge className={`mt-1 ${overviewSummary.areaReadiness === "High" ? "bg-emerald-100 text-emerald-700" : overviewSummary.areaReadiness === "Medium" ? "bg-amber-100 text-amber-700" : "bg-rose-100 text-rose-700"}`}>
+                    {overviewSummary.areaReadiness === "High" ? "Ready for business" : overviewSummary.areaReadiness === "Medium" ? "Some preparation needed" : "Requires development"}
+                  </Badge>
+                )}
               </CardContent>
             </Card>
           </div>
