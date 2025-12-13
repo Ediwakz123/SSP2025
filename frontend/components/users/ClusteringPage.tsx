@@ -1987,7 +1987,7 @@ export function ClusteringPage() {
             <div>
               <div className="text-sm font-semibold text-gray-900">Automatic Clustering Mode</div>
               <div className="text-sm text-gray-500">
-                The system automatically determines the optimal number of clusters for maximum accuracy.
+                The system automatically groups nearby business locations to provide the most accurate and helpful recommendations.
               </div>
             </div>
           </div>

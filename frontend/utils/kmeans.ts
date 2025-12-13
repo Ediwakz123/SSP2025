@@ -659,11 +659,12 @@ export function findOptimalLocation(
   category: string
 ): ClusteringResult {
 
-  const normalized = category.trim().toLowerCase();
-  const filtered = businesses.filter(
-    (b) => b.general_category.trim().toLowerCase() === normalized
-  );
-  const points = filtered.length ? filtered : businesses;
+  // IMPORTANT: User-selected category is CONTEXT ONLY
+  // We use ALL businesses from ALL categories for clustering
+  const normalizedCategory = category.trim().toLowerCase();
+
+  // Use all businesses for clustering (not filtered by category)
+  const points = businesses;
 
   // Build street popularity map
   const streetStats: Record<string, number> = {};
@@ -770,9 +771,9 @@ export function findOptimalLocation(
 
   const centroid = best.centroid;
 
-  // Competitors for this category
+  // Competitors are ONLY businesses in the same category (for context)
   const competitors = businesses.filter(
-    (b) => b.general_category.trim().toLowerCase() === normalized
+    (b) => b.general_category.trim().toLowerCase() === normalizedCategory
   );
 
   // Generate multiple candidate locations
@@ -899,25 +900,71 @@ export function findOptimalLocation(
     businessesWithin1km > 0 ? competitorsWithin1km / businessesWithin1km : 0;
 
   // --------------------------------------
-  // NEW: DYNAMIC CONFIDENCE SCORING
-  // (Replaces old static 0.82/0.68/0.55 values)
+  // NEW: 5-FACTOR OPPORTUNITY SCORING
+  // Uses all businesses, category is context only
   // --------------------------------------
-  const confidence = computeDynamicConfidence(
-    recommended,
-    best.points,
-    businesses,
-    competitors,
-    streetStats,
-    majorRoads
+
+  // Factor 1: Total Business Count (weight: 0.30)
+  const allBusinessesNearby = businesses.filter(b =>
+    haversineDistance(recommended, { latitude: b.latitude, longitude: b.longitude }) <= 0.3
+  ).length;
+  const businessCountScore = Math.min(1, allBusinessesNearby / 30) * 0.30;
+
+  // Factor 2: Category Diversity (weight: 0.25)
+  const nearbyCategories = new Set(
+    businesses
+      .filter(b => haversineDistance(recommended, { latitude: b.latitude, longitude: b.longitude }) <= 0.3)
+      .map(b => b.general_category.trim().toLowerCase())
+  );
+  const diversityScore = Math.min(1, nearbyCategories.size / 6) * 0.25;
+
+  // Factor 3: Market Saturation Balance (weight: 0.20)
+  // Avoid single-category dominance
+  const categoryCount = new Map<string, number>();
+  businesses
+    .filter(b => haversineDistance(recommended, { latitude: b.latitude, longitude: b.longitude }) <= 0.3)
+    .forEach(b => {
+      const cat = b.general_category.trim().toLowerCase();
+      categoryCount.set(cat, (categoryCount.get(cat) || 0) + 1);
+    });
+  const maxCategoryShare = allBusinessesNearby > 0
+    ? Math.max(...Array.from(categoryCount.values())) / allBusinessesNearby
+    : 0;
+  const saturationBalance = (1 - maxCategoryShare) * 0.20;
+
+  // Factor 4: Zone Compatibility (weight: 0.15)
+  const zoneType = inferredZoneType.toLowerCase();
+  let zoneCompatibility = 0.05;
+  if (zoneType.includes('commercial')) zoneCompatibility = 0.15;
+  else if (zoneType.includes('mixed')) zoneCompatibility = 0.10;
+  else if (zoneType.includes('residential')) zoneCompatibility = 0.05;
+
+  // Factor 5: Category Context Relevance (weight: 0.10)
+  // Small bonus if selected category has room to grow
+  const categoryContextScore = competitorsWithin500m <= 2 ? 0.10 :
+    competitorsWithin500m <= 5 ? 0.05 : 0.02;
+
+  // Final Opportunity Score (0-100)
+  const opportunityScore = Math.round(
+    (businessCountScore + diversityScore + saturationBalance + zoneCompatibility + categoryContextScore) * 100
   );
 
-  // Generate opportunity message based on confidence
-  const opportunity =
-    confidence >= 0.75
-      ? "EXCELLENT OPPORTUNITY — High foot-traffic indicators and healthy market space."
-      : confidence >= 0.55
-        ? "GOOD OPPORTUNITY — Balanced customer reach with moderate competition."
-        : "CAUTION — Competition density is high relative to surroundings.";
+  // Confidence = Final Score
+  const confidence = opportunityScore / 100;
+
+  // Generate opportunity label based on new scoring
+  let opportunityLabel: string;
+  if (opportunityScore >= 85) {
+    opportunityLabel = "Highly Recommended";
+  } else if (opportunityScore >= 70) {
+    opportunityLabel = "Good Choice";
+  } else if (opportunityScore >= 55) {
+    opportunityLabel = "Fair Option";
+  } else {
+    opportunityLabel = "Not Recommended";
+  }
+
+  const opportunity = `${opportunityLabel} — Based on business density, category diversity, and zone compatibility.`;
 
   return {
     clusters,

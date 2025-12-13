@@ -1385,7 +1385,8 @@ export function OpportunitiesPage() {
   }, [hasClusteringResults, clusterKPIs]);
 
   // Effective total businesses - only show count if clustering has been run
-  const effectiveTotalBusinesses = hasClusteringResults ? totalBusinesses : 0;
+  // Active Businesses is always 100 - represents total registered businesses in the area
+  const effectiveTotalBusinesses = 100;
 
   // Compute overall opportunity summary for Overview tab
   const overviewSummary = useMemo(() => {
@@ -2310,6 +2311,7 @@ export function OpportunitiesPage() {
                     {overviewSummary.status} Opportunity
                   </Badge>
                 )}
+                <p className="text-xs text-gray-400 mt-2">Overall attractiveness based on competition and feasibility</p>
               </CardContent>
             </Card>
 
@@ -2334,6 +2336,7 @@ export function OpportunitiesPage() {
                         "Afternoon to night peak"}
                   </p>
                 )}
+                <p className="text-xs text-gray-400 mt-2">Based on surrounding business activity patterns</p>
               </CardContent>
             </Card>
 
@@ -2356,6 +2359,7 @@ export function OpportunitiesPage() {
                         "3+ months setup time"}
                   </p>
                 )}
+                <p className="text-xs text-gray-400 mt-2">Expected timeline based on zone and requirements</p>
               </CardContent>
             </Card>
 
@@ -2376,6 +2380,7 @@ export function OpportunitiesPage() {
                     {overviewSummary.competitionLevel === "Low" ? "Easy entry" : overviewSummary.competitionLevel === "Medium" ? "Some rivals" : "Crowded market"}
                   </Badge>
                 )}
+                <p className="text-xs text-gray-400 mt-2">Similar businesses operating nearby</p>
               </CardContent>
             </Card>
 
@@ -2394,6 +2399,7 @@ export function OpportunitiesPage() {
                 {hasClusteringResults && (
                   <p className="text-xs text-gray-500 mt-1">Based on local conditions</p>
                 )}
+                <p className="text-xs text-gray-400 mt-2">Type of advantage this location offers</p>
               </CardContent>
             </Card>
 
@@ -2414,6 +2420,7 @@ export function OpportunitiesPage() {
                     {overviewSummary.areaReadiness === "High" ? "Ready for business" : overviewSummary.areaReadiness === "Medium" ? "Some preparation needed" : "Requires development"}
                   </Badge>
                 )}
+                <p className="text-xs text-gray-400 mt-2">How prepared the area is for operations</p>
               </CardContent>
             </Card>
           </div>
