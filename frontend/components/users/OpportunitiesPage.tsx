@@ -1157,6 +1157,7 @@ export function OpportunitiesPage() {
   const [openExportModal, setOpenExportModal] = useState(false);
   const [_showExportModal, setShowExportModal] = useState(false);
   const [showTopOpportunityDetails, setShowTopOpportunityDetails] = useState(false);
+  const [expandedOpportunities, setExpandedOpportunities] = useState<Set<string>>(new Set());
 
   // Compare opportunities state
   const [selectedForCompare, setSelectedForCompare] = useState<BusinessOpportunity[]>([]);
@@ -1173,6 +1174,19 @@ export function OpportunitiesPage() {
         return prev; // Max 3 selections
       }
       return [...prev, op];
+    });
+  };
+
+  // Toggle expanded details for opportunity card
+  const toggleOpportunityDetails = (key: string) => {
+    setExpandedOpportunities(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(key)) {
+        newSet.delete(key);
+      } else {
+        newSet.add(key);
+      }
+      return newSet;
     });
   };
 
@@ -3234,6 +3248,66 @@ export function OpportunitiesPage() {
                                 </Badge>
                               </div>
                             </div>
+
+                            {/* View More Details Button */}
+                            <button
+                              onClick={() => toggleOpportunityDetails(`${category}-${index}`)}
+                              className="flex items-center gap-1.5 text-sm text-indigo-600 hover:text-indigo-800 font-medium mt-4 transition-colors"
+                            >
+                              <ChevronDown className={`w-4 h-4 transition-transform ${expandedOpportunities.has(`${category}-${index}`) ? "rotate-180" : ""}`} />
+                              {expandedOpportunities.has(`${category}-${index}`) ? "Hide Details" : "View More Details"}
+                            </button>
+
+                            {/* Expanded Details Section */}
+                            {expandedOpportunities.has(`${category}-${index}`) && (
+                              <div className="mt-4 pt-4 border-t border-gray-100 space-y-4 animate-in slide-in-from-top-2 duration-200">
+                                {/* Why This Location */}
+                                <div className="p-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl">
+                                  <h5 className="font-semibold text-gray-800 mb-2 flex items-center gap-2">
+                                    <MapPin className="w-4 h-4 text-blue-600" />
+                                    Why This Location
+                                  </h5>
+                                  <p className="text-sm text-gray-600">
+                                    {op.competitionLevel === "Low"
+                                      ? "This location has minimal direct competitors, giving you a first-mover advantage to capture market share quickly."
+                                      : op.competitionLevel === "Medium"
+                                        ? "Moderate competition exists here, but there's room to differentiate and attract customers with unique offerings."
+                                        : "High competition area with established businesses. Success requires strong differentiation and competitive pricing."}
+                                  </p>
+                                </div>
+
+                                {/* Time Feasibility */}
+                                <div className="grid grid-cols-2 gap-3">
+                                  <div className="p-3 bg-gray-50 rounded-lg">
+                                    <p className="text-xs text-gray-500 mb-1">Setup Timeline</p>
+                                    <p className="font-semibold text-gray-800">
+                                      {op.setupSpeed === "Fast" ? "2-4 weeks" : op.setupSpeed === "Moderate" ? "1-2 months" : "3-6 months"}
+                                    </p>
+                                  </div>
+                                  <div className="p-3 bg-gray-50 rounded-lg">
+                                    <p className="text-xs text-gray-500 mb-1">Expected Stability</p>
+                                    <p className="font-semibold text-gray-800">
+                                      {op.competitionLevel === "Low" ? "1-2 months" : op.competitionLevel === "Medium" ? "3-6 months" : "6-12 months"}
+                                    </p>
+                                  </div>
+                                </div>
+
+                                {/* Recommendation */}
+                                <div className="p-4 bg-gradient-to-r from-emerald-50 to-green-50 rounded-xl">
+                                  <h5 className="font-semibold text-gray-800 mb-2 flex items-center gap-2">
+                                    <Lightbulb className="w-4 h-4 text-emerald-600" />
+                                    Recommendation
+                                  </h5>
+                                  <p className="text-sm text-gray-600">
+                                    {op.score >= 80
+                                      ? "Excellent opportunity! This location has strong potential for your business type. Consider prioritizing this area for maximum ROI."
+                                      : op.score >= 60
+                                        ? "Good opportunity with moderate potential. Focus on differentiating your offering to stand out from nearby competitors."
+                                        : "Proceed with caution. Ensure you have a clear competitive advantage before investing in this location."}
+                                  </p>
+                                </div>
+                              </div>
+                            )}
                           </div>
                         );
                       })}
