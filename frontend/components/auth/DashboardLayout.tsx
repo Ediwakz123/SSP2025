@@ -84,11 +84,11 @@ export function DashboardLayout() {
       {/* Sidebar */}
       <aside
         className={`
-          fixed lg:relative z-50 h-full
+          fixed lg:sticky lg:top-0 z-50 h-screen
           ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
           ${isSidebarOpen ? "w-64" : "w-20"}
-          bg-white/95 backdrop-blur-xl border-r border-gray-100
-          shadow-xl lg:shadow-lg
+          bg-white border-r border-gray-100
+          shadow-xl lg:shadow-md
           transition-all duration-300 ease-out
           flex flex-col
         `}
@@ -182,7 +182,7 @@ export function DashboardLayout() {
         </nav>
 
         {/* Logout Button */}
-        <div className="p-4 border-t border-gray-100">
+        <div className="mt-auto p-4 border-t border-gray-100">
           <Button
             onClick={handleLogout}
             variant="destructive"
