@@ -1352,6 +1352,32 @@ export function OpportunitiesPage() {
   const kmeansStore = useKMeansStore();
   const aiRecommendations = kmeansStore.aiRecommendations;
 
+  // Check if clustering has been run in the current session
+  const hasClusteringResults = kmeansStore.hasResults;
+
+  // Effective KPIs - show zeros if clustering hasn't been run
+  const effectiveKPIs = useMemo(() => {
+    if (!hasClusteringResults) {
+      return {
+        totalOpportunities: 0,
+        numClusters: 0,
+        avgBusinessDensity: 0,
+        avgCompetition: 0,
+        commercialZoneCount: 0,
+        residentialZoneCount: 0,
+        clusterStats: [],
+        categoryDistribution: [],
+        bestCluster: null,
+        lowestCompetitionCluster: null,
+        highestDensityCluster: null,
+      };
+    }
+    return clusterKPIs;
+  }, [hasClusteringResults, clusterKPIs]);
+
+  // Effective total businesses - only show count if clustering has been run
+  const effectiveTotalBusinesses = hasClusteringResults ? totalBusinesses : 0;
+
   // Compute overall opportunity summary for Overview tab
   const overviewSummary = useMemo(() => {
     const avgScore = opportunities.length > 0
@@ -2045,11 +2071,11 @@ export function OpportunitiesPage() {
           <div className="flex flex-wrap gap-3 mt-6">
             <div className="flex items-center gap-2 px-4 py-2 bg-white/10 rounded-lg backdrop-blur-sm">
               <Store className="w-4 h-4" />
-              <span className="text-sm font-medium">{clusterKPIs.totalOpportunities} Opportunities</span>
+              <span className="text-sm font-medium">{effectiveKPIs.totalOpportunities} Opportunities</span>
             </div>
             <div className="flex items-center gap-2 px-4 py-2 bg-white/10 rounded-lg backdrop-blur-sm" title="Total businesses recorded in the system">
               <MapPin className="w-4 h-4" />
-              <span className="text-sm font-medium">{totalBusinesses} Active Businesses</span>
+              <span className="text-sm font-medium">{effectiveTotalBusinesses} Active Businesses</span>
             </div>
 
             {/* Action Buttons */}
@@ -2082,8 +2108,8 @@ export function OpportunitiesPage() {
             </div>
           </CardHeader>
           <CardContent>
-            <div className="text-4xl font-bold bg-linear-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">{clusterKPIs.totalOpportunities}</div>
-            <p className="text-xs text-gray-500 mt-1">Identified locations</p>
+            <div className="text-4xl font-bold bg-linear-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">{effectiveKPIs.totalOpportunities}</div>
+            <p className="text-xs text-gray-500 mt-1">{hasClusteringResults ? "Identified locations" : "Run clustering to see results"}</p>
           </CardContent>
         </Card>
 
@@ -2097,7 +2123,7 @@ export function OpportunitiesPage() {
             </div>
           </CardHeader>
           <CardContent>
-            <div className="text-4xl font-bold bg-linear-to-r from-emerald-600 to-green-600 bg-clip-text text-transparent">{clusterKPIs.avgBusinessDensity}</div>
+            <div className="text-4xl font-bold bg-linear-to-r from-emerald-600 to-green-600 bg-clip-text text-transparent">{effectiveKPIs.avgBusinessDensity}</div>
             <p className="text-xs text-gray-500 mt-1">Nearby businesses</p>
           </CardContent>
         </Card>
@@ -2112,7 +2138,7 @@ export function OpportunitiesPage() {
             </div>
           </CardHeader>
           <CardContent>
-            <div className="text-4xl font-bold bg-linear-to-r from-amber-600 to-orange-600 bg-clip-text text-transparent">{clusterKPIs.avgCompetition}</div>
+            <div className="text-4xl font-bold bg-linear-to-r from-amber-600 to-orange-600 bg-clip-text text-transparent">{effectiveKPIs.avgCompetition}</div>
             <p className="text-xs text-gray-500 mt-1">Competitors nearby</p>
           </CardContent>
         </Card>
@@ -2128,9 +2154,9 @@ export function OpportunitiesPage() {
           </CardHeader>
           <CardContent>
             <div className="text-4xl font-bold bg-linear-to-r from-purple-600 to-violet-600 bg-clip-text text-transparent">
-              {clusterKPIs.commercialZoneCount}
+              {effectiveKPIs.commercialZoneCount}
             </div>
-            <p className="text-xs text-gray-500 mt-1">of {clusterKPIs.totalOpportunities} cluster locations</p>
+            <p className="text-xs text-gray-500 mt-1">of {effectiveKPIs.totalOpportunities} cluster locations</p>
           </CardContent>
         </Card>
       </div>
@@ -3363,8 +3389,8 @@ export function OpportunitiesPage() {
               <div className="grid md:grid-cols-2 gap-4">
                 {/* Morning Gap */}
                 <div className={`p-5 rounded-xl border-2 bg-white hover:shadow-md transition-all ${timeBasedGapsData.morning.status === "Gap Identified"
-                    ? "border-rose-200"
-                    : "border-emerald-200"
+                  ? "border-rose-200"
+                  : "border-emerald-200"
                   }`}>
                   <div className="flex items-center gap-3 mb-3">
                     <div className="p-2 bg-amber-100 rounded-lg">
@@ -3373,8 +3399,8 @@ export function OpportunitiesPage() {
                     <div className="flex-1">
                       <h4 className="font-semibold text-gray-800">Morning Hours ({timeBasedGapsData.morning.period})</h4>
                       <Badge className={`mt-1 ${timeBasedGapsData.morning.status === "Gap Identified"
-                          ? "bg-rose-100 text-rose-700"
-                          : "bg-emerald-100 text-emerald-700"
+                        ? "bg-rose-100 text-rose-700"
+                        : "bg-emerald-100 text-emerald-700"
                         }`}>
                         {timeBasedGapsData.morning.status}
                       </Badge>
@@ -3408,8 +3434,8 @@ export function OpportunitiesPage() {
 
                 {/* Evening Gap */}
                 <div className={`p-5 rounded-xl border-2 bg-white hover:shadow-md transition-all ${timeBasedGapsData.evening.status === "Gap Identified"
-                    ? "border-rose-200"
-                    : "border-emerald-200"
+                  ? "border-rose-200"
+                  : "border-emerald-200"
                   }`}>
                   <div className="flex items-center gap-3 mb-3">
                     <div className="p-2 bg-indigo-100 rounded-lg">
@@ -3418,8 +3444,8 @@ export function OpportunitiesPage() {
                     <div className="flex-1">
                       <h4 className="font-semibold text-gray-800">Evening Hours ({timeBasedGapsData.evening.period})</h4>
                       <Badge className={`mt-1 ${timeBasedGapsData.evening.status === "Gap Identified"
-                          ? "bg-rose-100 text-rose-700"
-                          : "bg-emerald-100 text-emerald-700"
+                        ? "bg-rose-100 text-rose-700"
+                        : "bg-emerald-100 text-emerald-700"
                         }`}>
                         {timeBasedGapsData.evening.status}
                       </Badge>
@@ -3454,8 +3480,8 @@ export function OpportunitiesPage() {
 
               {/* Overall Assessment */}
               <div className={`mt-4 p-4 rounded-xl border ${timeBasedGapsData.overallAssessment.gapsFound
-                  ? "bg-amber-50 border-amber-200"
-                  : "bg-emerald-50 border-emerald-200"
+                ? "bg-amber-50 border-amber-200"
+                : "bg-emerald-50 border-emerald-200"
                 }`}>
                 <div className="flex items-start gap-3">
                   {timeBasedGapsData.overallAssessment.gapsFound ? (
