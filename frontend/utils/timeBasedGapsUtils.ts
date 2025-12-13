@@ -72,8 +72,8 @@ const COVERAGE_THRESHOLDS = {
  * Generates time-based gap insights from clustering data
  */
 export function generateTimeBasedGaps(data: ClusterTimeData): TimeBasedGapsResult {
-    const morning = generateTimePeriodGap("morning", data.morning, "6AM – 11AM");
-    const evening = generateTimePeriodGap("evening", data.evening, "6PM – 10PM");
+    const morning = generateTimePeriodGap("morning", data.morning, "8AM – 5PM");
+    const evening = generateTimePeriodGap("evening", data.evening, "6PM – 12AM");
 
     const gapsFound = morning.status === "Gap Identified" || evening.status === "Gap Identified";
 
@@ -175,37 +175,37 @@ export function getDefaultTimeBasedGaps(location: string = "Selected Area"): Tim
     return {
         location,
         morning: {
-            period: "6AM – 11AM",
+            period: "8AM – 5PM",
             status: "No Data Available",
             statusColor: "gray",
-            summary: "Clustering data is required to analyze business coverage during this time period.",
+            summary: "Run a business recommendation to analyze coverage during working hours.",
             details: {
                 businessCount: 0,
                 mainCategories: [],
                 averageDemandScore: 0,
                 typicalHours: "—",
             },
-            insight: "Run clustering to identify time-based opportunities.",
-            reason: "No clustering data available yet.",
+            insight: "Run business recommendation to identify time-based opportunities.",
+            reason: "No recommendation data available yet.",
         },
         evening: {
-            period: "6PM – 10PM",
+            period: "6PM – 12AM",
             status: "No Data Available",
             statusColor: "gray",
-            summary: "Clustering data is required to analyze business coverage during this time period.",
+            summary: "Run a business recommendation to analyze coverage during evening hours.",
             details: {
                 businessCount: 0,
                 mainCategories: [],
                 averageDemandScore: 0,
                 typicalHours: "—",
             },
-            insight: "Run clustering to identify time-based opportunities.",
-            reason: "No clustering data available yet.",
+            insight: "Run business recommendation to identify time-based opportunities.",
+            reason: "No recommendation data available yet.",
         },
         overallAssessment: {
             gapsFound: false,
-            summary: "Time-based gap analysis requires clustering data.",
-            recommendation: "Run clustering to identify time-based opportunities.",
+            summary: "Time-based gap analysis requires business recommendation data.",
+            recommendation: "Run business recommendation to identify time-based opportunities.",
         },
     };
 }

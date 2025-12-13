@@ -1822,8 +1822,8 @@ export function OpportunitiesPage() {
 
   // Compute time-based gaps data for Market Gaps tab
   const timeBasedGapsData = useMemo((): TimeBasedGapsResult => {
-    // If no opportunities, return default data
-    if (clusterKPIs.totalOpportunities === 0) {
+    // If no recommendation data (opportunities), return default data
+    if (clusterKPIs.totalOpportunities === 0 || categoryStats.length === 0) {
       return getDefaultTimeBasedGaps(businessType || "Selected Area");
     }
 
@@ -1871,13 +1871,13 @@ export function OpportunitiesPage() {
         businessCount: morningCount,
         mainCategories: morningCats.length > 0 ? morningCats : ["General Retail"],
         demandScore: Math.min(100, baseDemandScore + 5),
-        operatingHours: "6AM – 9PM",
+        operatingHours: "8AM – 5PM",
       },
       evening: {
         businessCount: eveningCount,
         mainCategories: eveningCats.length > 0 ? eveningCats : ["Food", "Services"],
         demandScore: baseDemandScore,
-        operatingHours: "10AM – 10PM",
+        operatingHours: "6PM – 12AM",
       },
     });
   }, [clusterKPIs, categoryStats, businessType]);
