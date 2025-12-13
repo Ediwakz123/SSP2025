@@ -91,6 +91,19 @@ interface RecommendedLocation {
     longitude: number;
 }
 
+// Version snapshot for restore functionality
+export interface ClusteringVersion {
+    id: string;
+    version: number;
+    businessIdea: string;
+    category: string;
+    zoneType: string;
+    opportunityScore: number;
+    confidence: number;
+    opportunityCount: number;
+    createdAt: string;
+}
+
 // Full K-Means session state
 interface KMeansState {
     // User inputs
@@ -116,6 +129,10 @@ interface KMeansState {
 
     // Timestamp to know when analysis was run
     analysisTimestamp: number | null;
+
+    // Version tracking
+    activeVersionId: string | null;
+    versionNumber: number;
 }
 
 interface KMeansActions {
@@ -137,6 +154,29 @@ interface KMeansActions {
 
     // AI recommendations setter
     setAIRecommendations: (recommendations: AIBusinessRecommendations) => void;
+
+    // Version management
+    setActiveVersion: (id: string, versionNumber: number) => void;
+    incrementVersion: () => number;
+
+    // Restore from history (load saved data without re-running clustering)
+    restoreFromHistory: (data: {
+        id: string;
+        versionNumber: number;
+        businessIdea: string;
+        category: string;
+        zoneType: string;
+        analysis: ClusteringAnalysis;
+        locations: Array<{
+            street: string;
+            general_category: string;
+            business_density_200m: number;
+            competitor_density_200m: number;
+            zone_type: string;
+            cluster: number;
+            score: number;
+        }>;
+    }) => void;
 
     // Reset all state (for logout)
     reset: () => void;
@@ -160,10 +200,12 @@ const initialState: KMeansState = {
     competitorDensity: null,
     aiRecommendations: null,
     analysisTimestamp: null,
+    activeVersionId: null,
+    versionNumber: 0,
 };
 
 // Create in-memory Zustand store (NO persistence)
-export const useKMeansStore = create<KMeansStore>((set) => ({
+export const useKMeansStore = create<KMeansStore>((set, get) => ({
     ...initialState,
 
     // When business idea changes, reset all results to ensure fresh data
@@ -181,6 +223,7 @@ export const useKMeansStore = create<KMeansStore>((set) => ({
         competitorDensity: null,
         aiRecommendations: null,
         analysisTimestamp: null,
+        activeVersionId: null,
     }),
 
     setDetectedCategory: (value, reason = '') => set({
@@ -208,6 +251,36 @@ export const useKMeansStore = create<KMeansStore>((set) => ({
         aiRecommendations: recommendations,
     }),
 
+    // Set active version ID
+    setActiveVersion: (id, versionNumber) => set({
+        activeVersionId: id,
+        versionNumber,
+    }),
+
+    // Increment and return new version number
+    incrementVersion: () => {
+        const newVersion = get().versionNumber + 1;
+        set({ versionNumber: newVersion });
+        return newVersion;
+    },
+
+    // Restore dashboard from history without re-running clustering
+    restoreFromHistory: (data) => set({
+        hasResults: true,
+        activeVersionId: data.id,
+        versionNumber: data.versionNumber,
+        businessIdea: data.businessIdea,
+        detectedCategory: data.category,
+        zoneType: data.zoneType,
+        analysis: data.analysis,
+        analysisTimestamp: Date.now(),
+        // Note: Full cluster data isn't stored in history, so we mark as restored
+        clusters: [],
+        nearbyBusinesses: [],
+        competitorAnalysis: null,
+        aiRecommendations: null,
+    }),
+
     reset: () => set(initialState),
 }));
 
@@ -228,4 +301,6 @@ export const useKMeansResults = () => useKMeansStore((state) => ({
     nearbyBusinesses: state.nearbyBusinesses,
     aiRecommendations: state.aiRecommendations,
     analysisTimestamp: state.analysisTimestamp,
+    activeVersionId: state.activeVersionId,
+    versionNumber: state.versionNumber,
 }));

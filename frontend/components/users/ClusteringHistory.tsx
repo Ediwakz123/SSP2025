@@ -4,16 +4,17 @@ import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import {
-    Clock,
     MapPin,
     TrendingUp,
     Calendar,
-    ChevronRight,
     History,
     Target,
     RefreshCw,
+    RotateCcw,
+    Check,
 } from "lucide-react";
 import { toast } from "sonner";
+import { useKMeansStore } from "../../lib/stores/kmeansStore";
 
 // ============================================================================
 // Types
@@ -69,10 +70,8 @@ function getCompetitionLevel(score: number): { label: string; color: string } {
 }
 
 function generateBusinessIdeaLabel(item: ClusteringHistoryItem): string {
-    // If business_idea exists, use it
     if (item.business_idea) return item.business_idea;
 
-    // Otherwise generate from category and zone
     const category = item.business_category || "Business";
     const zone = (item.zone_type || "").toLowerCase();
 
@@ -83,7 +82,6 @@ function generateBusinessIdeaLabel(item: ClusteringHistoryItem): string {
         timePrefix = "Morning";
     }
 
-    // Map categories to simpler business type names
     const categoryMap: Record<string, string> = {
         "Food & Beverages": "Cafe",
         "Restaurant": "Food Stall",
@@ -105,6 +103,11 @@ export function ClusteringHistory({ onSelectHistory, maxItems = 10 }: Clustering
     const [history, setHistory] = useState<ClusteringHistoryItem[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [restoringId, setRestoringId] = useState<string | null>(null);
+
+    // Get active version from store
+    const activeVersionId = useKMeansStore((state) => state.activeVersionId);
+    const restoreFromHistory = useKMeansStore((state) => state.restoreFromHistory);
 
     const loadHistory = async () => {
         setLoading(true);
@@ -135,15 +138,42 @@ export function ClusteringHistory({ onSelectHistory, maxItems = 10 }: Clustering
         loadHistory();
     }, [maxItems]);
 
-    // Group history by business idea
-    const groupedHistory = history.reduce((acc, item) => {
-        const idea = generateBusinessIdeaLabel(item);
-        if (!acc[idea]) {
-            acc[idea] = [];
+    // Handle restore action
+    const handleRestore = async (item: ClusteringHistoryItem, versionNumber: number, e: React.MouseEvent) => {
+        e.stopPropagation(); // Prevent card click
+
+        setRestoringId(item.id);
+
+        try {
+            // Restore from history using kmeansStore
+            restoreFromHistory({
+                id: item.id,
+                versionNumber,
+                businessIdea: item.business_idea || generateBusinessIdeaLabel(item),
+                category: item.business_category,
+                zoneType: item.zone_type,
+                analysis: {
+                    opportunity: item.opportunity,
+                    opportunity_score: item.opportunity_score,
+                    confidence: item.confidence,
+                    competitorCount: 0,
+                },
+                locations: item.locations || [],
+            });
+
+            toast.success(`Restored v${versionNumber}`, {
+                description: `${item.business_category} - ${item.locations?.length || 0} opportunities`,
+            });
+
+            // Call parent handler if provided
+            onSelectHistory?.(item);
+        } catch (err) {
+            console.error("Error restoring version:", err);
+            toast.error("Failed to restore version");
+        } finally {
+            setRestoringId(null);
         }
-        acc[idea].push(item);
-        return acc;
-    }, {} as Record<string, ClusteringHistoryItem[]>);
+    };
 
     if (loading) {
         return (
@@ -211,7 +241,7 @@ export function ClusteringHistory({ onSelectHistory, maxItems = 10 }: Clustering
                         </div>
                         <div>
                             <CardTitle className="text-xl">Clustering History</CardTitle>
-                            <p className="text-sm text-gray-500">{history.length} past analyses</p>
+                            <p className="text-sm text-gray-500">{history.length} versions saved</p>
                         </div>
                     </div>
                     <Button variant="ghost" size="sm" onClick={loadHistory}>
@@ -220,64 +250,89 @@ export function ClusteringHistory({ onSelectHistory, maxItems = 10 }: Clustering
                 </div>
             </CardHeader>
             <CardContent className="p-6">
-                <div className="space-y-6">
-                    {Object.entries(groupedHistory).map(([idea, items]) => (
-                        <div key={idea} className="space-y-3">
-                            {/* Business Idea Group Header */}
-                            <div className="flex items-center gap-2">
-                                <Target className="w-4 h-4 text-indigo-500" />
-                                <span className="font-semibold text-gray-800">{idea}</span>
-                                <Badge variant="outline" className="text-xs">
-                                    {items.length} {items.length === 1 ? "run" : "runs"}
-                                </Badge>
-                            </div>
+                <div className="space-y-3">
+                    {history.map((item, index) => {
+                        const versionNumber = history.length - index;
+                        const competition = getCompetitionLevel(item.opportunity_score);
+                        const isActive = activeVersionId === item.id;
+                        const isRestoring = restoringId === item.id;
+                        const businessIdea = generateBusinessIdeaLabel(item);
 
-                            {/* History Items */}
-                            <div className="space-y-2 pl-6">
-                                {items.map((item) => {
-                                    const competition = getCompetitionLevel(item.opportunity_score);
-
-                                    return (
-                                        <div
-                                            key={item.id}
-                                            className="p-4 rounded-xl border bg-white hover:border-indigo-200 hover:shadow-md transition-all cursor-pointer group"
-                                            onClick={() => onSelectHistory?.(item)}
-                                        >
-                                            <div className="flex items-center justify-between">
-                                                <div className="flex-1">
-                                                    <div className="flex items-center gap-2 mb-2">
-                                                        <Badge className="bg-indigo-100 text-indigo-700 border-0">
-                                                            {item.business_category}
-                                                        </Badge>
-                                                        <Badge className={`border-0 ${competition.color}`}>
-                                                            {competition.label} Competition
-                                                        </Badge>
-                                                    </div>
-
-                                                    <div className="flex items-center gap-4 text-sm text-gray-500">
-                                                        <span className="flex items-center gap-1">
-                                                            <MapPin className="w-3 h-3" />
-                                                            {item.zone_type}
-                                                        </span>
-                                                        <span className="flex items-center gap-1">
-                                                            <TrendingUp className="w-3 h-3" />
-                                                            {item.locations?.length || 0} opportunities
-                                                        </span>
-                                                        <span className="flex items-center gap-1">
-                                                            <Calendar className="w-3 h-3" />
-                                                            {formatDate(item.created_at)}
-                                                        </span>
-                                                    </div>
-                                                </div>
-
-                                                <ChevronRight className="w-5 h-5 text-gray-400 group-hover:text-indigo-500 transition-colors" />
-                                            </div>
+                        return (
+                            <div
+                                key={item.id}
+                                className={`p-4 rounded-xl border transition-all ${isActive
+                                        ? "border-indigo-400 bg-indigo-50/50 shadow-md"
+                                        : "bg-white hover:border-indigo-200 hover:shadow-md"
+                                    }`}
+                            >
+                                <div className="flex items-center justify-between">
+                                    <div className="flex-1">
+                                        {/* Version and Business Idea */}
+                                        <div className="flex items-center gap-2 mb-2">
+                                            <Badge className={`font-bold ${isActive ? "bg-indigo-500 text-white" : "bg-gray-200 text-gray-700"}`}>
+                                                v{versionNumber}
+                                            </Badge>
+                                            <span className="font-semibold text-gray-800 flex items-center gap-1">
+                                                <Target className="w-3 h-3 text-indigo-500" />
+                                                {businessIdea}
+                                            </span>
+                                            {isActive && (
+                                                <Badge className="bg-emerald-100 text-emerald-700 border-0 text-xs">
+                                                    <Check className="w-3 h-3 mr-1" />
+                                                    Active
+                                                </Badge>
+                                            )}
                                         </div>
-                                    );
-                                })}
+
+                                        {/* Category and Competition */}
+                                        <div className="flex items-center gap-2 mb-2">
+                                            <Badge className="bg-indigo-100 text-indigo-700 border-0">
+                                                {item.business_category}
+                                            </Badge>
+                                            <Badge className={`border-0 ${competition.color}`}>
+                                                {competition.label} Competition
+                                            </Badge>
+                                        </div>
+
+                                        {/* Details */}
+                                        <div className="flex items-center gap-4 text-sm text-gray-500">
+                                            <span className="flex items-center gap-1">
+                                                <MapPin className="w-3 h-3" />
+                                                {item.zone_type}
+                                            </span>
+                                            <span className="flex items-center gap-1">
+                                                <TrendingUp className="w-3 h-3" />
+                                                {item.locations?.length || 0} opportunities
+                                            </span>
+                                            <span className="flex items-center gap-1">
+                                                <Calendar className="w-3 h-3" />
+                                                {formatDate(item.created_at)}
+                                            </span>
+                                        </div>
+                                    </div>
+
+                                    {/* Restore Button */}
+                                    {!isActive && (
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            className="ml-4 hover:bg-indigo-50 hover:border-indigo-300 hover:text-indigo-700"
+                                            onClick={(e) => handleRestore(item, versionNumber, e)}
+                                            disabled={isRestoring}
+                                        >
+                                            {isRestoring ? (
+                                                <RefreshCw className="w-4 h-4 mr-1 animate-spin" />
+                                            ) : (
+                                                <RotateCcw className="w-4 h-4 mr-1" />
+                                            )}
+                                            Restore
+                                        </Button>
+                                    )}
+                                </div>
                             </div>
-                        </div>
-                    ))}
+                        );
+                    })}
                 </div>
             </CardContent>
         </Card>
@@ -285,3 +340,4 @@ export function ClusteringHistory({ onSelectHistory, maxItems = 10 }: Clustering
 }
 
 export default ClusteringHistory;
+
