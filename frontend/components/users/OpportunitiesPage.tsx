@@ -50,6 +50,11 @@ import {
 import { InsightsPanel, generateInsightsPanelData } from "./InsightsPanel";
 import { ZoneAnalysis } from "./ZoneAnalysis";
 import { RecommendedForYou } from "./RecommendedForYou";
+import {
+  generateTimeBasedGaps,
+  getDefaultTimeBasedGaps,
+  type TimeBasedGapsResult,
+} from "../../utils/timeBasedGapsUtils";
 
 // -----------------------------------------------------------------------------
 // Types
@@ -1647,6 +1652,68 @@ export function OpportunitiesPage() {
       mixedPct: 100 - Math.round(commercialRatio * 100) - Math.round(residentialRatio * 100),
     };
   }, [aggregateZoneAnalysis, clusterKPIs]);
+
+  // Compute time-based gaps data for Market Gaps tab
+  const timeBasedGapsData = useMemo((): TimeBasedGapsResult => {
+    // If no opportunities, return default data
+    if (clusterKPIs.totalOpportunities === 0) {
+      return getDefaultTimeBasedGaps(businessType || "Selected Area");
+    }
+
+    // Build category distribution from categoryStats
+    const categoryDist = categoryStats.map(c => ({ name: c.category, count: c.count }));
+
+    // Estimate morning vs evening businesses based on category types
+    const morningCategories = ["Convenience Store", "Bakery", "Retail", "Services", "Healthcare"];
+    const eveningCategories = ["Restaurant", "Food Stall", "Fast Food", "Entertainment", "Bar"];
+
+    let morningCount = 0;
+    let eveningCount = 0;
+    const morningCats: string[] = [];
+    const eveningCats: string[] = [];
+
+    categoryDist.forEach(({ name, count }) => {
+      const isMorning = morningCategories.some(mc =>
+        name.toLowerCase().includes(mc.toLowerCase())
+      );
+      const isEvening = eveningCategories.some(ec =>
+        name.toLowerCase().includes(ec.toLowerCase())
+      );
+
+      if (isMorning) {
+        morningCount += count;
+        if (!morningCats.includes(name) && morningCats.length < 2) morningCats.push(name);
+      }
+      if (isEvening) {
+        eveningCount += count;
+        if (!eveningCats.includes(name) && eveningCats.length < 2) eveningCats.push(name);
+      }
+      // Some businesses operate both periods
+      if (!isMorning && !isEvening) {
+        morningCount += Math.floor(count * 0.6);
+        eveningCount += Math.floor(count * 0.4);
+      }
+    });
+
+    // Normalize density to a  demand score
+    const baseDemandScore = Math.min(100, Math.round((clusterKPIs.avgBusinessDensity / 20) * 100));
+
+    return generateTimeBasedGaps({
+      location: businessType || "Selected Area",
+      morning: {
+        businessCount: morningCount,
+        mainCategories: morningCats.length > 0 ? morningCats : ["General Retail"],
+        demandScore: Math.min(100, baseDemandScore + 5),
+        operatingHours: "6AM – 9PM",
+      },
+      evening: {
+        businessCount: eveningCount,
+        mainCategories: eveningCats.length > 0 ? eveningCats : ["Food", "Services"],
+        demandScore: baseDemandScore,
+        operatingHours: "10AM – 10PM",
+      },
+    });
+  }, [clusterKPIs, categoryStats, businessType]);
 
   // ============================================================================
   // EARLY RETURNS - AFTER ALL HOOKS
@@ -3272,58 +3339,138 @@ export function OpportunitiesPage() {
           {/* Time-Based Gaps */}
           <Card className="border-0 shadow-xl bg-white/80 backdrop-blur-sm overflow-hidden">
             <CardHeader className="bg-linear-to-r from-amber-50 to-orange-50 border-b">
-              <div className="flex items-center gap-3">
-                <div className="p-2.5 bg-linear-to-br from-amber-500 to-orange-600 rounded-xl text-white shadow-lg shadow-amber-200">
-                  <Clock className="w-5 h-5" />
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="p-2.5 bg-linear-to-br from-amber-500 to-orange-600 rounded-xl text-white shadow-lg shadow-amber-200">
+                    <Clock className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <CardTitle className="text-xl">Time-Based Gaps</CardTitle>
+                    <p className="text-sm text-gray-500">
+                      Coverage analysis for {timeBasedGapsData.location}
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <CardTitle className="text-xl">Time-Based Gaps</CardTitle>
-                  <p className="text-sm text-gray-500">
-                    Underserved time periods based on nearby business patterns
-                  </p>
-                </div>
+                {!timeBasedGapsData.overallAssessment.gapsFound && (
+                  <Badge className="bg-emerald-100 text-emerald-700 border-0">
+                    <CheckCircle2 className="w-3 h-3 mr-1" />
+                    All Periods Covered
+                  </Badge>
+                )}
               </div>
             </CardHeader>
             <CardContent className="p-6">
               <div className="grid md:grid-cols-2 gap-4">
                 {/* Morning Gap */}
-                <div className="p-5 rounded-xl border bg-white hover:shadow-md transition-all">
+                <div className={`p-5 rounded-xl border-2 bg-white hover:shadow-md transition-all ${timeBasedGapsData.morning.status === "Gap Identified"
+                    ? "border-rose-200"
+                    : "border-emerald-200"
+                  }`}>
                   <div className="flex items-center gap-3 mb-3">
                     <div className="p-2 bg-amber-100 rounded-lg">
                       <Sun className="w-5 h-5 text-amber-600" />
                     </div>
-                    <div>
-                      <h4 className="font-semibold text-gray-800">Morning Hours (6 AM - 11 AM)</h4>
-                      <Badge className={`mt-1 ${zoneAnalysisData.activityTime === "Evening" ? "bg-rose-100 text-rose-700" : "bg-emerald-100 text-emerald-700"}`}>
-                        {zoneAnalysisData.activityTime === "Evening" ? "Underserved" : "Well Covered"}
+                    <div className="flex-1">
+                      <h4 className="font-semibold text-gray-800">Morning Hours ({timeBasedGapsData.morning.period})</h4>
+                      <Badge className={`mt-1 ${timeBasedGapsData.morning.status === "Gap Identified"
+                          ? "bg-rose-100 text-rose-700"
+                          : "bg-emerald-100 text-emerald-700"
+                        }`}>
+                        {timeBasedGapsData.morning.status}
                       </Badge>
                     </div>
                   </div>
-                  <p className="text-sm text-gray-600">
-                    {zoneAnalysisData.activityTime === "Evening"
-                      ? "Few businesses cater to early morning customers. Consider breakfast spots or early-open services."
-                      : "Good coverage from existing businesses. Competition may be higher."}
+
+                  {/* Business details */}
+                  <div className="mb-3 p-3 bg-gray-50 rounded-lg">
+                    <div className="flex items-center justify-between text-sm mb-1">
+                      <span className="text-gray-600">Active Businesses</span>
+                      <span className="font-semibold text-gray-800">{timeBasedGapsData.morning.details.businessCount}</span>
+                    </div>
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-gray-600">Main Types</span>
+                      <span className="font-medium text-gray-700">
+                        {timeBasedGapsData.morning.details.mainCategories.join(", ") || "—"}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Insight */}
+                  <p className="text-sm text-gray-700 mb-2">
+                    {timeBasedGapsData.morning.insight}
+                  </p>
+
+                  {/* Reason */}
+                  <p className="text-xs text-gray-500 italic">
+                    {timeBasedGapsData.morning.reason}
                   </p>
                 </div>
 
                 {/* Evening Gap */}
-                <div className="p-5 rounded-xl border bg-white hover:shadow-md transition-all">
+                <div className={`p-5 rounded-xl border-2 bg-white hover:shadow-md transition-all ${timeBasedGapsData.evening.status === "Gap Identified"
+                    ? "border-rose-200"
+                    : "border-emerald-200"
+                  }`}>
                   <div className="flex items-center gap-3 mb-3">
                     <div className="p-2 bg-indigo-100 rounded-lg">
                       <Moon className="w-5 h-5 text-indigo-600" />
                     </div>
-                    <div>
-                      <h4 className="font-semibold text-gray-800">Evening Hours (6 PM - 10 PM)</h4>
-                      <Badge className={`mt-1 ${zoneAnalysisData.activityTime === "Daytime" ? "bg-rose-100 text-rose-700" : "bg-emerald-100 text-emerald-700"}`}>
-                        {zoneAnalysisData.activityTime === "Daytime" ? "Underserved" : "Well Covered"}
+                    <div className="flex-1">
+                      <h4 className="font-semibold text-gray-800">Evening Hours ({timeBasedGapsData.evening.period})</h4>
+                      <Badge className={`mt-1 ${timeBasedGapsData.evening.status === "Gap Identified"
+                          ? "bg-rose-100 text-rose-700"
+                          : "bg-emerald-100 text-emerald-700"
+                        }`}>
+                        {timeBasedGapsData.evening.status}
                       </Badge>
                     </div>
                   </div>
-                  <p className="text-sm text-gray-600">
-                    {zoneAnalysisData.activityTime === "Daytime"
-                      ? "Limited evening options available. Consider dinner restaurants or entertainment venues."
-                      : "Good coverage for evening customers. Focus on differentiation."}
+
+                  {/* Business details */}
+                  <div className="mb-3 p-3 bg-gray-50 rounded-lg">
+                    <div className="flex items-center justify-between text-sm mb-1">
+                      <span className="text-gray-600">Active Businesses</span>
+                      <span className="font-semibold text-gray-800">{timeBasedGapsData.evening.details.businessCount}</span>
+                    </div>
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-gray-600">Main Types</span>
+                      <span className="font-medium text-gray-700">
+                        {timeBasedGapsData.evening.details.mainCategories.join(", ") || "—"}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Insight */}
+                  <p className="text-sm text-gray-700 mb-2">
+                    {timeBasedGapsData.evening.insight}
                   </p>
+
+                  {/* Reason */}
+                  <p className="text-xs text-gray-500 italic">
+                    {timeBasedGapsData.evening.reason}
+                  </p>
+                </div>
+              </div>
+
+              {/* Overall Assessment */}
+              <div className={`mt-4 p-4 rounded-xl border ${timeBasedGapsData.overallAssessment.gapsFound
+                  ? "bg-amber-50 border-amber-200"
+                  : "bg-emerald-50 border-emerald-200"
+                }`}>
+                <div className="flex items-start gap-3">
+                  {timeBasedGapsData.overallAssessment.gapsFound ? (
+                    <AlertTriangle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+                  ) : (
+                    <CheckCircle2 className="w-5 h-5 text-emerald-600 flex-shrink-0 mt-0.5" />
+                  )}
+                  <div>
+                    <p className="text-sm font-medium text-gray-800 mb-1">
+                      {timeBasedGapsData.overallAssessment.summary}
+                    </p>
+                    <p className="text-xs text-gray-600">
+                      {timeBasedGapsData.overallAssessment.recommendation}
+                    </p>
+                  </div>
                 </div>
               </div>
             </CardContent>
