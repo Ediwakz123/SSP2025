@@ -2325,7 +2325,7 @@ export function OpportunitiesPage() {
                   <span className="text-sm font-medium text-gray-600">Best Operating Time</span>
                 </div>
                 <div className="text-2xl font-bold text-gray-800">
-                  {hasClusteringResults ? overviewSummary.operatingTime : "Run clustering to see results"}
+                  {hasClusteringResults ? overviewSummary.operatingTime : "—"}
                 </div>
                 {hasClusteringResults && (
                   <p className="text-xs text-gray-500 mt-1">
@@ -2347,7 +2347,7 @@ export function OpportunitiesPage() {
                   <span className="text-sm font-medium text-gray-600">Setup Speed</span>
                 </div>
                 <div className="text-2xl font-bold text-gray-800">
-                  {hasClusteringResults ? overviewSummary.setupSpeed : "Run clustering to see results"}
+                  {hasClusteringResults ? overviewSummary.setupSpeed : "—"}
                 </div>
                 {hasClusteringResults && (
                   <p className="text-xs text-gray-500 mt-1">
@@ -2369,7 +2369,7 @@ export function OpportunitiesPage() {
                   <span className="text-sm font-medium text-gray-600">Competition Level</span>
                 </div>
                 <div className="text-2xl font-bold text-gray-800">
-                  {hasClusteringResults ? overviewSummary.competitionLevel : "Run clustering to see results"}
+                  {hasClusteringResults ? overviewSummary.competitionLevel : "—"}
                 </div>
                 {hasClusteringResults && (
                   <Badge className={`mt-1 ${overviewSummary.competitionLevel === "Low" ? "bg-emerald-100 text-emerald-700" : overviewSummary.competitionLevel === "Medium" ? "bg-amber-100 text-amber-700" : "bg-rose-100 text-rose-700"}`}>
@@ -2389,7 +2389,7 @@ export function OpportunitiesPage() {
                   <span className="text-sm font-medium text-gray-600">Opportunity Focus</span>
                 </div>
                 <div className="text-lg font-bold text-gray-800">
-                  {hasClusteringResults ? overviewSummary.opportunityFocus : "Run clustering to see results"}
+                  {hasClusteringResults ? overviewSummary.opportunityFocus : "—"}
                 </div>
                 {hasClusteringResults && (
                   <p className="text-xs text-gray-500 mt-1">Based on local conditions</p>
@@ -2407,7 +2407,7 @@ export function OpportunitiesPage() {
                   <span className="text-sm font-medium text-gray-600">Area Readiness</span>
                 </div>
                 <div className="text-2xl font-bold text-gray-800">
-                  {hasClusteringResults ? overviewSummary.areaReadiness : "Run clustering to see results"}
+                  {hasClusteringResults ? overviewSummary.areaReadiness : "—"}
                 </div>
                 {hasClusteringResults && (
                   <Badge className={`mt-1 ${overviewSummary.areaReadiness === "High" ? "bg-emerald-100 text-emerald-700" : overviewSummary.areaReadiness === "Medium" ? "bg-amber-100 text-amber-700" : "bg-rose-100 text-rose-700"}`}>
