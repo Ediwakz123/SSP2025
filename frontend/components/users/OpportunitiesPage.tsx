@@ -1386,12 +1386,18 @@ export function OpportunitiesPage() {
       return {
         category: businessType || "General Business",
         overallScore: 0,
+        overallScoreWhy: "",
         operatingTime: "N/A" as const,
+        operatingTimeWhy: "",
         setupSpeed: "N/A" as const,
+        setupSpeedWhy: "",
         competitionLevel: "N/A" as const,
+        competitionLevelWhy: "",
         status: "Pending" as const,
         opportunityFocus: "Run clustering to see results",
+        opportunityFocusWhy: "",
         areaReadiness: "N/A" as const,
+        areaReadinessWhy: "",
       };
     }
 
@@ -1401,52 +1407,109 @@ export function OpportunitiesPage() {
 
     const avgDensity = clusterKPIs.avgBusinessDensity;
     const avgComp = clusterKPIs.avgCompetition;
+    const category = businessType || "General Business";
+
+    // Generate score explanation
+    let overallScoreWhy = "";
+    if (avgScore >= 70) {
+      overallScoreWhy = `Strong demand for ${category.toLowerCase()} with limited competition nearby.`;
+    } else if (avgScore >= 50) {
+      overallScoreWhy = `Demand exists for ${category.toLowerCase()}, but similar businesses are already present nearby.`;
+    } else {
+      overallScoreWhy = `The area has moderate demand, but competition is higher than average.`;
+    }
 
     // Determine best operating time from zone and category analysis
     let operatingTime: "Day" | "Evening" | "Both" | "N/A" = "Both";
+    let operatingTimeWhy = "";
     const commercialRatio = clusterKPIs.commercialZoneCount / Math.max(1, clusterKPIs.totalOpportunities);
     const residentialRatio = clusterKPIs.residentialZoneCount / Math.max(1, clusterKPIs.totalOpportunities);
-    if (commercialRatio > 0.7) operatingTime = "Both";
-    else if (residentialRatio > 0.6) operatingTime = "Day";
-    else if (commercialRatio > 0.4 && residentialRatio < 0.3) operatingTime = "Evening";
+
+    if (commercialRatio > 0.7) {
+      operatingTime = "Both";
+      operatingTimeWhy = "Customer activity is spread across morning and evening based on clustering data.";
+    } else if (residentialRatio > 0.6) {
+      operatingTime = "Day";
+      operatingTimeWhy = "Residential areas show higher daytime activity from local residents.";
+    } else if (commercialRatio > 0.4 && residentialRatio < 0.3) {
+      operatingTime = "Evening";
+      operatingTimeWhy = "Commercial zones show peak activity during evening hours.";
+    } else {
+      operatingTimeWhy = "Customer activity is spread across morning and evening based on clustering data.";
+    }
 
     // Determine setup speed based on category
     const setupSpeed = determineSetupSpeed(businessType);
+    let setupSpeedWhy = "";
+    if (setupSpeed === "Fast") {
+      setupSpeedWhy = `${category} businesses require less space and lower setup time based on local patterns.`;
+    } else if (setupSpeed === "Moderate") {
+      setupSpeedWhy = `${category} businesses need moderate preparation time for equipment and permits.`;
+    } else {
+      setupSpeedWhy = `${category} businesses typically need longer setup time for proper establishment.`;
+    }
 
     // Determine competition level
     const competitionLevel = getCompetitionLevel(avgComp);
+    let competitionLevelWhy = "";
+    if (competitionLevel === "Low") {
+      competitionLevelWhy = "Few similar businesses operate in this area, giving you an advantage.";
+    } else if (competitionLevel === "Medium") {
+      competitionLevelWhy = "Several businesses in the same category operate within the area.";
+    } else {
+      competitionLevelWhy = "Many competitors are already established in this location.";
+    }
 
     // Determine opportunity focus based on operating time and setup speed
     let opportunityFocus = "Best for quick setup";
+    let opportunityFocusWhy = "";
     if (operatingTime === "Evening" && competitionLevel === "Low") {
       opportunityFocus = "Best for evening sales";
+      opportunityFocusWhy = "Low competition during evening hours makes this ideal for after-work customers.";
     } else if (operatingTime === "Day" && competitionLevel === "Low") {
       opportunityFocus = "Best for daytime services";
+      opportunityFocusWhy = "Daytime foot traffic is high with few competitors serving the area.";
     } else if (setupSpeed === "Fast" && competitionLevel === "Low") {
       opportunityFocus = "Best for quick setup";
+      opportunityFocusWhy = `${category} businesses require less space and lower setup time based on local patterns.`;
     } else if (avgDensity > 15) {
       opportunityFocus = "Best for high-traffic areas";
+      opportunityFocusWhy = "High business density means more potential customers passing through.";
     } else if (competitionLevel === "Low") {
       opportunityFocus = "Best for first movers";
+      opportunityFocusWhy = "Being first in the area gives you a head start before competitors arrive.";
+    } else {
+      opportunityFocusWhy = "This location offers balanced opportunities for various business approaches.";
     }
 
     // Determine area readiness level
     let areaReadiness: "High" | "Medium" | "Low" | "N/A" = "Medium";
+    let areaReadinessWhy = "";
     if (avgScore >= 70 && commercialRatio > 0.4) {
       areaReadiness = "High";
+      areaReadinessWhy = "The area is well-developed with good infrastructure for your business type.";
     } else if (avgScore < 50 || commercialRatio < 0.2) {
       areaReadiness = "Low";
+      areaReadinessWhy = "The area may need more development before it fully supports your business.";
+    } else {
+      areaReadinessWhy = "The area supports the business type but may need minor preparation.";
     }
 
     return {
-      category: businessType || "General Business",
+      category,
       overallScore: avgScore,
+      overallScoreWhy,
       operatingTime,
+      operatingTimeWhy,
       setupSpeed,
+      setupSpeedWhy,
       competitionLevel,
+      competitionLevelWhy,
       status: getStatusFromScore(avgScore),
       opportunityFocus,
+      opportunityFocusWhy,
       areaReadiness,
+      areaReadinessWhy,
     };
   }, [opportunities, clusterKPIs, businessType, hasClusteringResults]);
 
