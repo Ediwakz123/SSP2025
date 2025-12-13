@@ -1381,6 +1381,20 @@ export function OpportunitiesPage() {
 
   // Compute overall opportunity summary for Overview tab
   const overviewSummary = useMemo(() => {
+    // Empty state when clustering hasn't been run
+    if (!hasClusteringResults) {
+      return {
+        category: businessType || "General Business",
+        overallScore: 0,
+        operatingTime: "N/A" as const,
+        setupSpeed: "N/A" as const,
+        competitionLevel: "N/A" as const,
+        status: "Pending" as const,
+        opportunityFocus: "Run clustering to see results",
+        areaReadiness: "N/A" as const,
+      };
+    }
+
     const avgScore = opportunities.length > 0
       ? Math.round(opportunities.reduce((s, o) => s + o.score, 0) / opportunities.length)
       : 0;
@@ -1389,7 +1403,7 @@ export function OpportunitiesPage() {
     const avgComp = clusterKPIs.avgCompetition;
 
     // Determine best operating time from zone and category analysis
-    let operatingTime: "Day" | "Evening" | "Both" = "Both";
+    let operatingTime: "Day" | "Evening" | "Both" | "N/A" = "Both";
     const commercialRatio = clusterKPIs.commercialZoneCount / Math.max(1, clusterKPIs.totalOpportunities);
     const residentialRatio = clusterKPIs.residentialZoneCount / Math.max(1, clusterKPIs.totalOpportunities);
     if (commercialRatio > 0.7) operatingTime = "Both";
@@ -1417,7 +1431,7 @@ export function OpportunitiesPage() {
     }
 
     // Determine area readiness level
-    let areaReadiness: "High" | "Medium" | "Low" = "Medium";
+    let areaReadiness: "High" | "Medium" | "Low" | "N/A" = "Medium";
     if (avgScore >= 70 && commercialRatio > 0.4) {
       areaReadiness = "High";
     } else if (avgScore < 50 || commercialRatio < 0.2) {
@@ -1434,7 +1448,7 @@ export function OpportunitiesPage() {
       opportunityFocus,
       areaReadiness,
     };
-  }, [opportunities, clusterKPIs, businessType]);
+  }, [opportunities, clusterKPIs, businessType, hasClusteringResults]);
 
   // Group opportunities by category for the Opportunities tab
   const opportunitiesByCategory = useMemo(() => {
